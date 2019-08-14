@@ -11,6 +11,12 @@ enum SCANEXITK
     SCANEXITK_Nil = -1
 };
 
+enum SCANMATCHK
+{
+    SCANMATCHK_Consume,
+    SCANMATCHK_Peek
+};
+
 struct Scanner
 {
 	// Init state
@@ -32,7 +38,9 @@ struct Scanner
 
     int         iToken = 0;					// Becomes tokens id
     
-    int			cNestedComment = 0;			/* this style of comment can nest */
+    int			cNestedBlockComment = 0;    /* this style of comment can nest */
+
+    bool        hadError = false;
 
     // Lexeme buffer management
 
@@ -50,12 +58,16 @@ TOKENK nextToken(Scanner * pScanner, Token * poToken);
 
 // Internal
 
-bool tryMatch(Scanner * pScanner, char expected, bool consumeIfMatch=true);
+bool tryMatch(Scanner * pScanner, char expected, SCANMATCHK scanmatchk=SCANMATCHK_Consume);
+bool tryMatch(Scanner * pScanner, char rangeMin, char rangeMax, char * poMatch=nullptr, SCANMATCHK scanmatchk=SCANMATCHK_Consume);
 char consumeChar(Scanner * pScanner);
-void onConsumeNewline(Scanner * pScanner);
 
 void onStartToken(Scanner * pScanner);
+void writeCurrentLexemeIntoBuffer(Scanner * pScanner);
 void makeToken(Scanner * pScanner, TOKENK tokenk, Token * poToken);
+void makeTokenWithLexeme(Scanner * pScanner, TOKENK tokenk, char * lexeme, Token * poToken);
+void makeErrorToken(Scanner * pScanner, ERRORTOKENK errortokenk, Token * poToken);
+void makeEofToken(Scanner * pScanner, Token * poToken);
 
 bool checkEndOfFile(Scanner * pScanner);
 

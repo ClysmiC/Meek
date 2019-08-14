@@ -1,3 +1,4 @@
+#include "common.h"
 #include "token.h"
 
 ReservedWord g_reservedWords[] = {
@@ -22,4 +23,8 @@ ReservedWord g_reservedWords[] = {
     { "f64",        TOKENK_F64 },
     { "struct",     TOKENK_Struct },
     { "enum",       TOKENK_Enum },
+    { "true",       TOKENK_BoolLiteral },
+    { "false",      TOKENK_BoolLiteral },
 };
+
+int g_reservedWordCount = ArrayLen(g_reservedWords);

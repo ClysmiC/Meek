@@ -2,10 +2,13 @@
 
 enum TOKENK
 {
-    TOKENK_Eof,
+    TOKENK_Error,
 
     TOKENK_Identifier,
-    TOKENK_Literal,     // TODO: Differentiate between int literal, float literal, string literal ?
+    TOKENK_IntLiteral,
+    TOKENK_FloatLiteral,
+    TOKENK_BoolLiteral,
+    TOKENK_StringLiteral,       // TODO: Provide ways to specify more specific kinds of literals? Like s8 or u64?
 
     // Punctuation symbols
 
@@ -19,7 +22,7 @@ enum TOKENK
     TOKENK_Comma,
     TOKENK_Semicolon,
     TOKENK_Colon,
-    TOKENK_Quote,
+    //  TOKENK_Quote,           // HMM: Is this even it's own token, or does it just get subsumed by string literal?
     TOKENK_SingleQuote,
     TOKENK_Plus,
     TOKENK_Minus,
@@ -74,8 +77,30 @@ enum TOKENK
 
                         // TODO: char? string?
 
+    TOKENK_Eof,
+
     TOKENK_Max,
-    TOKENK_Nil = -1
+    TOKENK_Nil = -1,
+
+    TOKENK_LiteralMin = TOKENK_IntLiteral,
+    TOKENK_LiteralMax = TOKENK_StringLiteral + 1
+};
+
+enum ERRORTOKENK
+{
+    ERRORTOKENK_Unspecified,
+
+    ERRORTOKENK_InvalidCharacter,
+
+    ERRORTOKENK_FloatLiteralMultipleDecimals,
+
+    ERRORTOKENK_IntLiteralOutOfRange,
+    ERRORTOKENK_FloatLiteralOutOfRange,
+
+    ERRORTOKENK_MultilineString,
+    ERRORTOKENK_UnterminatedString,
+
+    ERRORTOKENK_UnterminatedBlockComment,
 };
 
 struct Token
@@ -86,7 +111,17 @@ struct Token
 
     TOKENK      tokenk = TOKENK_Nil;
 
-    char *      lexeme = nullptr;   // Only set for identifiers and literals
+    char *      lexeme = nullptr;   // Only set for identifiers, literals, and errors
+
+    union
+    {
+        int         literalInt;     // TOKENK_IntLiteral
+        float       literalFloat;   // TOKENK_FloatLiteral
+        bool        literalBool;    // TOKENK_BoolLiteral
+        ERRORTOKENK errortokenk;    // TOKENK_Error
+
+        // String literal can just read the lexeme
+    };
 };
 
 struct ReservedWord
@@ -97,6 +132,12 @@ struct ReservedWord
     ReservedWord(char * lexeme, TOKENK tokenk) : lexeme(lexeme), tokenk(tokenk) { ; }
 };
 
+inline bool isLiteral(TOKENK tokenk)
+{
+    return tokenk >= TOKENK_LiteralMin && tokenk < TOKENK_LiteralMax;
+}
+
 // TODO: use a dict or trie for this
 
-ReservedWord g_reservedWords[];
+extern ReservedWord    g_reservedWords[];
+extern int             g_reservedWordCount;

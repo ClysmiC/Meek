@@ -10,7 +10,7 @@
 
 int main()
 {
-    char * filename = "C:/Users/Andrew/Desktop/test.cly";        // TODO: Read this in from command line
+    char * filename = "C:/Users/Andrew/Desktop/lang/lang/test.cly";        // TODO: Read this in from command line
     int bufferSize = 1024 * 1024;           // TODO: Support files bigger than 1 mb. Maybe have scanner return a special value when its buffer is full and it will ask you to pass it a new one
 
     char * buffer = new char[bufferSize];
@@ -45,9 +45,18 @@ int main()
     }
 
     Token token;
-    while (nextToken(&scanner, &token) != TOKENK_Nil)
+    while (nextToken(&scanner, &token) != TOKENK_Eof)
     {
-        int x = 0;
+        if (token.tokenk == TOKENK_Error)
+        {
+            fprintf(stderr, "Error token\n");
+        }
+        else
+        {
+            fprintf(stdout, "%s : %d\n", token.lexeme, token.tokenk);
+        }
     }
+
+    getchar();
 }
 
