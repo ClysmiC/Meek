@@ -39,6 +39,12 @@
     <ClInclude Include="macro_assert.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="common_array.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="parse.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">
@@ -48,6 +54,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="token.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="parse.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

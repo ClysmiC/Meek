@@ -24,7 +24,6 @@ enum TOKENK
 	TOKENK_Comma,
 	TOKENK_Semicolon,
 	TOKENK_Colon,
-	//	TOKENK_Quote,			// HMM: Is this even it's own token, or does it just get subsumed by string literal?
 	TOKENK_SingleQuote,
 	TOKENK_Plus,
 	TOKENK_Minus,
@@ -34,6 +33,9 @@ enum TOKENK
 	TOKENK_Bang,
 	TOKENK_Lesser,
 	TOKENK_Greater,
+
+	TOKENK_MinusMinus,
+	TOKENK_PlusPlus,
 
 	TOKENK_PlusEqual,
 	TOKENK_MinusEqual,

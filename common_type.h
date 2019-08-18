@@ -18,6 +18,8 @@ typedef u8          byte;
 typedef float       f32;
 typedef double      f64;
 
+typedef unsigned int uint;
+
 #define S32_MAX  2147483647
 
 // Tricky -1 is necessary because -2147483648 gets treated as an unsigned long literal with a unary operator...

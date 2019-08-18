@@ -1,10 +1,9 @@
 #include "scan.h"
 
 #include "common.h"
-
 #include <stdlib.h>
 
-bool init(Scanner * pScanner, char * pText, int textSize, char * pLexemeBuffer, int lexemeBufferSize)
+bool init(Scanner * pScanner, char * pText, uint textSize, char * pLexemeBuffer, uint lexemeBufferSize)
 {
 	if (!pScanner || !pText || !pLexemeBuffer || lexemeBufferSize < textSize) return false;
 
@@ -25,7 +24,67 @@ bool init(Scanner * pScanner, char * pText, int textSize, char * pLexemeBuffer, 
 
 TOKENK nextToken(Scanner * pScanner, Token * poToken)
 {
-    onStartToken(pScanner);
+	if (count(&pScanner->peekBuffer) > 0)
+	{
+		read(&pScanner->peekBuffer, poToken);
+		return poToken->tokenk;
+	}
+	else
+	{
+		return consumeNextToken(pScanner, poToken);
+	}
+}
+
+TOKENK peekToken(Scanner * pScanner, Token * poToken, uint lookahead)
+{
+	Assert(lookahead < Scanner::s_lookMax);
+	auto & rbuf = pScanner->peekBuffer;
+
+	// Consume tokens until we have enough in our buffer to peek that far
+
+	Token tokenLookahead;
+	while (!isFinished(pScanner) && count(&rbuf) < lookahead)
+	{
+		consumeNextToken(pScanner, &tokenLookahead);
+		write(&rbuf, &tokenLookahead);
+	}
+
+	// If we peek any amount past the end of the file we return nil token
+
+	if (lookahead < rbuf.cItem)
+	{
+		Verify(peek(&rbuf, lookahead, poToken));
+	}
+	else
+	{
+		poToken->tokenk = TOKENK_Nil;
+	}
+
+	return poToken->tokenk;
+}
+
+TOKENK prevToken(Scanner * pScanner, Token * poToken, uint lookbehind)
+{
+	Assert(lookbehind < Scanner::s_lookMax);
+	auto & rbuf = pScanner->prevBuffer;
+
+	// If we peek any amount before beginning of the file we return nil token
+
+	if (lookbehind < rbuf.cItem)
+	{
+		Verify(peek(&rbuf, rbuf.cItem - lookbehind - 1, poToken));
+	}
+	else
+	{
+		poToken->tokenk = TOKENK_Nil;
+	}
+
+	return poToken->tokenk;
+}
+
+TOKENK consumeNextToken(Scanner * pScanner, Token * poToken)
+{
+	onStartToken(pScanner);
 	while (!checkEndOfFile(pScanner))
 	{
 		char c = consumeChar(pScanner);
@@ -65,9 +124,9 @@ TOKENK nextToken(Scanner * pScanner, Token * poToken)
 			case '.':
 			{
 				char firstDigit;
-				if (tryMatch(pScanner, '0', '9', &firstDigit, SCANMATCHK_Peek))
+				if (tryConsume(pScanner, '0', '9', &firstDigit))
 				{
-					finishAfterConsumeDotDigit(pScanner, firstDigit, poToken);
+					finishAfterConsumeDotAndDigit(pScanner, firstDigit, poToken);
 				}
 				else
 				{
@@ -96,11 +155,11 @@ TOKENK nextToken(Scanner * pScanner, Token * poToken)
 
 				while (!checkEndOfFile(pScanner))
 				{
-					if (tryMatch(pScanner, '\n'))
+					if (tryConsume(pScanner, '\n'))
 					{
 						grferrtok |= FERRTOK_MultilineString;
 					}
-					else if (tryMatch(pScanner, '\"'))
+					else if (tryConsume(pScanner, '\"'))
 					{
 						grferrtok &= ~FERRTOK_UnterminatedString;
 						if (!grferrtok)
@@ -129,22 +188,50 @@ TOKENK nextToken(Scanner * pScanner, Token * poToken)
 
 			case '+':
 			{
-				if (tryMatch(pScanner, '=')) makeToken(pScanner, TOKENK_PlusEqual, poToken);
+				if (tryConsume(pScanner, '=')) makeToken(pScanner, TOKENK_PlusEqual, poToken);
+				else if (tryConsume(pScanner, '+')) makeToken(pScanner, TOKENK_MinusMinus, poToken);
 				else makeToken(pScanner, TOKENK_Plus, poToken);
 			} break;
 
 			case '-':
 			{
-				// HMM: Should we count the negative sign as part of a int/float literal,
-				//	or should we just call it a unary operator in that case.
+				// Note: We count the negative sign as part of an int/float literal
 
-				if (tryMatch(pScanner, '=')) makeToken(pScanner, TOKENK_MinusEqual, poToken);
+				// If we only scan positive literals and rely on unary - to negate, then
+				//	-2147483648 (which is a valid s32) would be considered an out of range
+				//	int literal since the scanner would read it as a positive value
+				//
+				// C has this problem:
+				//	#define INT_MIN     (-2147483647 - 1)
+
+				char firstDigit;
+
+				if (tryConsume(pScanner, '='))
+				{
+					makeToken(pScanner, TOKENK_MinusEqual, poToken);
+				}
+				else if (tryConsume(pScanner, '0', '9', &firstDigit))
+				{
+					finishAfterConsumeDigit(pScanner, firstDigit, poToken);
+				}
+				else if (tryPeek(pScanner, '.'))
+				{
+					int lookahead = 1;
+					if (tryPeek(pScanner, '0', '9', &firstDigit, lookahead))
+					{
+						consumeChar(pScanner);  // '.'
+						consumeChar(pScanner);  // Digit
+
+						finishAfterConsumeDotAndDigit(pScanner, firstDigit, poToken);
+					}
+				}
+				else if (tryConsume(pScanner, '-')) makeToken(pScanner, TOKENK_MinusMinus, poToken);
 				else makeToken(pScanner, TOKENK_Minus, poToken);
 			} break;
 
 			case '*':
 			{
-				if (tryMatch(pScanner, '=')) makeToken(pScanner, TOKENK_StarEqual, poToken);
+				if (tryConsume(pScanner, '=')) makeToken(pScanner, TOKENK_StarEqual, poToken);
 				else makeToken(pScanner, TOKENK_Star, poToken);
 			} break;
 
@@ -155,17 +242,17 @@ TOKENK nextToken(Scanner * pScanner, Token * poToken)
 				//	supporting comments w/ semantics, maybe some form of metaprogramming
 
 				bool isComment = false;
-				if (tryMatch(pScanner, '/'))
+				if (tryConsume(pScanner, '/'))
 				{
 					isComment = true;
 
 					while (!checkEndOfFile(pScanner))
 					{
-						if (tryMatch(pScanner, '\n')) break;
+						if (tryConsume(pScanner, '\n')) break;
 						else consumeChar(pScanner);
 					}
 				}
-				else if (tryMatch(pScanner, '*'))
+				else if (tryConsume(pScanner, '*'))
 				{
 					isComment = true;
 
@@ -175,16 +262,16 @@ TOKENK nextToken(Scanner * pScanner, Token * poToken)
 					GRFERRTOK grferrtok = FERRTOK_UnterminatedBlockComment;
 					while (!checkEndOfFile(pScanner))
 					{
-						if (tryMatch(pScanner, '/'))
+						if (tryConsume(pScanner, '/'))
 						{
-							if (tryMatch(pScanner, '*'))
+							if (tryConsume(pScanner, '*'))
 							{
 								pScanner->cNestedBlockComment++;
 							}
 						}
-						else if (tryMatch(pScanner, '*'))
+						else if (tryConsume(pScanner, '*'))
 						{
-							if (tryMatch(pScanner, '/'))
+							if (tryConsume(pScanner, '/'))
 							{
 								pScanner->cNestedBlockComment--;
 
@@ -206,31 +293,31 @@ TOKENK nextToken(Scanner * pScanner, Token * poToken)
 						makeErrorToken(pScanner, grferrtok, poToken);
 					}
 				}
-				else if (tryMatch(pScanner, '=')) makeToken(pScanner, TOKENK_SlashEqual, poToken);
+				else if (tryConsume(pScanner, '=')) makeToken(pScanner, TOKENK_SlashEqual, poToken);
 				else makeToken(pScanner, TOKENK_Slash, poToken);
 			} break;
 
 			case '!':
 			{
-				if (tryMatch(pScanner, '=')) makeToken(pScanner, TOKENK_BangEqual, poToken);
+				if (tryConsume(pScanner, '=')) makeToken(pScanner, TOKENK_BangEqual, poToken);
 				else makeToken(pScanner, TOKENK_Bang, poToken);
 			} break;
 
 			case '=':
 			{
-				if (tryMatch(pScanner, '=')) makeToken(pScanner, TOKENK_EqualEqual, poToken);
+				if (tryConsume(pScanner, '=')) makeToken(pScanner, TOKENK_EqualEqual, poToken);
 				else makeToken(pScanner, TOKENK_Equal, poToken);
 			} break;
 
 			case '<':
 			{
-				if (tryMatch(pScanner, '=')) makeToken(pScanner, TOKENK_LesserEqual, poToken);
+				if (tryConsume(pScanner, '=')) makeToken(pScanner, TOKENK_LesserEqual, poToken);
 				else makeToken(pScanner, TOKENK_Lesser, poToken);
 			} break;
 
 			case '>':
 			{
-				if (tryMatch(pScanner, '=')) makeToken(pScanner, TOKENK_GreaterEqual, poToken);
+				if (tryConsume(pScanner, '=')) makeToken(pScanner, TOKENK_GreaterEqual, poToken);
 				else makeToken(pScanner, TOKENK_Greater, poToken);
 			} break;
 
@@ -250,9 +337,9 @@ TOKENK nextToken(Scanner * pScanner, Token * poToken)
 				{
 					while (true)
 					{
-						if (!(tryMatch(pScanner, '_') || tryMatch(pScanner, 'a', 'z') || tryMatch(pScanner, 'A', 'Z') || tryMatch(pScanner, '0', '9')))
+						if (!(tryConsume(pScanner, '_') || tryConsume(pScanner, 'a', 'z') || tryConsume(pScanner, 'A', 'Z') || tryConsume(pScanner, '0', '9')))
 						{
-							// Try match fails into here if end of file
+							// Try consume fails into here if end of file
 
 							// Write current lexeme into buffer so that we have a null terminated string to
 							//	strncpm with
@@ -315,12 +402,17 @@ TOKENK nextToken(Scanner * pScanner, Token * poToken)
 	return poToken->tokenk;
 }
 
+bool isFinished(Scanner * pScanner)
+{
+	return pScanner->scanexitk != SCANEXITK_Nil;
+}
+
 void finishAfterConsumeDigit(Scanner * pScanner, char firstDigit, Token * poToken)
 {
 	_finishAfterConsumeDigit(pScanner, firstDigit, false, poToken);
 }
 
-void finishAfterConsumeDotDigit(Scanner * pScanner, char firstDigit, Token * poToken)
+void finishAfterConsumeDotAndDigit(Scanner * pScanner, char firstDigit, Token * poToken)
 {
 	_finishAfterConsumeDigit(pScanner, firstDigit, true, poToken);
 }
@@ -328,32 +420,32 @@ void finishAfterConsumeDotDigit(Scanner * pScanner, char firstDigit, Token * poT
 void _finishAfterConsumeDigit(Scanner * pScanner, char firstDigit, bool startsWithDot, Token * poToken)
 {
 	int cDot = (startsWithDot) ? 1 : 0;
-	int cDigit = 0;		// prefixes like 0x don't count toward cDigit
 	int base = 10;
+	int cDigit = 1;
 
 	if (!startsWithDot)
 	{
-		if (tryMatch(pScanner, '0'))
+		if (firstDigit == '0')
 		{
-            // Right now only supporting lower case prefix.
-            //  0xABCD works
-            //  0XABCD does not
+			// Right now only supporting lower case prefix.
+			//  0xABCD works
+			//  0XABCD does not
 
-			if (tryMatch(pScanner, 'x'))
+			if (tryConsume(pScanner, 'x'))
 			{
+
 				base = 16;
+				cDigit = 0;		// Prefixes don't count toward cDigit
 			}
-			else if (tryMatch(pScanner, 'b'))
+			else if (tryConsume(pScanner, 'b'))
 			{
 				base = 2;
+				cDigit = 0;
 			}
-			else if (tryMatch(pScanner, 'o'))
+			else if (tryConsume(pScanner, 'o'))
 			{
 				base = 8;
-			}
-			else
-			{
-				cDigit++;	// Base 10, so leading 0 is actually part of the number
+				cDigit = 0;
 			}
 		}
 	}
@@ -361,11 +453,11 @@ void _finishAfterConsumeDigit(Scanner * pScanner, char firstDigit, bool startsWi
 	GRFERRTOK grferrtok = GRFERRTOK_None;
 	if (base == 16)
 	{
-        // Support both lower and upper case hex letters, but you can't
-        //  mix and match!
-        //  0xABCD works
-        //  0xabcd works
-        //  0xAbCd does not
+		// Support both lower and upper case hex letters, but you can't
+		//  mix and match!
+		//  0xABCD works
+		//  0xabcd works
+		//  0xAbCd does not
 
 		enum CASEK
 		{
@@ -378,11 +470,11 @@ void _finishAfterConsumeDigit(Scanner * pScanner, char firstDigit, bool startsWi
 
 		while (true)
 		{
-			if (tryMatch(pScanner, '.'))
+			if (tryConsume(pScanner, '.'))
 			{
 				cDot++;
 			}
-			else if (tryMatch(pScanner, 'a', 'z'))
+			else if (tryConsume(pScanner, 'a', 'z'))
 			{
 				cDigit++;
 
@@ -395,7 +487,7 @@ void _finishAfterConsumeDigit(Scanner * pScanner, char firstDigit, bool startsWi
 					casek = CASEK_Lower;
 				}
 			}
-			else if (tryMatch(pScanner, 'A', 'Z'))
+			else if (tryConsume(pScanner, 'A', 'Z'))
 			{
 				cDigit++;
 
@@ -408,13 +500,13 @@ void _finishAfterConsumeDigit(Scanner * pScanner, char firstDigit, bool startsWi
 					casek = CASEK_Upper;
 				}
 			}
-			else if (tryMatch(pScanner, '0', '9'))
+			else if (tryConsume(pScanner, '0', '9'))
 			{
 				cDigit++;
 			}
 			else
 			{
-				// Try match fails into here if end of file
+				// Try consume fails into here if end of file
 
 				break;
 			}
@@ -424,20 +516,20 @@ void _finishAfterConsumeDigit(Scanner * pScanner, char firstDigit, bool startsWi
 	{
 		while (true)
 		{
-			if (tryMatch(pScanner, '.'))
+			if (tryConsume(pScanner, '.'))
 			{
 				cDot++;
 			}
 			else
 			{
 				char upperChar = '0' + base - 1;
-				if (tryMatch(pScanner, '0', upperChar))
+				if (tryConsume(pScanner, '0', upperChar))
 				{
 					cDigit++;
 				}
 				else
 				{
-					// Try match fails into here if end of file
+					// Try consume fails into here if end of file
 
 					break;
 				}
@@ -452,7 +544,7 @@ void _finishAfterConsumeDigit(Scanner * pScanner, char firstDigit, bool startsWi
 
 	if (cDot > 1)
 	{
-        grferrtok |= FERRTOK_NumberLiteralMultipleDecimals;
+		grferrtok |= FERRTOK_NumberLiteralMultipleDecimals;
 	}
 
 	if (base != 10 && cDigit == 0)
@@ -465,7 +557,7 @@ void _finishAfterConsumeDigit(Scanner * pScanner, char firstDigit, bool startsWi
 		// Note makeToken handles some classes of errors too, like int literals
 		//	that are too big for us to actually store!
 
-        pScanner->currentIntLiteralBase = base;
+		pScanner->currentIntLiteralBase = base;
 
 		(cDot > 0) ?
 			makeToken(pScanner, TOKENK_FloatLiteral, poToken) :
@@ -534,7 +626,7 @@ void makeTokenWithLexeme(Scanner * pScanner, TOKENK tokenk, char * lexeme, Token
 	}
 	else if (tokenk == TOKENK_IntLiteral)
 	{
-        int base = pScanner->currentIntLiteralBase;
+		int base = pScanner->currentIntLiteralBase;
 		char * end;
 		long value = strtol(lexeme, &end, base);
 
@@ -550,7 +642,7 @@ void makeTokenWithLexeme(Scanner * pScanner, TOKENK tokenk, char * lexeme, Token
 		}
 		else
 		{
-            poToken->intliteralk = (base == 10) ? INTLITERALK_Decimal : (base == 16) ? INTLITERALK_Hexadecimal : (base == 8) ? INTLITERALK_Octal : INTLITERALK_Binary;
+			poToken->intliteralk = (base == 10) ? INTLITERALK_Decimal : (base == 16) ? INTLITERALK_Hexadecimal : (base == 8) ? INTLITERALK_Octal : INTLITERALK_Binary;
 			poToken->literalInt = (int)value;
 		}
 	}
@@ -618,34 +710,48 @@ char consumeChar(Scanner * pScanner)
 	return c;
 }
 
-bool tryMatch(Scanner * pScanner, char expected, SCANMATCHK scanmatchk)
+bool tryConsume(Scanner * pScanner, char expected)
 {
 	if (checkEndOfFile(pScanner)) return false;
 	if (pScanner->pText[pScanner->iText] != expected) return false;
 
-	if (scanmatchk == SCANMATCHK_Consume)
-	{
-		consumeChar(pScanner);
-	}
+	consumeChar(pScanner);
 
 	return true;
 }
 
-bool tryMatch(Scanner * pScanner, char rangeMin, char rangeMax, char * poMatch, SCANMATCHK scanmatchk)
+bool tryConsume(Scanner * pScanner, char rangeMin, char rangeMax, char * poMatch)
 {
 	if (checkEndOfFile(pScanner)) return false;
 	if (rangeMin > rangeMax) return false;
 
 	char c = pScanner->pText[pScanner->iText];
-
 	if (c < rangeMin || c > rangeMax) return false;
+
+	consumeChar(pScanner);
 
 	if (poMatch) *poMatch = c;
 
-	if (scanmatchk == SCANMATCHK_Consume)
-	{
-		 consumeChar(pScanner);
-	}
+	return true;
+}
+
+bool tryPeek(Scanner * pScanner, char expected, int lookahead)
+{
+	if (checkEndOfFile(pScanner, lookahead)) return false;
+	if (pScanner->pText[pScanner->iText + lookahead] != expected) return false;
+
+	return true;
+}
+
+bool tryPeek(Scanner * pScanner, char rangeMin, char rangeMax, char * poMatch, int lookahead)
+{
+	if (checkEndOfFile(pScanner, lookahead)) return false;
+	if (rangeMin > rangeMax) return false;
+
+	char c = pScanner->pText[pScanner->iText + lookahead];
+	if (c < rangeMin || c > rangeMax) return false;
+
+	if (poMatch) *poMatch = c;
 
 	return true;
 }
@@ -658,7 +764,7 @@ void onStartToken(Scanner * pScanner)
 	pScanner->madeToken = false;
 }
 
-bool checkEndOfFile(Scanner * pScanner)
+bool checkEndOfFile(Scanner * pScanner, int lookahead)
 {
 	if (!pScanner->pText)
 	{
@@ -666,9 +772,10 @@ bool checkEndOfFile(Scanner * pScanner)
 		return true;
 	}
 
-	if (pScanner->iText >= pScanner->textSize)
+	if (pScanner->iText + lookahead >= pScanner->textSize)
 	{
-		pScanner->scanexitk = SCANEXITK_ReadAllBytes;
+		if (lookahead == 0) pScanner->scanexitk = SCANEXITK_ReadAllBytes;
+
 		return true;
 	}
 

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "common.h"
 #include "token.h"
 
 enum SCANEXITK
@@ -11,43 +12,43 @@ enum SCANEXITK
 	SCANEXITK_Nil = -1
 };
 
-enum SCANMATCHK
-{
-	SCANMATCHK_Consume,
-	SCANMATCHK_Peek
-};
-
 struct Scanner
 {
 	// Init state
 
 	char *		pText = nullptr;
-	int			textSize = 0;
-	char *		pLexemeBuffer = nullptr;	// Must be as large as pText
-	int			lexemeBufferSize = 0;
+	uint		textSize = 0;
+	char *		pLexemeBuffer = nullptr;		// Must be as large as pText
+	uint		lexemeBufferSize = 0;
 
 	// Scan state
 
-	int			iText = 0;
-	int			line = 1;
-	int			column = 1;
+	uint		iText = 0;
+	uint		line = 1;
+	uint		column = 1;
 
-	int			iTextTokenStart = 0;
-	int			lineTokenStart = 1;
-	int			columnTokenStart = 1;
+	uint		iTextTokenStart = 0;
+	uint		lineTokenStart = 1;
+	uint		columnTokenStart = 1;
 
-	int			iToken = 0;					// Becomes tokens id
+	uint		iToken = 0;						// Becomes tokens id
 
-	int			cNestedBlockComment = 0;	/* this style of comment can nest */
+	int			cNestedBlockComment = 0;		/* this style of comment can nest */
 
-    int         currentIntLiteralBase;
+	uint        currentIntLiteralBase;
 
-	bool		madeToken = false;			// Resets at beginning of each call to makeToken
+	bool		madeToken = false;				// Resets at beginning of each call to makeToken
 	bool		hadError = false;
+
+	// Peek and prev buffers
+
+	static constexpr uint s_lookMax=16;
+	RingBuffer<Token, s_lookMax> peekBuffer;
+	RingBuffer<Token, s_lookMax> prevBuffer;    // More recent tokens are at the end of the buffer
 
 	// Lexeme buffer management
 
-	int			iLexemeBuffer = 0;
+	uint		iLexemeBuffer = 0;
 
 	// Exit kind
 
@@ -56,13 +57,20 @@ struct Scanner
 
 // Public interface
 
-bool init(Scanner * pScanner, char * pText, int textSize, char * pLexemeBuffer, int lexemeBufferSize);
+bool init(Scanner * pScanner, char * pText, uint textSize, char * pLexemeBuffer, uint lexemeBufferSize);
 TOKENK nextToken(Scanner * pScanner, Token * poToken);
+TOKENK peekToken(Scanner * pScanner, Token * poToken, uint lookahead=0);
+TOKENK prevToken(Scanner * pScanner, Token * poToken, uint lookbehind=0);
+bool isFinished(Scanner * pScanner);
+
 
 // Internal
 
-bool tryMatch(Scanner * pScanner, char expected, SCANMATCHK scanmatchk=SCANMATCHK_Consume);
-bool tryMatch(Scanner * pScanner, char rangeMin, char rangeMax, char * poMatch=nullptr, SCANMATCHK scanmatchk=SCANMATCHK_Consume);
+TOKENK consumeNextToken(Scanner * pScanner, Token * poToken);
+bool tryConsume(Scanner * pScanner, char expected);
+bool tryConsume(Scanner * pScanner, char rangeMin, char rangeMax, char * poMatch=nullptr);
+bool tryPeek(Scanner * pScanner, char expected, int lookahead=0);
+bool tryPeek(Scanner * pScanner, char rangeMin, char rangeMax, char * poMatch=nullptr, int lookahead=0);
 char consumeChar(Scanner * pScanner);
 
 void onStartToken(Scanner * pScanner);
@@ -71,11 +79,11 @@ void makeToken(Scanner * pScanner, TOKENK tokenk, Token * poToken);
 void makeTokenWithLexeme(Scanner * pScanner, TOKENK tokenk, char * lexeme, Token * poToken);
 void makeErrorToken(Scanner * pScanner, GRFERRTOK ferrtok, Token * poToken);
 void makeEofToken(Scanner * pScanner, Token * poToken);
-void finishAfterConsumeDotDigit(Scanner * pScanner, char firstDigit, Token * poToken);
+void finishAfterConsumeDotAndDigit(Scanner * pScanner, char firstDigit, Token * poToken);
 void finishAfterConsumeDigit(Scanner * pScanner, char firstDigit, Token * poToken);
 void _finishAfterConsumeDigit(Scanner * pScanner, char firstDigit, bool startsWithDot, Token * poToken);
 
-bool checkEndOfFile(Scanner * pScanner);
+bool checkEndOfFile(Scanner * pScanner, int lookahead=0);
 
 inline bool isDigit(char c)
 {
