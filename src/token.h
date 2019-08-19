@@ -1,6 +1,6 @@
 #pragma once
 
-#include "common_type.h"
+#include "als.h"
 
 enum TOKENK
 {
@@ -164,6 +164,12 @@ struct ReservedWord
 inline bool isLiteral(TOKENK tokenk)
 {
 	return tokenk >= TOKENK_LiteralMin && tokenk < TOKENK_LiteralMax;
+}
+
+inline void nillify(Token * poToken)
+{
+	poToken->id = 0;
+	poToken->tokenk = TOKENK_Nil;
 }
 
 // TODO: use a dict or trie for this

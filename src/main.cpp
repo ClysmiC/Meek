@@ -2,14 +2,18 @@
 	#define _CRT_SECURE_NO_DEPRECATE
 #endif
 
-#include <stdio.h>
+#include "als.h"
 
-#include "macro_defer.h"
-
+#include "ast.h"
 #include "scan.h"
+#include "parse.h"
+
+#include <stdio.h>
 
 int main()
 {
+    // printf("Size of AstNode %d", sizeof(AstNode));
+
 	char * filename = "C:/Users/Andrew/Desktop/lang/lang/test.cly";		// TODO: Read this in from command line
 	int bufferSize = 1024 * 1024;										// TODO: Support files bigger than 1 mb. Maybe have scanner return a special value when its buffer is full and it will ask you to pass it a new one
 

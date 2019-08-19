@@ -1,7 +1,6 @@
 #include "scan.h"
 
-#include "common.h"
-#include <stdlib.h>
+#include <stdlib.h> // For strncpy and related functions
 
 bool init(Scanner * pScanner, char * pText, uint textSize, char * pLexemeBuffer, uint lexemeBufferSize)
 {
@@ -57,7 +56,7 @@ TOKENK peekToken(Scanner * pScanner, Token * poToken, uint lookahead)
 	}
 	else
 	{
-		poToken->tokenk = TOKENK_Nil;
+		nillify(poToken);
 	}
 
 	return poToken->tokenk;
@@ -76,7 +75,7 @@ TOKENK prevToken(Scanner * pScanner, Token * poToken, uint lookbehind)
 	}
 	else
 	{
-		poToken->tokenk = TOKENK_Nil;
+		nillify(poToken);
 	}
 
 	return poToken->tokenk;
@@ -613,7 +612,7 @@ void makeTokenWithLexeme(Scanner * pScanner, TOKENK tokenk, char * lexeme, Token
 {
 	Assert(!pScanner->madeToken);
 
-	poToken->id = pScanner->iToken;
+	poToken->id = pScanner->iToken + 1;		// + 1 to make sure we never have id 0
 	poToken->line = pScanner->lineTokenStart;
 	poToken->column = pScanner->columnTokenStart;
 	poToken->tokenk = tokenk;
@@ -670,22 +669,16 @@ void makeTokenWithLexeme(Scanner * pScanner, TOKENK tokenk, char * lexeme, Token
 		}
 	}
 
+    forceWrite(&pScanner->prevBuffer, poToken);
 	pScanner->madeToken = true;
 	pScanner->iToken++;
 }
 
 void makeErrorToken(Scanner * pScanner, GRFERRTOK grferrtok, Token * poToken)
 {
-	if (grferrtok)
-	{
-		makeToken(pScanner, TOKENK_Error, poToken);
-		poToken->grferrtok = grferrtok;
-	}
-	else
-	{
-		Assert(false);
-		poToken->tokenk = TOKENK_Nil;
-	}
+	Assert(grferrtok);
+	makeToken(pScanner, TOKENK_Error, poToken);
+	poToken->grferrtok = grferrtok;
 }
 
 void makeEofToken(Scanner * pScanner, Token * poToken)

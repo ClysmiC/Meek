@@ -1,6 +1,7 @@
 #pragma once
 
-#include "common.h"
+#include "als.h"
+
 #include "token.h"
 
 enum SCANEXITK
@@ -42,7 +43,7 @@ struct Scanner
 
 	// Peek and prev buffers
 
-	static constexpr uint s_lookMax=16;
+    static constexpr uint s_lookMax = 16;
 	RingBuffer<Token, s_lookMax> peekBuffer;
 	RingBuffer<Token, s_lookMax> prevBuffer;    // More recent tokens are at the end of the buffer
 
@@ -55,13 +56,16 @@ struct Scanner
 	SCANEXITK	scanexitk = SCANEXITK_Nil;
 };
 
-// Public interface
+
+
+// Public
 
 bool init(Scanner * pScanner, char * pText, uint textSize, char * pLexemeBuffer, uint lexemeBufferSize);
 TOKENK nextToken(Scanner * pScanner, Token * poToken);
 TOKENK peekToken(Scanner * pScanner, Token * poToken, uint lookahead=0);
 TOKENK prevToken(Scanner * pScanner, Token * poToken, uint lookbehind=0);
 bool isFinished(Scanner * pScanner);
+
 
 
 // Internal

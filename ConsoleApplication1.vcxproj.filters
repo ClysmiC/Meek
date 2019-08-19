@@ -9,54 +9,65 @@
       <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
       <Extensions>h;hh;hpp;hxx;hm;inl;inc;xsd</Extensions>
     </Filter>
-    <Filter Include="Resource Files">
-      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
-      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    <Filter Include="Header Files\als">
+      <UniqueIdentifier>{e6de0e7e-411f-4d3d-aa7e-a83d6c80437a}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="token.h">
+    <ClInclude Include="src\als\als.h">
+      <Filter>Header Files\als</Filter>
+    </ClInclude>
+    <ClInclude Include="src\als\common.h">
+      <Filter>Header Files\als</Filter>
+    </ClInclude>
+    <ClInclude Include="src\als\common_alloc.h">
+      <Filter>Header Files\als</Filter>
+    </ClInclude>
+    <ClInclude Include="src\als\common_array.h">
+      <Filter>Header Files\als</Filter>
+    </ClInclude>
+    <ClInclude Include="src\als\common_type.h">
+      <Filter>Header Files\als</Filter>
+    </ClInclude>
+    <ClInclude Include="src\als\macro.h">
+      <Filter>Header Files\als</Filter>
+    </ClInclude>
+    <ClInclude Include="src\als\macro_assert.h">
+      <Filter>Header Files\als</Filter>
+    </ClInclude>
+    <ClInclude Include="src\als\macro_defer.h">
+      <Filter>Header Files\als</Filter>
+    </ClInclude>
+    <ClInclude Include="src\als\macro_mem.h">
+      <Filter>Header Files\als</Filter>
+    </ClInclude>
+    <ClInclude Include="src\ast.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="scan.h">
+    <ClInclude Include="src\parse.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="macro_defer.h">
+    <ClInclude Include="src\scan.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="common_type.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="common.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="common_macro.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="macro_mem.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="macro_assert.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="common_array.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="parse.h">
+    <ClInclude Include="src\token.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="main.cpp">
+    <ClCompile Include="src\ast.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="scan.cpp">
+    <ClCompile Include="src\main.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="token.cpp">
+    <ClCompile Include="src\parse.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="parse.cpp">
+    <ClCompile Include="src\scan.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\token.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

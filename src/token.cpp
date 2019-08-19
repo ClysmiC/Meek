@@ -1,4 +1,3 @@
-#include "common.h"
 #include "token.h"
 
 ReservedWord g_reservedWords[] = {

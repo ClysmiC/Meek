@@ -18,6 +18,28 @@
       <Platform>x64</Platform>
     </ProjectConfiguration>
   </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="src\als\als.h" />
+    <ClInclude Include="src\als\common.h" />
+    <ClInclude Include="src\als\common_alloc.h" />
+    <ClInclude Include="src\als\common_array.h" />
+    <ClInclude Include="src\als\common_type.h" />
+    <ClInclude Include="src\als\macro.h" />
+    <ClInclude Include="src\als\macro_assert.h" />
+    <ClInclude Include="src\als\macro_defer.h" />
+    <ClInclude Include="src\als\macro_mem.h" />
+    <ClInclude Include="src\ast.h" />
+    <ClInclude Include="src\parse.h" />
+    <ClInclude Include="src\scan.h" />
+    <ClInclude Include="src\token.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="src\ast.cpp" />
+    <ClCompile Include="src\main.cpp" />
+    <ClCompile Include="src\parse.cpp" />
+    <ClCompile Include="src\scan.cpp" />
+    <ClCompile Include="src\token.cpp" />
+  </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{FAFEABCC-FEA7-4798-B916-7C0B7955B4EC}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>
@@ -89,6 +111,7 @@
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <TreatWarningAsError>true</TreatWarningAsError>
+      <AdditionalIncludeDirectories>C:\Users\Andrew\Desktop\lang\lang\src\als;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -142,24 +165,6 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
   </ItemDefinitionGroup>
-  <ItemGroup>
-    <ClCompile Include="main.cpp" />
-    <ClCompile Include="parse.cpp" />
-    <ClCompile Include="scan.cpp" />
-    <ClCompile Include="token.cpp" />
-  </ItemGroup>
-  <ItemGroup>
-    <ClInclude Include="common.h" />
-    <ClInclude Include="common_array.h" />
-    <ClInclude Include="common_macro.h" />
-    <ClInclude Include="common_type.h" />
-    <ClInclude Include="macro_assert.h" />
-    <ClInclude Include="macro_defer.h" />
-    <ClInclude Include="macro_mem.h" />
-    <ClInclude Include="parse.h" />
-    <ClInclude Include="scan.h" />
-    <ClInclude Include="token.h" />
-  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

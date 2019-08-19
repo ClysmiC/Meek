@@ -1,22 +1,20 @@
 #pragma once
 
-#include "common_type.h"
-
 #include "macro_assert.h"
 
 // Ring Buffer (not thread safe)
 
-template <typename T, uint Capacity>
+template <typename T, unsigned int Capacity>
 struct RingBuffer
 {
-	static constexpr uint cCapacity = Capacity;
+	static constexpr unsigned int cCapacity = Capacity;
 
     T buffer[Capacity];
-	uint iBufferRead = 0;
-	uint cItem = 0;
+	unsigned int iBufferRead = 0;
+	unsigned int cItem = 0;
 };
 
-template <typename T, uint Capacity>
+template <typename T, unsigned int Capacity>
 bool read(RingBuffer<T, Capacity> * pRbuf, T * poT)
 {
     if (pRbuf->cItem == 0) return false;
@@ -31,7 +29,7 @@ bool read(RingBuffer<T, Capacity> * pRbuf, T * poT)
     return true;
 }
 
-template <typename T, uint Capacity>
+template <typename T, unsigned int Capacity>
 bool write(RingBuffer<T, Capacity> * pRbuf, T * pT)
 {
 	if (pRbuf->cItem >= Capacity)
@@ -40,7 +38,7 @@ bool write(RingBuffer<T, Capacity> * pRbuf, T * pT)
 		return false;
 	}
 
-	uint iBufferWrite = (pRbuf->iBufferRead + pRbuf->cItem) % Capacity;
+	unsigned int iBufferWrite = (pRbuf->iBufferRead + pRbuf->cItem) % Capacity;
     pRbuf->buffer[iBufferWrite] = *pT;
 
     pRbuf->cItem++;
@@ -48,10 +46,10 @@ bool write(RingBuffer<T, Capacity> * pRbuf, T * pT)
     return true;
 }
 
-template <typename T, uint Capacity>
+template <typename T, unsigned int Capacity>
 void forceWrite(RingBuffer<T, Capacity> * pRbuf, T * pT)
 {
-	if (pRBuf->cItem < Capacity)
+	if (pRbuf->cItem < Capacity)
 	{
 		write(pRbuf, pT);
 	}
@@ -60,7 +58,7 @@ void forceWrite(RingBuffer<T, Capacity> * pRbuf, T * pT)
 		// Overwrite first item in the buffer with the new one and
 		//	bump the read index
 
-		uint iBufferWrite = pRbuf->iBufferRead;
+		unsigned int iBufferWrite = pRbuf->iBufferRead;
 		pRbuf->buffer[iBufferWrite] = *pT;
 
 		pRbuf->iBufferRead++;
@@ -68,25 +66,25 @@ void forceWrite(RingBuffer<T, Capacity> * pRbuf, T * pT)
 	}
 }
 
-template <typename T, uint Capacity>
-bool peek(RingBuffer<T, Capacity> * pRbuf, uint iItem, T * poT)
+template <typename T, unsigned int Capacity>
+bool peek(RingBuffer<T, Capacity> * pRbuf, unsigned int iItem, T * poT)
 {
 	if (iItem >= pRbuf->cItem) return false;
 
-	uint iBufferPeek = (pRbuf->iBufferRead + iItem) % Capacity;
+	unsigned int iBufferPeek = (pRbuf->iBufferRead + iItem) % Capacity;
 	*poT = pRbuf->buffer[iBufferPeek];
 
 	return true;
 }
 
-template <typename T, uint Capacity>
+template <typename T, unsigned int Capacity>
 bool isEmpty(RingBuffer<T, Capacity> * pRbuf)
 {
 	return pRbuf->cItem != 0;
 }
 
-template <typename T, uint Capacity>
-uint count(RingBuffer<T, Capacity> * pRbuf)
+template <typename T, unsigned int Capacity>
+unsigned int count(RingBuffer<T, Capacity> * pRbuf)
 {
 	return pRbuf->cItem;
 }
