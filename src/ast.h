@@ -102,13 +102,13 @@ struct AstExpr
 	union
 	{
 		AstAssignmentExpr	assignmentExpr;
-        AstUnopExpr         unopExpr;
-		AstBinopExpr 	    binopExpr;
+		AstUnopExpr			unopExpr;
+		AstBinopExpr		binopExpr;
 		AstLiteralExpr		literalExpr;
 		AstGroupExpr		groupExpr;
 	};
 
-	EXPRK				    exprk;
+	EXPRK					exprk;
 };
 
 struct AstStmt
@@ -122,29 +122,29 @@ struct AstStmt
 
 struct AstNode
 {
-    // First union trick is to force this struct to 32 bytes
+	// First union trick is to force this struct to 32 bytes
 
-    union
-    {
-        struct
-        {
-            // Second union trick is to make AstNode of every type really be the exact
-            //  same struct under the hood. See note at top of file.
+	union
+	{
+		struct
+		{
+			// Second union trick is to make AstNode of every type really be the exact
+			//	same struct under the hood. See note at top of file.
 
-	        union
-	        {
-		        AstExpr			expr;
-		        AstStmt			stmt;
-	        };
+			union
+			{
+				AstExpr			expr;
+				AstStmt			stmt;
+			};
 
-            ASTNODEK			astnodek;
+			ASTNODEK			astnodek;
 
-	        int					id;
-	        int					startLine;
-        };
+			int					id;
+			int					startLine;
+		};
 
-        char _padding[32];
-    };
+		char _padding[32];
+	};
 };
 
 StaticAssert(sizeof(AstNode) == 32);		// Goal: Make it so 2 AstNodes fit in a cache line. This might be hard/impossible but it's my goal!
