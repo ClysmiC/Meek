@@ -81,6 +81,35 @@ TOKENK prevToken(Scanner * pScanner, Token * poToken, uint lookbehind)
 	return poToken->tokenk;
 }
 
+bool tryConsumeToken(Scanner * pScanner, TOKENK tokenk, Token * poToken)
+{
+	TOKENK tokenk = peekToken(pScanner, poToken);
+
+	if (tokenk == tokenk)
+	{
+		consumeNextToken(pScaner, poToken);
+		return true;
+	}
+
+	return false;
+}
+
+bool tryConsumeToken(Scanner * pScanner, TOKENK * aTokenk, int cTokenk, Token * poToken)
+{
+	TOKENK tokenk = peekToken(pScanner, poToken);
+
+	for (int i = 0; i < cTokenk; i++)
+	{
+		if (tokenk == aTokenk[i])
+		{
+			consumeNextToken(pScaner, poToken);
+			return true;
+		}
+	}
+
+	return false;
+}
+
 TOKENK consumeNextToken(Scanner * pScanner, Token * poToken)
 {
 	onStartToken(pScanner);
@@ -318,6 +347,40 @@ TOKENK consumeNextToken(Scanner * pScanner, Token * poToken)
 			{
 				if (tryConsume(pScanner, '=')) makeToken(pScanner, TOKENK_GreaterEqual, poToken);
 				else makeToken(pScanner, TOKENK_Greater, poToken);
+			} break;
+
+			case '|':
+			{
+				if (tryConsume(pScanner, '|'))
+				{
+					if (tryConsume(pScanner, '=')) makeToken(pScanner, TOKENK_PipePipeEqual, poToken);
+					else makeToken(pScanner, TOKENK_PipePipe, poToken);
+				}
+				else if (tryConsume(pScanner, '='))
+				{
+					makeToken(pScanner, TOKENK_PipeEqual, poToken);
+				}
+				else
+				{
+					makeToken(pScanner, TOKENK_Pipe, poToken);
+				}
+			} break;
+
+			case '&':
+			{
+				if (tryConsume(pScanner, '|'))
+				{
+					if (tryConsume(pScanner, '=')) makeToken(pScanner, TOKENK_AmpAmpEqual, poToken);
+					else makeToken(pScanner, TOKENK_AmpAmp, poToken);
+				}
+				else if (tryConsume(pScanner, '='))
+				{
+					makeToken(pScanner, TOKENK_AmpEqual, poToken);
+				}
+				else
+				{
+					makeToken(pScanner, TOKENK_Amp, poToken);
+				}
 			} break;
 
 			case ' ':

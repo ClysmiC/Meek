@@ -37,6 +37,16 @@ enum TOKENK
 	TOKENK_MinusMinus,
 	TOKENK_PlusPlus,
 
+	TOKENK_Pipe,
+	TOKENK_PipeEqual,
+	TOKENK_PipePipe,
+	TOKENK_PipePipeEqual,
+
+	TOKENK_Amp,
+	TOKENK_AmpEqual,
+	TOKENK_AmpAmp,
+	TOKENK_AmpAmpEqual,
+
 	TOKENK_PlusEqual,
 	TOKENK_MinusEqual,
 	TOKENK_StarEqual,

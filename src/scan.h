@@ -61,9 +61,11 @@ struct Scanner
 // Public
 
 bool init(Scanner * pScanner, char * pText, uint textSize, char * pLexemeBuffer, uint lexemeBufferSize);
-TOKENK nextToken(Scanner * pScanner, Token * poToken);
+TOKENK nextToken(Scanner * pScanner, Token * poToken);	// TODO: replace this with TryConsumeToken?
 TOKENK peekToken(Scanner * pScanner, Token * poToken, uint lookahead=0);
 TOKENK prevToken(Scanner * pScanner, Token * poToken, uint lookbehind=0);
+bool tryConsumeToken(Scanner * pScanner, TOKENK tokenk, Token * poToken);
+bool tryConsumeToken(Scanner * pScanner, TOKENK * aTokenk, int cTokenk, Token * poToken);
 bool isFinished(Scanner * pScanner);
 
 

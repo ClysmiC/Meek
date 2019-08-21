@@ -48,8 +48,7 @@ namespace _Als_Helper
 template <typename T, unsigned int Capacity>
 struct FixedPoolAllocator
 {
-    // Free list is doubly linked list embedded inside of unallocated slots. Doubly linked so that
-    //  an item already on the list can be moved to the front and repair any cycles that would create.
+    // Free list is doubly linked list embedded inside of unallocated slots.
 
     struct FreeListNode
     {
@@ -133,7 +132,13 @@ void release(FixedPoolAllocator<T, Capacity> * pAlloc, T* pItem)
 #ifdef ALS_DEBUG
 	{
 
-        // Detect releasing item that is already on the free list
+        // Detect releasing item that is already on the free list. For this, we assert
+		//	so that hopefully the user can catch this bug during development. In release,
+		//	this is a silent failure which will result in the free list becoming a cycle,
+		//	meaning future allocations in this buggy state may clobber data from older
+		//	ones. This is pretty nasty, but if we wanted to perform this check quickly
+		//	in release we would need to add more bookkeeping. Maybe that would be worth
+		//	it, but for now I am fine with this behavior.
 
         fpa::FreeListNode * pFreeNode = pAlloc->pFree;
         while (pFreeNode)

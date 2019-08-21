@@ -8,34 +8,39 @@ struct AstExpr;
 struct AstStmt;
 struct AstNode;
 
-enum ASTNODEK : u8
+enum ASTCATK
 {
-	ASTNODEK_Expr,
-	ASTNODEK_Stmt,
+	ASTCATK_Error,
+	ASTCATK_Expr,
+	ASTCATK_Stmt
 };
 
-enum EXPRK : u8
+enum ASTK //: u8
 {
-	EXPRK_Assignment,
+	ASTK_Error,
 
-	EXPRK_Unop,
-	EXPRK_Binop,
+	// EXPR
 
-	EXPRK_Literal,
-	EXPRK_Group,
+	ASTK_UnopExpr,
+	ASTK_BinopExpr,
+	ASTK_LiteralExpr,
+	ASTK_GroupExpr,
+
+	ASTK_ExprMax,		// Illegal value, used to determine ASTCATK
+
+	// STMT
+
+	ASTK_ExprStmt,
+	ASTK_AssignStmt,	// This is a statement unless I find a good reason to make it an expression
+	ASTK_VarDeclStmt,
+	ASTK_FunDeclStmt,
+
+	ASTK_StmtMax		// Illegal value, used to determine ASTCATK
 };
 
-enum STMTK : u8
-{
-	STMTK_Expr,
-
-	STMTK_VarDecl,
-	STMTK_FunDecl
-};
 
 
-
-// IMPORTANT: All AstNodes in the tree are the exact same struct (AstNode). Switch on the ASTNODEK to
+// IMPORTANT: All AstNodes in the tree are the exact same struct (AstNode). Switch on the ASTK to
 //	get the kind of node, and then switch on the exprk or stmtk to get further details.
 //	It is important that these unions are the first member in each struct, so that if you have
 //	a pointer to a more detailed type, you can just cast it to an AstNode to access things like
@@ -43,25 +48,27 @@ enum STMTK : u8
 //
 // If a specific kind of node is very large in memory, then EVERY node will be that large. Keep the nodes small!
 
+struct AstError
+{
+	// Errors propogate up the AST
+
+	AstNode * pChildren[4] = { 0 };
+};
 
 // Expressions
 
-struct AstAssignmentExpr
-{
-	// TODO
-};
 
 struct AstUnopExpr
 {
 	Token *			pOp;
-	AstExpr *		pExpr;
+	AstNode *		pExpr;
 };
 
 struct AstBinopExpr
 {
 	Token *			pOp;
-	AstExpr *		pLhs;
-	AstExpr *		pRhs;
+	AstNode *		pLhsExpr;
+	AstNode *		pRhsExpr;
 };
 
 struct AstLiteralExpr
@@ -71,7 +78,7 @@ struct AstLiteralExpr
 
 struct AstGroupExpr
 {
-	AstExpr *		pExpr;
+	AstNode *		pExpr;
 };
 
 
@@ -80,7 +87,13 @@ struct AstGroupExpr
 
 struct AstExprStmt
 {
-	AstExpr *		pExpr;
+	AstNode *		pExpr;
+};
+
+struct AstAssignStmt
+{
+	AstNode * pLhsExpr;
+	AstNode * pRhsExpr;
 };
 
 struct AstVarDeclStmt
@@ -91,33 +104,6 @@ struct AstVarDeclStmt
 struct AstFunDeclStmt
 {
 	// TODO
-};
-
-
-
-// Node Definition
-
-struct AstExpr
-{
-	union
-	{
-		AstAssignmentExpr	assignmentExpr;
-		AstUnopExpr			unopExpr;
-		AstBinopExpr		binopExpr;
-		AstLiteralExpr		literalExpr;
-		AstGroupExpr		groupExpr;
-	};
-
-	EXPRK					exprk;
-};
-
-struct AstStmt
-{
-	union
-	{
-	};
-
-	STMTK				stmtk;
 };
 
 struct AstNode
@@ -133,11 +119,20 @@ struct AstNode
 
 			union
 			{
-				AstExpr			expr;
-				AstStmt			stmt;
+				AstError			error;
+
+				// EXPR
+
+				AstAssignExpr		assignExpr;
+				AstUnopExpr			unopExpr;
+				AstBinopExpr		binopExpr;
+				AstLiteralExpr		literalExpr;
+				AstGroupExpr		groupExpr;
+
+				// STMT
 			};
 
-			ASTNODEK			astnodek;
+			ASTK				astk;
 
 			int					id;
 			int					startLine;
@@ -149,3 +144,22 @@ struct AstNode
 
 StaticAssert(sizeof(AstNode) == 32);		// Goal: Make it so 2 AstNodes fit in a cache line. This might be hard/impossible but it's my goal!
 											//	If 32 bytes is too restrictive, relax this to 64 bytes
+
+inline ASTCATK category(ASTK astk)
+{
+	if (astk == ASTK_Error) return ASTK_Error;
+	if (astk < ASTK_Expr) return ASTK_Expr;
+
+	Assert(astk < ASTK_Stmt);
+	return ASTK_Stmt;
+}
+
+inline ASTCATK category(AstNode * pNode)
+{
+	return category(pNode->astk);
+}
+
+inline bool isErrorNode(AstNode * pNode)
+{
+	return pNode->astk == ASTK_Error;
+}
