@@ -229,22 +229,9 @@ struct DynamicPoolAllocator
 	static constexpr int s_cRecentlyReleasedMax = _Als_Helper::max(16, CapacityPerBucket / 4);
 	T *         aRecentlyReleased[s_cRecentlyReleasedMax];
 	int         cRecentlyReleased = 0;
-
-	~DynamicPoolAllocator()
-	{
-		// Free all buckets
-
-		Bucket * pBucket = this->pBuckets;
-		while (pBucket)
-		{
-			Bucket * pBucketNext = pBucket->pNextBucket;
-			delete pBucket;
-			pBucket = pBucketNext;
-		}
-	}
 };
 
-template <typename T, unsigned int CapacityPerBucket = 512>
+template <typename T, unsigned int CapacityPerBucket>
 void init(DynamicPoolAllocator<T, CapacityPerBucket> * pAlloc)
 {
 	typedef DynamicPoolAllocator<T, CapacityPerBucket> dpa;
@@ -254,6 +241,20 @@ void init(DynamicPoolAllocator<T, CapacityPerBucket> * pAlloc)
 	pAlloc->pBuckets = new dpa::Bucket;
     init(&pAlloc->pBuckets->alloc);
 	pAlloc->pFree = pAlloc->pBuckets;
+}
+
+template <typename T, unsigned int CapacityPerBucket>
+void destroy(DynamicPoolAllocator<T, CapacityPerBucket> * pAlloc)
+{
+	// Free all buckets
+
+	Bucket * pBucket = pAlloc->pBuckets;
+	while (pBucket)
+	{
+		Bucket * pBucketNext = pBucket->pNextBucket;
+		delete pBucket;
+		pBucket = pBucketNext;
+	}
 }
 
 template <typename T, unsigned int CapacityPerBucket>
@@ -435,7 +436,7 @@ void reinit(DynamicPoolAllocator<T, CapacityPerBucket> * pAlloc)
 
 	// Free all of our buckets
 
-	pAlloc->~dpa();
+	destroy(pAlloc);
 
 	// Reinitialize
 
