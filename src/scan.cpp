@@ -45,7 +45,7 @@ TOKENK peekToken(Scanner * pScanner, Token * poToken, uint lookahead)
 	while (!isFinished(pScanner) && count(&rbuf) < lookahead)
 	{
 		consumeNextToken(pScanner, &tokenLookahead);
-		write(&rbuf, &tokenLookahead);
+		write(&rbuf, tokenLookahead);
 	}
 
 	// If we peek any amount past the end of the file we return nil token
@@ -81,28 +81,28 @@ TOKENK prevToken(Scanner * pScanner, Token * poToken, uint lookbehind)
 	return poToken->tokenk;
 }
 
-bool tryConsumeToken(Scanner * pScanner, TOKENK tokenk, Token * poToken)
+bool tryConsumeToken(Scanner * pScanner, TOKENK tokenkMatch, Token * poToken)
 {
 	TOKENK tokenk = peekToken(pScanner, poToken);
 
-	if (tokenk == tokenk)
+	if (tokenk == tokenkMatch)
 	{
-		consumeNextToken(pScaner, poToken);
+		consumeNextToken(pScanner, poToken);
 		return true;
 	}
 
 	return false;
 }
 
-bool tryConsumeToken(Scanner * pScanner, TOKENK * aTokenk, int cTokenk, Token * poToken)
+bool tryConsumeToken(Scanner * pScanner, const TOKENK * aTokenkMatch, int cTokenkMatch, Token * poToken)
 {
 	TOKENK tokenk = peekToken(pScanner, poToken);
 
-	for (int i = 0; i < cTokenk; i++)
+	for (int i = 0; i < cTokenkMatch; i++)
 	{
-		if (tokenk == aTokenk[i])
+		if (tokenk == aTokenkMatch[i])
 		{
-			consumeNextToken(pScaner, poToken);
+			consumeNextToken(pScanner, poToken);
 			return true;
 		}
 	}
@@ -263,6 +263,12 @@ TOKENK consumeNextToken(Scanner * pScanner, Token * poToken)
 				else makeToken(pScanner, TOKENK_Star, poToken);
 			} break;
 
+			case '%':
+			{
+				if (tryConsume(pScanner, '=')) makeToken(pScanner, TOKENK_PercentEqual, poToken);
+				else makeToken(pScanner, TOKENK_Percent, poToken);
+			} break;
+
 			case '/':
 			{
 				// HMM: Any value in capturing the comment lexeme and passing it as a token
@@ -415,9 +421,9 @@ TOKENK consumeNextToken(Scanner * pScanner, Token * poToken)
 							// @Slow
 
 							bool isReservedWord = false;
-							for (int i = 0; i < g_reservedWordCount; i++)
+							for (int i = 0; i < g_cReservedWord; i++)
 							{
-								ReservedWord * pReservedWord = g_reservedWords + i;
+								const ReservedWord * pReservedWord = g_aReservedWord + i;
 
 								if (strncmp(lexeme, pReservedWord->lexeme, lexemeLength) == 0)
 								{
@@ -732,7 +738,7 @@ void makeTokenWithLexeme(Scanner * pScanner, TOKENK tokenk, char * lexeme, Token
 		}
 	}
 
-    forceWrite(&pScanner->prevBuffer, poToken);
+    forceWrite(&pScanner->prevBuffer, *poToken);
 	pScanner->madeToken = true;
 	pScanner->iToken++;
 }

@@ -48,7 +48,18 @@ int main()
 		return 1;
 	}
 
-	Token token;
+    Parser parser;
+    if (!init(&parser, &scanner))
+    {
+        // TODO: distinguish this as internal compiler error
+
+        fprintf(stderr, "Failed to initialize parser");
+        return 1;
+    }
+
+    parse(&parser);
+
+	/*Token token;
 	while (nextToken(&scanner, &token) != TOKENK_Eof)
 	{
 		if (token.tokenk == TOKENK_Error)
@@ -59,7 +70,7 @@ int main()
 		{
 			fprintf(stdout, "%s : %d\n", token.lexeme, token.tokenk);
 		}
-	}
+	}*/
 
 	getchar();
 }

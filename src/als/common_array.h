@@ -35,6 +35,8 @@
 #endif
 #endif
 
+#include <stdlib.h>     // realloc for DynamicArray
+
 // Ring Buffer (not thread safe)
 
 template <typename T, unsigned int Capacity>
@@ -84,7 +86,7 @@ void forceWrite(RingBuffer<T, Capacity> * pRbuf, const T & t)
 {
 	if (pRbuf->cItem < Capacity)
 	{
-		write(pRbuf, pT);
+		write(pRbuf, t);
 	}
 	else
 	{
@@ -146,14 +148,16 @@ void init (DynamicArray<T> * pArray, unsigned int startingCapacity=16)
 template <typename T>
 void ensureCapacity(DynamicArray<T> * pArray, unsigned int requestedCapacity)
 {
+    typedef DynamicArray<T> da;
+
 	if (requestedCapacity <= pArray->capacity) return;
 
-	unsigned int newCapacity = pArray->capacity;
+	unsigned int newCapacity = (pArray->capacity > 0) ? pArray->capacity : 1;
 
 	while (newCapacity < requestedCapacity)
 	{
 		unsigned int prevNewCapacity = newCapacity;
-		newCapacity *= da::s_growthFactor;
+		newCapacity = static_cast<unsigned int>(newCapacity * da::s_growthFactor + 1.0f);       // + 1 to force round up
 
 		// Overflow check... probably overkill
 
@@ -163,7 +167,9 @@ void ensureCapacity(DynamicArray<T> * pArray, unsigned int requestedCapacity)
 		}
 	}
 
-	pArray->pBuffer = ALS_COMMON_ARRAY_Verify(static_cast<T *>(realloc(pArray->pBuffer, newCapacity * sizeof(T))));
+	pArray->pBuffer = static_cast<T *>(realloc(pArray->pBuffer, newCapacity * sizeof(T)));
+    ALS_COMMON_ARRAY_Assert(pArray->pBuffer);
+
 	pArray->capacity = newCapacity;
 }
 
@@ -226,3 +232,5 @@ void remove(DynamicArray<T> * pArray, int iItem)
 
 	pArray->cItem--;
 }
+
+// TODO: operator[]

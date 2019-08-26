@@ -57,10 +57,10 @@ struct FixedPoolAllocator
 
     ALS_COMMON_ALLOC_StaticAssert(sizeof(T) >= sizeof(FreeListNode));        // Pool allocated type must be >= 2 * size of a pointer so that unallocated slots may maintain a doubly linked free list
 
-    static constexpr unsigned int   s_capacity = Capacity;
+    static constexpr unsigned int s_capacity = Capacity;
 
-	T                               aPool[Capacity];
-	FreeListNode *                  pFree = reinterpret_cast<FreeListNode *>(aPool);
+	T aPool[Capacity];
+	FreeListNode * pFree = reinterpret_cast<FreeListNode *>(aPool);
 };
 
 template <typename T, unsigned int Capacity>
@@ -215,20 +215,21 @@ struct DynamicPoolAllocator
 {
     struct Bucket
     {
-        FixedPoolAllocator<T, CapacityPerBucket>    alloc;
-		Bucket *                                    pNextBucket = nullptr;	// List of all buckets that we own. Sorted by memory address, low to high
-		Bucket *                                    pNextFree = nullptr;	// Only valid for bucket on the free list
+        FixedPoolAllocator<T, CapacityPerBucket> alloc;
+		Bucket * pNextBucket = nullptr;     // List of all buckets that we own. Sorted by memory address, low to high
+		Bucket * pNextFree = nullptr;       // Only valid for bucket on the free list
     };
 
-    Bucket *    pBuckets = nullptr;     // Linked list of all buckets
-    Bucket *    pFree = nullptr;        // Linked list of just buckets w/ capacity
+    Bucket * pBuckets = nullptr;     // Linked list of all buckets
+    Bucket * pFree = nullptr;        // Linked list of just buckets w/ capacity
 
     // We need to traverse the linked list to know which bucket the released
     //  item is in. Batch this operation to make it happen infrequently
 
 	static constexpr int s_cRecentlyReleasedMax = _Als_Helper::max(16, CapacityPerBucket / 4);
-	T *         aRecentlyReleased[s_cRecentlyReleasedMax];
-	int         cRecentlyReleased = 0;
+
+	T * aRecentlyReleased[s_cRecentlyReleasedMax];
+	int cRecentlyReleased = 0;
 };
 
 template <typename T, unsigned int CapacityPerBucket>
@@ -236,7 +237,7 @@ void init(DynamicPoolAllocator<T, CapacityPerBucket> * pAlloc)
 {
 	typedef DynamicPoolAllocator<T, CapacityPerBucket> dpa;
 
-    // Pre-allocate the first bucket
+    // Pre-allocate the first bucket. No reason we couldn' delay this until the first allocation, but meh.
 
 	pAlloc->pBuckets = new dpa::Bucket;
     init(&pAlloc->pBuckets->alloc);

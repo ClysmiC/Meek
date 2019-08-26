@@ -65,7 +65,7 @@ TOKENK nextToken(Scanner * pScanner, Token * poToken);	// TODO: replace this wit
 TOKENK peekToken(Scanner * pScanner, Token * poToken, uint lookahead=0);
 TOKENK prevToken(Scanner * pScanner, Token * poToken, uint lookbehind=0);
 bool tryConsumeToken(Scanner * pScanner, TOKENK tokenk, Token * poToken);
-bool tryConsumeToken(Scanner * pScanner, TOKENK * aTokenk, int cTokenk, Token * poToken);
+bool tryConsumeToken(Scanner * pScanner, const TOKENK * aTokenk, int cTokenk, Token * poToken);
 bool isFinished(Scanner * pScanner);
 
 

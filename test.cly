@@ -1,11 +1,1 @@
-{ ( != == // this is a comment that goes to the end of the line
-
-/* this /* is a /* nested // * ***/ comment /* add one more heh */*/ at 1 */
-
-thisisanidentifier
-
-3.09403.044
-
--45
-
-true
+4.4 + 37 - (7 - 1) * 44 / 2

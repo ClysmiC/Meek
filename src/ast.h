@@ -15,7 +15,7 @@ enum ASTCATK
 	ASTCATK_Stmt
 };
 
-enum ASTK //: u8
+enum ASTK : u8
 {
 	ASTK_Error,
 
@@ -38,6 +38,13 @@ enum ASTK //: u8
 	ASTK_StmtMax		// Illegal value, used to determine ASTCATK
 };
 
+enum ASTERRK : u16
+{
+	ASTERRK_ExpectedExpr,
+	ASTERRK_UnexpectedEof,
+	ASTERRK_ExpectedCloseParen,
+};
+
 
 
 // IMPORTANT: All AstNodes in the tree are the exact same struct (AstNode). Switch on the ASTK to
@@ -52,7 +59,9 @@ struct AstError
 {
 	// Errors propogate up the AST
 
-	AstNode * pChildren[4] = { 0 };
+	AstNode * pChildren[2] = { 0 };
+
+	ASTERRK asterrk;
 };
 
 // Expressions
@@ -108,6 +117,10 @@ struct AstFunDeclStmt
 
 struct AstNode
 {
+    // Compiler implicitly deleted this constructor because of the union trickery it seems. Lame.
+
+    AstNode() {}
+
 	// First union trick is to force this struct to 32 bytes
 
 	union
@@ -123,13 +136,14 @@ struct AstNode
 
 				// EXPR
 
-				AstAssignExpr		assignExpr;
 				AstUnopExpr			unopExpr;
 				AstBinopExpr		binopExpr;
 				AstLiteralExpr		literalExpr;
 				AstGroupExpr		groupExpr;
 
 				// STMT
+
+				AstAssignStmt		assignExpr;
 			};
 
 			ASTK				astk;
@@ -147,11 +161,11 @@ StaticAssert(sizeof(AstNode) == 32);		// Goal: Make it so 2 AstNodes fit in a ca
 
 inline ASTCATK category(ASTK astk)
 {
-	if (astk == ASTK_Error) return ASTK_Error;
-	if (astk < ASTK_Expr) return ASTK_Expr;
+	if (astk == ASTK_Error) return ASTCATK_Error;
+	if (astk < ASTK_ExprMax) return ASTCATK_Expr;
 
-	Assert(astk < ASTK_Stmt);
-	return ASTK_Stmt;
+	Assert(astk < ASTK_StmtMax);
+	return ASTCATK_Stmt;
 }
 
 inline ASTCATK category(AstNode * pNode)

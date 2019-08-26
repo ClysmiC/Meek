@@ -1,22 +1,45 @@
 #include "parse.h"
 #include "scan.h"
 
+
 // The downside to using a union instead of inheritance is that I can't implicitly upcast. Since there is quite
 //	a bit of pointer casting required, these helpers make it slightly more succinct
 
 #define Up(pNode) reinterpret_cast<AstNode *>(pNode)
-#define AstNew(pParser, astk) reinterpret_cast<Ast##astk *>(astNew(pParser, astk))
+#define AstNew(pParser, astk) reinterpret_cast<Ast##astk *>(astNew(pParser, ASTK_##astk))
 
-void init(Parser * pParser, Scanner * pScanner)
+// TODO: should assignment statement be in here?
+// What about . operator?
+
+static ParseOp s_aParseOp[] = {
+	{ 0, { TOKENK_Star, TOKENK_Slash, TOKENK_Percent }, 3 },
+	{ 1, { TOKENK_Plus, TOKENK_Minus }, 2 },
+	{ 2, { TOKENK_Lesser, TOKENK_Greater, TOKENK_LesserEqual, TOKENK_GreaterEqual }, 4 },
+	{ 3, { TOKENK_EqualEqual, TOKENK_BangEqual }, 2 },
+	{ 4, { TOKENK_Amp }, 1 },
+	{ 5, { TOKENK_Pipe }, 1 },
+	{ 6, { TOKENK_AmpAmp }, 1 },
+	{ 7, { TOKENK_PipePipe }, 1 },
+};
+static constexpr int s_iParseOpMax = ArrayLen(s_aParseOp);
+
+bool init(Parser * pParser, Scanner * pScanner)
 {
+    if (!pParser || !pScanner) return false;
+
 	pParser->pScanner = pScanner;
 	init(&pParser->astAlloc);
 	init(&pParser->tokenAlloc);
+
+    return true;
 }
 
 AstNode * parse(Parser * pParser)
 {
-	return nullptr;
+	// TODO: Make this parse a list of statements. For now it is just driving some tests...
+
+	AstNode * pNode = parseExpr(pParser);
+	return pNode;
 }
 
 AstNode * parseStmt(Parser * pParser)
@@ -44,50 +67,120 @@ AstNode * parseAssignStmt(Parser * pParser)
 	}
 	else
 	{
-		return lhsExpr;
+		return pLhsExpr;
 	}
 }
 
 AstNode * parseExpr(Parser * pParser)
 {
-	return parseOrExpr(pParser);
+	return parseOp(pParser, s_aParseOp[s_iParseOpMax]);
 }
 
-AstNode * parseOrExpr(Parser * pParser)
+AstNode * parseOp(Parser * pParser, const ParseOp & op)
 {
-	AstNode * pExpr = parseAndExpr(pParser);
-	if (isErrorNode(pExpr)) return pExpr;
-
-	while (tryConsumeToken(pParser->pScanner, TOKEN_PipePipe, ensurePendingToken(pParser)))
+	if (op.precedence == 0)
 	{
-		AstNode * pRhsExpr = parseExpr(pParser);
-		if (isErrorNode(pRhsExpr))
+        return parsePrimary(pParser);
+	}
+	else
+	{
+		ParseOp & opNext = s_aParseOp[op.precedence - 1];
+		AstNode * pExpr = parseOp(pParser, opNext);
+		if (isErrorNode(pExpr)) return pExpr;
+
+		while (tryConsumeToken(pParser->pScanner, op.aTokenkMatch, op.cTokenMatch, ensurePendingToken(pParser)))
+		{
+			AstNode * pRhsExpr = parseOp(pParser, opNext);
+			if (isErrorNode(pRhsExpr))
+			{
+				auto * pError = AstNew(pParser, Error);
+				pError->pChildren[0] = pExpr;
+				pError->pChildren[1] = pRhsExpr;
+				return Up(pError);
+			}
+
+			auto pNode = AstNew(pParser, BinopExpr);
+			pNode->pOp = claimPendingToken(pParser);
+			pNode->pLhsExpr = pExpr;
+			pNode->pRhsExpr = pRhsExpr;
+
+			pExpr = Up(pNode);
+		}
+
+		return pExpr;
+	}
+}
+
+AstNode * parsePrimary(Parser * pParser)
+{
+	if (tryConsumeToken(pParser->pScanner, TOKENK_OpenParen, ensurePendingToken(pParser)))
+	{
+		// Group ( )
+
+		AstNode * pExpr = parseExpr(pParser);
+
+		if (isErrorNode(pExpr))
 		{
 			auto * pError = AstNew(pParser, Error);
 			pError->pChildren[0] = pExpr;
-			pError->pChildren[1] = pRhsExpr;
 			return Up(pError);
 		}
 
-		auto pOrExpr = AstNew(pParser, BinopExpr);
-		pNode->pOp = claimPendingToken(pParser);
-		pNode->pLhsExpr = pExrl;
-		pNode->pRhsExpr = pRhsExpr;
+		if (!tryConsumeToken(pParser->pScanner, TOKENK_CloseParen, ensurePendingToken(pParser)))
+		{
+			auto * pError = AstNew(pParser, Error);
+			pError->asterrk = ASTERRK_ExpectedCloseParen;
+			pError->pChildren[0] = pExpr;
+			return Up(pError);
+		}
 
-		pExpr = pOrExpr;
+		auto * pNode = AstNew(pParser, GroupExpr);
+		pNode->pExpr = pExpr;
+		return Up(pNode);
 	}
+	else if (tryConsumeToken(pParser->pScanner, g_aTokenkLiteral, g_cTokenkLiteral, ensurePendingToken(pParser)))
+	{
+		// Literal
 
-	return pExpr;
+		auto * pNode = AstNew(pParser, LiteralExpr);
+		pNode->pToken = claimPendingToken(pParser);
+		return Up(pNode);
+	}
+	else if (tryConsumeToken(pParser->pScanner, TOKENK_Identifier, ensurePendingToken(pParser)))
+	{
+		// Identifier
+
+		// TODO: also handle chaining dots, functions (), array access []...
+
+        return nullptr;
+	}
+	else
+	{
+		// Error
+
+		if (tryConsumeToken(pParser->pScanner, TOKENK_Eof, ensurePendingToken(pParser)))
+		{
+			auto * pError = AstNew(pParser, Error);
+			pError->asterrk = ASTERRK_UnexpectedEof;
+			return Up(pError);
+		}
+		else
+		{
+			auto * pError = AstNew(pParser, Error);
+			pError->asterrk = ASTERRK_ExpectedExpr;
+			return Up(pError);
+		}
+	}
 }
 
 AstNode * astNew(Parser * pParser, ASTK astk)
 {
-	AstNode * pNode = allocate(pParser->astAlloc);
+	AstNode * pNode = allocate(&pParser->astAlloc);
 	pNode->astk = astk;
 	pNode->id = pParser->iNode;
 	pParser->iNode++;
 
-	pParser->apAstNodes.push_back(pNode);
+	append(&pParser->astNodes, pNode);
 
 	return pNode;
 }

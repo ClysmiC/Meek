@@ -29,6 +29,7 @@ enum TOKENK
 	TOKENK_Minus,
 	TOKENK_Star,
 	TOKENK_Slash,
+	TOKENK_Percent,
 	TOKENK_Equal,
 	TOKENK_Bang,
 	TOKENK_Lesser,
@@ -51,6 +52,7 @@ enum TOKENK
 	TOKENK_MinusEqual,
 	TOKENK_StarEqual,
 	TOKENK_SlashEqual,
+	TOKENK_PercentEqual,
 	TOKENK_EqualEqual,
 	TOKENK_BangEqual,
 	TOKENK_LesserEqual,
@@ -99,6 +101,7 @@ enum TOKENK
 	TOKENK_LiteralMin = TOKENK_IntLiteral,
 	TOKENK_LiteralMax = TOKENK_StringLiteral + 1
 };
+
 
 
 enum FERRTOK : u32
@@ -182,7 +185,10 @@ inline void nillify(Token * poToken)
 	poToken->tokenk = TOKENK_Nil;
 }
 
-// TODO: use a dict or trie for this
+// TODO: use a dict or trie for reserved words
 
-extern ReservedWord	g_reservedWords[];
-extern int			g_reservedWordCount;
+extern ReservedWord g_aReservedWord[];
+extern int g_cReservedWord;
+
+extern TOKENK g_aTokenkLiteral[];
+extern int g_cTokenkLiteral;

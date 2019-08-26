@@ -1,6 +1,16 @@
 #include "token.h"
 
-ReservedWord g_reservedWords[] = {
+TOKENK g_aTokenkLiteral[] = {
+	TOKENK_Identifier,
+	TOKENK_IntLiteral,
+	TOKENK_FloatLiteral,
+	TOKENK_BoolLiteral,
+	TOKENK_StringLiteral
+};
+
+int g_cTokenkLiteral = ArrayLen(g_aTokenkLiteral);
+
+ReservedWord g_aReservedWord[] = {
 	{ "if",			TOKENK_If },
 	{ "for",		TOKENK_For },
 	{ "while",		TOKENK_While },
@@ -26,4 +36,4 @@ ReservedWord g_reservedWords[] = {
 	{ "false",		TOKENK_BoolLiteral },
 };
 
-int g_reservedWordCount = ArrayLen(g_reservedWords);
+int g_cReservedWord = ArrayLen(g_aReservedWord);
