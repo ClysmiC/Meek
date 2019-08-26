@@ -9,7 +9,7 @@ struct Scanner;
 
 struct ParseOp
 {
-	static constexpr int s_cTokenMatchMax = 4;	// Feel free to bump this
+	static constexpr int s_cTokenMatchMax = 4;	// Bump as needed
 
 	int precedence;
 	TOKENK aTokenkMatch[s_cTokenMatchMax];

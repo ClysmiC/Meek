@@ -25,13 +25,13 @@ static constexpr int s_iParseOpMax = ArrayLen(s_aParseOp);
 
 bool init(Parser * pParser, Scanner * pScanner)
 {
-    if (!pParser || !pScanner) return false;
+	if (!pParser || !pScanner) return false;
 
 	pParser->pScanner = pScanner;
 	init(&pParser->astAlloc);
 	init(&pParser->tokenAlloc);
 
-    return true;
+	return true;
 }
 
 AstNode * parse(Parser * pParser)
@@ -80,7 +80,7 @@ AstNode * parseOp(Parser * pParser, const ParseOp & op)
 {
 	if (op.precedence == 0)
 	{
-        return parsePrimary(pParser);
+		return parsePrimary(pParser);
 	}
 	else
 	{
@@ -152,7 +152,7 @@ AstNode * parsePrimary(Parser * pParser)
 
 		// TODO: also handle chaining dots, functions (), array access []...
 
-        return nullptr;
+		return nullptr;
 	}
 	else
 	{
