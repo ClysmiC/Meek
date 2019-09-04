@@ -106,9 +106,11 @@ struct AstErr
 	// Errors propogate up the AST, but still hang on to their child nodes so that
 	//	we can clean whatever information we can from their valid children.
 
+
+	// TODO: Error node needs to have dynamic array of children since func call can have unlimited arguments!!!
+
 	static constexpr int s_cChildrenMax = 2;
 	AstNode * aChildren[s_cChildrenMax] = { 0 };
-
 };
 
 

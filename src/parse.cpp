@@ -12,6 +12,9 @@
 // Absolutely sucks that I need to use 0, 1, 2 suffixes. I tried this approach to simulate default parameters in a macro but MSVC has a bug
 //  with varargs expansion that made it blow up: https://stackoverflow.com/questions/3046889/optional-parameters-with-c-macros
 
+// TODO: need to redo this to support unlimited children. Maybe a macro isn't the way to go here. But maybe I just use a macro
+//	with var args that calls a function with var args???
+
 #define AstNewErr0(pParser, astkErr) reinterpret_cast<Ast##astkErr *>(astNewErr(pParser, ASTK_##astkErr, nullptr, nullptr))
 #define AstNewErr1(pParser, astkErr, pChild0) reinterpret_cast<Ast##astkErr *>(astNewErr(pParser, ASTK_##astkErr, pChild0, nullptr))
 #define AstNewErr2(pParser, astkErr, pChild0, pChild1) reinterpret_cast<Ast##astkErr *>(astNewErr(pParser, ASTK_##astkErr, pChild0, pChild1))
@@ -230,16 +233,16 @@ AstNode * finishParsePrimary(Parser * pParser, AstNode * pExpr)
 	{
 		// Array access
 
-		AstNode * pSubscript = parseExpr(pParser);
-		if (isErrorNode(pSubscript))
+		AstNode * pSubscriptExpr = parseExpr(pParser);
+		if (isErrorNode(pSubscriptExpr))
 		{
-			auto * pNode = AstNewErr1(pParser, BubbleErr, pSubscript);
+			auto * pNode = AstNewErr1(pParser, BubbleErr, pSubscriptExpr);
             return Up(pNode);
 		}
 
 		if (!tryConsumeToken(pParser->pScanner, TOKENK_CloseBracket, ensurePendingToken(pParser)))
 		{
-			auto * pNode = AstNewErr2(pParser, ExpectedTokenkErr, pExpr, pSubscript);
+			auto * pNode = AstNewErr2(pParser, ExpectedTokenkErr, pExpr, pSubscriptExpr);
 			pNode->tokenk = TOKENK_CloseBracket;
 
 			return Up(pNode);
@@ -247,13 +250,40 @@ AstNode * finishParsePrimary(Parser * pParser, AstNode * pExpr)
 
 		auto * pNode = AstNew(pParser, ArrayAccessExpr);
 		pNode->pArray = pExpr;
-		pNode->pSubscript = pSubscript;
+		pNode->pSubscript = pSubscriptExpr;
 
 		return finishParsePrimary(pParser, Up(pNode));
 	}
 	else if (tryConsumeToken(pParser->pScanner, TOKENK_OpenParen, ensurePendingToken(pParser)))
 	{
 		// TODO
+
+		bool isFirstArg = true;
+
+		while (!tryConsumeToken(pParser->pScanner, TOKENK_OpenParen, ensurePendingToken(pParser)))
+		{
+			// TODO: Error node needs to have dynamic array of children since func call can have unlimited arguments!!!
+
+			if (!isFirstArg && !tryConsumeToken(pParser->pScanner, TOKENK_Comma, ensurePendingToken(pParser)))
+			{
+				auto * pNode = AstNewErr1(pParser, ExpectedTokenkErr, pExpr);
+				pNode->tokenk = TOKENK_Comma;
+
+				// TODO: Add all of the nodes that we have parsed up to this point as children of this errror!
+				//	Then you can uncomment the actual return value and get rid of the null placeholder :)
+				return nullptr;
+				// return Up(pNode);
+			}
+
+			// Consume expr
+			// Bubble up error if needed.
+			//	- Remember to add all of the potentially infinite children to the bubble error!
+			// If not error, add to list of arguments
+			// Once we read the close paren, create the funcCall node and put the list of arguments
+			//	in it!
+
+			isFirstArg = false;
+		}
 
 		// Read comma separated list of expressions
 		// Read the close paren and error if we don't find one!!!
