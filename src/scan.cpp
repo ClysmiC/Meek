@@ -23,14 +23,14 @@ bool init(Scanner * pScanner, char * pText, uint textSize, char * pLexemeBuffer,
 
 TOKENK nextToken(Scanner * pScanner, Token * poToken)
 {
-	if (count(&pScanner->peekBuffer) > 0)
+	if (count(pScanner->peekBuffer) > 0)
 	{
 		read(&pScanner->peekBuffer, poToken);
 		return poToken->tokenk;
 	}
 	else
 	{
-		return consumeNextToken(pScanner, poToken);
+		return produceNextToken(pScanner, poToken);
 	}
 }
 
@@ -42,9 +42,9 @@ TOKENK peekToken(Scanner * pScanner, Token * poToken, uint lookahead)
 	// Consume tokens until we have enough in our buffer to peek that far
 
 	Token tokenLookahead;
-	while (!isFinished(pScanner) && count(&rbuf) < lookahead)
+	while (!isFinished(pScanner) && count(rbuf) <= lookahead)
 	{
-		consumeNextToken(pScanner, &tokenLookahead);
+		produceNextToken(pScanner, &tokenLookahead);
 		write(&rbuf, tokenLookahead);
 	}
 
@@ -52,7 +52,7 @@ TOKENK peekToken(Scanner * pScanner, Token * poToken, uint lookahead)
 
 	if (lookahead < rbuf.cItem)
 	{
-		Verify(peek(&rbuf, lookahead, poToken));
+		Verify(peek(rbuf, lookahead, poToken));
 	}
 	else
 	{
@@ -71,7 +71,7 @@ TOKENK prevToken(Scanner * pScanner, Token * poToken, uint lookbehind)
 
 	if (lookbehind < rbuf.cItem)
 	{
-		Verify(peek(&rbuf, rbuf.cItem - lookbehind - 1, poToken));
+		Verify(peek(rbuf, rbuf.cItem - lookbehind - 1, poToken));
 	}
 	else
 	{
@@ -87,7 +87,7 @@ bool tryConsumeToken(Scanner * pScanner, TOKENK tokenkMatch, Token * poToken)
 
 	if (tokenk == tokenkMatch)
 	{
-		consumeNextToken(pScanner, poToken);
+        Verify(read(&pScanner->peekBuffer, poToken));
 		return true;
 	}
 
@@ -102,7 +102,7 @@ bool tryConsumeToken(Scanner * pScanner, const TOKENK * aTokenkMatch, int cToken
 	{
 		if (tokenk == aTokenkMatch[i])
 		{
-			consumeNextToken(pScanner, poToken);
+            Verify(read(&pScanner->peekBuffer, poToken));
 			return true;
 		}
 	}
@@ -110,7 +110,7 @@ bool tryConsumeToken(Scanner * pScanner, const TOKENK * aTokenkMatch, int cToken
 	return false;
 }
 
-TOKENK consumeNextToken(Scanner * pScanner, Token * poToken)
+TOKENK produceNextToken(Scanner * pScanner, Token * poToken)
 {
 	onStartToken(pScanner);
 	while (!checkEndOfFile(pScanner))

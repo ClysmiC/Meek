@@ -1,0 +1,56 @@
+---Allocation and initialization---
+
+-RAII is rejected. You are ALLOWED to have uninitialized memory of any type.
+-Maybe there should still be some way to formally initialize something so that
+	you can have constraints that are set when you decide to initialize it.
+	-You can override this
+
+Syntax to arbitrarily set members of a struct in a single statement. Special syntax that requires that you set all members that are tagged with some property?
+
+
+
+---Operator overloading---
+-Allow overloading of arithmetic operators but disallow modifying the operands
+
+
+
+---Interfaces---
+-Interface is the way that dynamic dispatch is done.
+-Define a list of functions that must exist with the specified type in the appropriate spot.
+-By default are "implicit", but can be marked as "implicit" or "explicit". If explicit, implementing types
+	must say in their definition that they implement the interface and it is enforced by the compiler, even
+	if they are never used as such. Otherwise, the compiler only checks the implementation if it is actually
+	used as that type of interface.
+
+- Should interface also specify data members that you must have?
+- Should the parametr in the interface be required to be "using" ?
+
+interface IToString ::
+{
+	string ToString(this);
+}
+
+struct SomeExplicitStruct : IToString :
+{
+	// ...
+}
+
+string ToString(SomeExplicitStruct s) ::
+{
+	// ...
+}
+
+struct SomeImplicitStruct ::
+{
+	// ...
+}
+
+string ToString(SomeImplicitStruct s) ::
+{
+	// ...
+}
+
+
+
+---Misc---
+-constexpr (or equivalent) on function parameter? This allows static asserts for specific function parameters. Meh, maybe this is an area for templates.

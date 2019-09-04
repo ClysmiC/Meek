@@ -102,26 +102,26 @@ void forceWrite(RingBuffer<T, Capacity> * pRbuf, const T & t)
 }
 
 template <typename T, unsigned int Capacity>
-bool peek(RingBuffer<T, Capacity> * pRbuf, unsigned int iItem, T * poT)
+bool peek(const RingBuffer<T, Capacity> & pRbuf, unsigned int iItem, T * poT)
 {
-	if (iItem >= pRbuf->cItem) return false;
+	if (iItem >= pRbuf.cItem) return false;
 
-	unsigned int iBufferPeek = (pRbuf->iBufferRead + iItem) % Capacity;
-	*poT = pRbuf->buffer[iBufferPeek];
+	unsigned int iBufferPeek = (pRbuf.iBufferRead + iItem) % Capacity;
+	*poT = pRbuf.buffer[iBufferPeek];
 
 	return true;
 }
 
 template <typename T, unsigned int Capacity>
-bool isEmpty(RingBuffer<T, Capacity> * pRbuf)
+bool isEmpty(const RingBuffer<T, Capacity> & pRbuf)
 {
-	return pRbuf->cItem != 0;
+	return pRbuf.cItem != 0;
 }
 
 template <typename T, unsigned int Capacity>
-unsigned int count(RingBuffer<T, Capacity> * pRbuf)
+unsigned int count(const RingBuffer<T, Capacity> & pRbuf)
 {
-	return pRbuf->cItem;
+	return pRbuf.cItem;
 }
 
 

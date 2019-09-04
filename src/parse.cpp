@@ -1,17 +1,25 @@
 #include "parse.h"
 #include "scan.h"
 
-
 // The downside to using a union instead of inheritance is that I can't implicitly upcast. Since there is quite
 //	a bit of pointer casting required, these helpers make it slightly more succinct
 
 #define Up(pNode) reinterpret_cast<AstNode *>(pNode)
+#define Down(pNode, astk) reinterpret_cast<Ast##astk *>(pNode)
+#define DownConst(pNode, astk) reinterpret_cast<const Ast##astk *>(pNode)
 #define AstNew(pParser, astk) reinterpret_cast<Ast##astk *>(astNew(pParser, ASTK_##astk))
+
+// Absolutely sucks that I need to use 0, 1, 2 suffixes. I tried this approach to simulate default parameters in a macro but MSVC has a bug
+//  with varargs expansion that made it blow up: https://stackoverflow.com/questions/3046889/optional-parameters-with-c-macros
+
+#define AstNewErr0(pParser, astkErr) reinterpret_cast<Ast##astkErr *>(astNewErr(pParser, ASTK_##astkErr, nullptr, nullptr))
+#define AstNewErr1(pParser, astkErr, pChild0) reinterpret_cast<Ast##astkErr *>(astNewErr(pParser, ASTK_##astkErr, pChild0, nullptr))
+#define AstNewErr2(pParser, astkErr, pChild0, pChild1) reinterpret_cast<Ast##astkErr *>(astNewErr(pParser, ASTK_##astkErr, pChild0, pChild1))
 
 // TODO: should assignment statement be in here?
 // What about . operator?
 
-static ParseOp s_aParseOp[] = {
+static const ParseOp s_aParseOp[] = {
 	{ 0, { TOKENK_Star, TOKENK_Slash, TOKENK_Percent }, 3 },
 	{ 1, { TOKENK_Plus, TOKENK_Minus }, 2 },
 	{ 2, { TOKENK_Lesser, TOKENK_Greater, TOKENK_LesserEqual, TOKENK_GreaterEqual }, 4 },
@@ -73,42 +81,50 @@ AstNode * parseAssignStmt(Parser * pParser)
 
 AstNode * parseExpr(Parser * pParser)
 {
-	return parseOp(pParser, s_aParseOp[s_iParseOpMax]);
+	return parseOp(pParser, s_aParseOp[s_iParseOpMax - 1]);
 }
 
 AstNode * parseOp(Parser * pParser, const ParseOp & op)
 {
-	if (op.precedence == 0)
-	{
-		return parsePrimary(pParser);
-	}
-	else
-	{
-		ParseOp & opNext = s_aParseOp[op.precedence - 1];
-		AstNode * pExpr = parseOp(pParser, opNext);
-		if (isErrorNode(pExpr)) return pExpr;
+    auto oneStepLower = [](Parser * pParser, int precedence) -> AstNode *
+    {
+        Assert(precedence >= 0);
 
-		while (tryConsumeToken(pParser->pScanner, op.aTokenkMatch, op.cTokenMatch, ensurePendingToken(pParser)))
+        if (precedence == 0)
+        {
+            return parsePrimary(pParser);
+        }
+        else
+        {
+            const ParseOp & opNext = s_aParseOp[precedence - 1];
+            return parseOp(pParser, opNext);
+        }
+    };
+
+    AstNode * pExpr = oneStepLower(pParser, op.precedence);
+
+    Assert(pExpr);
+	if (isErrorNode(pExpr)) return pExpr;
+
+	while (tryConsumeToken(pParser->pScanner, op.aTokenkMatch, op.cTokenMatch, ensurePendingToken(pParser)))
+	{
+        Token * pOp = claimPendingToken(pParser);
+
+        AstNode * pRhsExpr = oneStepLower(pParser, op.precedence);
+		if (isErrorNode(pRhsExpr))
 		{
-			AstNode * pRhsExpr = parseOp(pParser, opNext);
-			if (isErrorNode(pRhsExpr))
-			{
-				auto * pError = AstNew(pParser, Error);
-				pError->pChildren[0] = pExpr;
-				pError->pChildren[1] = pRhsExpr;
-				return Up(pError);
-			}
-
-			auto pNode = AstNew(pParser, BinopExpr);
-			pNode->pOp = claimPendingToken(pParser);
-			pNode->pLhsExpr = pExpr;
-			pNode->pRhsExpr = pRhsExpr;
-
-			pExpr = Up(pNode);
+			auto * pNode = AstNewErr2(pParser, BubbleErr, pExpr, pRhsExpr);
 		}
 
-		return pExpr;
+		auto pNode = AstNew(pParser, BinopExpr);
+		pNode->pOp = pOp;
+		pNode->pLhsExpr = pExpr;
+		pNode->pRhsExpr = pRhsExpr;
+
+		pExpr = Up(pNode);
 	}
+
+	return pExpr;
 }
 
 AstNode * parsePrimary(Parser * pParser)
@@ -121,22 +137,21 @@ AstNode * parsePrimary(Parser * pParser)
 
 		if (isErrorNode(pExpr))
 		{
-			auto * pError = AstNew(pParser, Error);
-			pError->pChildren[0] = pExpr;
-			return Up(pError);
+			auto * pNode = AstNewErr0(pParser, BubbleErr);
+            return Up(pNode);
 		}
 
 		if (!tryConsumeToken(pParser->pScanner, TOKENK_CloseParen, ensurePendingToken(pParser)))
 		{
-			auto * pError = AstNew(pParser, Error);
-			pError->asterrk = ASTERRK_ExpectedCloseParen;
-			pError->pChildren[0] = pExpr;
-			return Up(pError);
+			auto * pNode = AstNewErr1(pParser, ExpectedTokenkErr, pExpr);
+			pNode->tokenk = TOKENK_CloseParen;
+			return Up(pNode);
 		}
 
 		auto * pNode = AstNew(pParser, GroupExpr);
 		pNode->pExpr = pExpr;
-		return Up(pNode);
+
+		return finishParsePrimary(pParser, Up(pNode));
 	}
 	else if (tryConsumeToken(pParser->pScanner, g_aTokenkLiteral, g_cTokenkLiteral, ensurePendingToken(pParser)))
 	{
@@ -150,26 +165,104 @@ AstNode * parsePrimary(Parser * pParser)
 	{
 		// Identifier
 
-		// TODO: also handle chaining dots, functions (), array access []...
+		Token * pIdent = claimPendingToken(pParser);
 
-		return nullptr;
+		auto * pNode = AstNew(pParser, VarExpr);
+		pNode->pOwner = nullptr;
+		pNode->pIdent = pIdent;
+
+		return finishParsePrimary(pParser, Up(pNode));
 	}
 	else
 	{
 		// Error
 
-		if (tryConsumeToken(pParser->pScanner, TOKENK_Eof, ensurePendingToken(pParser)))
+        Token throwaway;
+
+		auto * pNode = AstNewErr0(pParser, UnexpectedTokenkErr);
+		pNode->tokenk = peekToken(pParser->pScanner, &throwaway);
+		return Up(pNode);
+	}
+}
+
+AstNode * finishParsePrimary(Parser * pParser, AstNode * pExpr)
+{
+	switch (pExpr->astk)
+	{
+		case ASTK_GroupExpr:
+		case ASTK_FuncCallExpr:
+		case ASTK_ArrayAccessExpr:
+			break;
+
+		case ASTK_VarExpr:
 		{
-			auto * pError = AstNew(pParser, Error);
-			pError->asterrk = ASTERRK_UnexpectedEof;
-			return Up(pError);
-		}
-		else
+			Assert(Down(pExpr, VarExpr)->pIdent->tokenk == TOKENK_Identifier);
+		} break;
+
+		default:
+			Assert(false);
+	}
+
+	if (tryConsumeToken(pParser->pScanner, TOKENK_Dot, ensurePendingToken(pParser)))
+	{
+		// Member access
+
+		if (!tryConsumeToken(pParser->pScanner, TOKENK_Identifier, ensurePendingToken(pParser)))
 		{
-			auto * pError = AstNew(pParser, Error);
-			pError->asterrk = ASTERRK_ExpectedExpr;
-			return Up(pError);
+			auto * pNode = AstNewErr1(pParser, ExpectedTokenkErr, pExpr);
+			pNode->tokenk = TOKENK_Identifier;
+
+			return Up(pNode);
 		}
+
+		// COPYPASTE: from parsePrimary
+
+		Token * pIdent = claimPendingToken(pParser);
+		Assert(pIdent->tokenk == TOKENK_Identifier);
+
+		auto * pNode = AstNew(pParser, VarExpr);
+		pNode->pOwner = pExpr;
+		pNode->pIdent = pIdent;
+
+		return finishParsePrimary(pParser, Up(pNode));
+	}
+	else if (tryConsumeToken(pParser->pScanner, TOKENK_OpenBracket, ensurePendingToken(pParser)))
+	{
+		// Array access
+
+		AstNode * pSubscript = parseExpr(pParser);
+		if (isErrorNode(pSubscript))
+		{
+			auto * pNode = AstNewErr1(pParser, BubbleErr, pSubscript);
+            return Up(pNode);
+		}
+
+		if (!tryConsumeToken(pParser->pScanner, TOKENK_CloseBracket, ensurePendingToken(pParser)))
+		{
+			auto * pNode = AstNewErr2(pParser, ExpectedTokenkErr, pExpr, pSubscript);
+			pNode->tokenk = TOKENK_CloseBracket;
+
+			return Up(pNode);
+		}
+
+		auto * pNode = AstNew(pParser, ArrayAccessExpr);
+		pNode->pArray = pExpr;
+		pNode->pSubscript = pSubscript;
+
+		return finishParsePrimary(pParser, Up(pNode));
+	}
+	else if (tryConsumeToken(pParser->pScanner, TOKENK_OpenParen, ensurePendingToken(pParser)))
+	{
+		// TODO
+
+		// Read comma separated list of expressions
+		// Read the close paren and error if we don't find one!!!
+
+        return nullptr;
+	}
+	else
+	{
+		return pExpr;
 	}
 }
 
@@ -183,6 +276,19 @@ AstNode * astNew(Parser * pParser, ASTK astk)
 	append(&pParser->astNodes, pNode);
 
 	return pNode;
+}
+
+AstNode * astNewErr(Parser * pParser, ASTK astkErr, AstNode * pChild0, AstNode * pChild1)
+{
+	// HMM: Maybe this should be a template so that I can statically assert this...
+
+	Assert(category(astkErr) == ASTCATK_Error);
+
+	auto * pNode = Down(astNew(pParser, astkErr), Err);
+	pNode->aChildren[0] = pChild0;
+	pNode->aChildren[1] = pChild1;
+
+	return Up(pNode);
 }
 
 Token * ensurePendingToken(Parser * pParser)
@@ -202,3 +308,54 @@ Token * claimPendingToken(Parser * pParser)
 	pParser->pPendingToken = nullptr;
 	return pResult;
 }
+
+
+
+#if DEBUG
+
+#include <stdio.h>
+
+void debugPrintAst(const AstNode & root)
+{
+    debugPrintSubAst(root);
+    printf("\n");
+}
+
+void debugPrintSubAst(const AstNode & node)
+{
+    switch (node.astk)
+    {
+        case ASTK_BinopExpr:
+        {
+            auto pExpr = DownConst(&node, BinopExpr);
+            printf("(");
+            debugPrintSubAst(*pExpr->pLhsExpr);
+            printf(" %s ", pExpr->pOp->lexeme);
+            debugPrintSubAst(*pExpr->pRhsExpr);
+            printf(")");
+        } break;
+
+        case ASTK_GroupExpr:
+        {
+            auto pExpr = DownConst(&node, GroupExpr);
+            printf("(");
+            debugPrintSubAst(*pExpr->pExpr);
+            printf(")");
+        } break;
+
+        case ASTK_LiteralExpr:
+        {
+            auto pExpr = DownConst(&node, LiteralExpr);
+            printf("%s", pExpr->pToken->lexeme);
+        } break;
+
+        default:
+        {
+            // Not implemented!
+
+            Assert(false);
+        }
+    }
+}
+
+#endif

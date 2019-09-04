@@ -4,8 +4,6 @@
 
 #include "token.h"
 
-struct AstExpr;
-struct AstStmt;
 struct AstNode;
 
 enum ASTCATK
@@ -17,7 +15,13 @@ enum ASTCATK
 
 enum ASTK : u8
 {
-	ASTK_Error,
+	// ERR
+
+	ASTK_BubbleErr,
+	ASTK_UnexpectedTokenkErr,
+	ASTK_ExpectedTokenkErr,
+
+	ASTK_ErrMax,
 
 	// EXPR
 
@@ -25,6 +29,9 @@ enum ASTK : u8
 	ASTK_BinopExpr,
 	ASTK_LiteralExpr,
 	ASTK_GroupExpr,
+	ASTK_VarExpr,
+	ASTK_ArrayAccessExpr,
+	ASTK_FuncCallExpr,
 
 	ASTK_ExprMax,		// Illegal value, used to determine ASTCATK
 
@@ -33,17 +40,30 @@ enum ASTK : u8
 	ASTK_ExprStmt,
 	ASTK_AssignStmt,	// This is a statement unless I find a good reason to make it an expression
 	ASTK_VarDeclStmt,
-	ASTK_FunDeclStmt,
+	ASTK_FuncDeclStmt,
+	ASTK_StructDeclStmt,
+	ASTK_IfStmt,
+	ASTK_WhileStmt,
+
+	// TODO: for statement... once I figure out what I want it to look like
 
 	ASTK_StmtMax		// Illegal value, used to determine ASTCATK
 };
 
-enum ASTERRK : u16
-{
-	ASTERRK_ExpectedExpr,
-	ASTERRK_UnexpectedEof,
-	ASTERRK_ExpectedCloseParen,
-};
+// enum ASTERRK : u16
+// {
+// 	ASTERRK_Bubble,
+
+
+// 	ASTERRK_UnexpectedTokenk,
+
+// 	// Expected token kind
+
+// 	ASTERRK_ExpectedExpr,
+// 	ASTERRK_ExpectedCloseParen,
+// 	ASTERRK_ExpectedCloseBracket,
+// 	ASTERRK_ExpectedIdentifier,
+// };
 
 
 
@@ -55,39 +75,91 @@ enum ASTERRK : u16
 //
 // If a specific kind of node is very large in memory, then EVERY node will be that large. Keep the nodes small!
 
-struct AstError
+// Errors
+
+struct AstBubbleErr
 {
-	// Errors propogate up the AST
-
-	AstNode * pChildren[2] = { 0 };
-
-	ASTERRK asterrk;
 };
+
+struct AstUnexpectedTokenkErr
+{
+	TOKENK tokenk;
+};
+
+struct AstExpectedTokenkErr
+{
+	TOKENK tokenk;
+};
+
+struct AstErr
+{
+	// NOTE: Error kind is encoded in ASTK
+	// NOTE: Using same union trick for upcasting/downcasting that AstNode uses
+
+	union
+	{
+		AstBubbleErr bubbleErr;
+		AstUnexpectedTokenkErr unexpectedTokenErr;
+		AstExpectedTokenkErr expectedTokenErr;
+	};
+
+	// Errors propogate up the AST, but still hang on to their child nodes so that
+	//	we can clean whatever information we can from their valid children.
+
+	static constexpr int s_cChildrenMax = 2;
+	AstNode * aChildren[s_cChildrenMax] = { 0 };
+
+};
+
+
 
 // Expressions
 
 
 struct AstUnopExpr
 {
-	Token *			pOp;
-	AstNode *		pExpr;
+	Token *	pOp;
+	AstNode * pExpr;
 };
 
 struct AstBinopExpr
 {
-	Token *			pOp;
-	AstNode *		pLhsExpr;
-	AstNode *		pRhsExpr;
+	Token *	pOp;
+	AstNode * pLhsExpr;
+	AstNode * pRhsExpr;
 };
 
 struct AstLiteralExpr
 {
-	Token *			pToken;
+	Token *	pToken;
 };
 
 struct AstGroupExpr
 {
-	AstNode *		pExpr;
+	AstNode * pExpr;
+};
+
+struct AstVarExpr
+{
+	// Better way to store identifier here? Should we store resolve info?
+
+	// NOTE: pOwner is the left hand side of the '.' -- null means that it is
+	//	just a plain old variable without a dot.
+
+	AstNode * pOwner;
+	Token * pIdent;
+};
+
+struct AstArrayAccessExpr
+{
+	AstNode * pArray;
+	AstNode * pSubscript;
+};
+
+struct AstFuncCallExpr
+{
+	AstNode * pFunc;
+	DynamicArray<AstNode *> pArgs;
 };
 
 
@@ -96,7 +168,7 @@ struct AstGroupExpr
 
 struct AstExprStmt
 {
-	AstNode *		pExpr;
+	AstNode * pExpr;
 };
 
 struct AstAssignStmt
@@ -110,7 +182,7 @@ struct AstVarDeclStmt
 	// TODO
 };
 
-struct AstFunDeclStmt
+struct AstFuncDeclStmt
 {
 	// TODO
 };
@@ -132,7 +204,7 @@ struct AstNode
 
 			union
 			{
-				AstError			error;
+				AstErr  			err;
 
 				// EXPR
 
@@ -140,6 +212,9 @@ struct AstNode
 				AstBinopExpr		binopExpr;
 				AstLiteralExpr		literalExpr;
 				AstGroupExpr		groupExpr;
+				AstVarExpr			varExpr;
+				AstArrayAccessExpr	arrayAccessExpr;
+				AstFuncCallExpr		funcCallExpr;
 
 				// STMT
 
@@ -161,7 +236,7 @@ StaticAssert(sizeof(AstNode) == 32);		// Goal: Make it so 2 AstNodes fit in a ca
 
 inline ASTCATK category(ASTK astk)
 {
-	if (astk == ASTK_Error) return ASTCATK_Error;
+	if (astk == ASTK_ErrMax) return ASTCATK_Error;
 	if (astk < ASTK_ExprMax) return ASTCATK_Expr;
 
 	Assert(astk < ASTK_StmtMax);
@@ -175,5 +250,5 @@ inline ASTCATK category(AstNode * pNode)
 
 inline bool isErrorNode(AstNode * pNode)
 {
-	return pNode->astk == ASTK_Error;
+	return pNode->astk < ASTK_ErrMax;
 }

@@ -57,7 +57,8 @@ int main()
         return 1;
     }
 
-    parse(&parser);
+    AstNode * pAst = parse(&parser);
+    debugPrintAst(*pAst);
 
 	/*Token token;
 	while (nextToken(&scanner, &token) != TOKENK_Eof)

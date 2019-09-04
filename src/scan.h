@@ -72,7 +72,7 @@ bool isFinished(Scanner * pScanner);
 
 // Internal
 
-TOKENK consumeNextToken(Scanner * pScanner, Token * poToken);
+TOKENK produceNextToken(Scanner * pScanner, Token * poToken);
 bool tryConsume(Scanner * pScanner, char expected);
 bool tryConsume(Scanner * pScanner, char rangeMin, char rangeMax, char * poMatch=nullptr);
 bool tryPeek(Scanner * pScanner, char expected, int lookahead=0);
