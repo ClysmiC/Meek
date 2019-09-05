@@ -2,6 +2,8 @@
 
 #include "als.h"
 
+// Keep in sync with g_mpTokenkDisplay
+
 enum TOKENK
 {
 	TOKENK_Error,
@@ -192,3 +194,5 @@ extern int g_cReservedWord;
 
 extern TOKENK g_aTokenkLiteral[];
 extern int g_cTokenkLiteral;
+
+extern const char * g_mpTokenkDisplay[];

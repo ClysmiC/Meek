@@ -25,7 +25,10 @@ int main()
 
 	int bytesRead = file ? fread(buffer, 0x1, bufferSize, file) : -1;
 
-	char * lexemeBuffer = new char[bytesRead];
+    // NOTE: Lexeme buffer size is multiplied by 2 to handle worst case scenario where each byte is its own lexeme,
+    //  which gets written into the buffer and then null terminated.
+
+	char * lexemeBuffer = new char[bytesRead * 2];
 	Defer(delete[] lexemeBuffer);
 
 	if (bytesRead < 0)
@@ -58,7 +61,10 @@ int main()
     }
 
     AstNode * pAst = parse(&parser);
+
+#if DEBUG
     debugPrintAst(*pAst);
+#endif
 
 	/*Token token;
 	while (nextToken(&scanner, &token) != TOKENK_Eof)

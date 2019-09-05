@@ -6,7 +6,7 @@
 
 #ifndef ALS_COMMON_ARRAY_StaticAssert
 #ifndef ALS_DEBUG
-#define ALS_COMMON_ARRAY StaticAssert(x)
+#define ALS_COMMON_ARRAY_StaticAssert(x)
 #elif defined(ALS_MACRO)
 #define ALS_COMMON_ARRAY_StaticAssert(x) StaticAssert(x)
 #else
@@ -17,7 +17,7 @@
 
 #ifndef ALS_COMMON_ARRAY_Assert
 #ifndef ALS_DEBUG
-#define ALS_COMMON_ARRAY Assert(x)
+#define ALS_COMMON_ARRAY_Assert(x)
 #elif defined(ALS_MACRO)
 #define ALS_COMMON_ARRAY_Assert(x) Assert(x)
 #else
@@ -136,14 +136,55 @@ struct DynamicArray
 	unsigned int capacity = 0;
 
 	static constexpr float s_growthFactor = 1.5f;
+
+	const T& operator[] (unsigned int i) const
+	{
+		return this->pBuffer[i];
+	}
+
+	T& operator[] (unsigned int i)
+	{
+		return this->pBuffer[i];
+	}
 };
 
 template <typename T>
 void init (DynamicArray<T> * pArray, unsigned int startingCapacity=16)
 {
-	ALS_COMMON_ARRAY_Assert(!pBuffer);
+    // UGH: I wish I could assert this, but there is trickiness with unions containing
+    //  dynamic arrays and my pool allocator not zero-initializing the memory.
+
+	// ALS_COMMON_ARRAY_Assert(!pArray->pBuffer);
+
+    pArray->cItem = 0;
+    pArray->capacity = 0;
+    pArray->pBuffer = nullptr;
+
 	ensureCapacity(pArray, startingCapacity);
 }
+
+template <typename T>
+void initMove (DynamicArray<T> * pArray, DynamicArray<T> * pArraySrc)
+{
+    // UGH: I wish I could assert this, but there is trickiness with unions containing
+    //  dynamic arrays and my pool allocator not zero-initializing the memory.
+
+	// ALS_COMMON_ARRAY_Assert(!pArray->pBuffer);
+	*pArray = *pArraySrc;
+
+	pArraySrc->pBuffer = nullptr;
+	pArraySrc->cItem = 0;
+	pArraySrc->capacity = 0;
+}
+
+template <typename T>
+void destroy (DynamicArray<T> * pArray)
+{
+    // UGH: This isn't robust against pBuffer being unitialized (CDCDCDCD)
+
+	if (pArray->pBuffer) free(pArray->pBuffer);
+}
+
 
 template <typename T>
 void ensureCapacity(DynamicArray<T> * pArray, unsigned int requestedCapacity)
@@ -185,6 +226,18 @@ void append(DynamicArray<T> * pArray, const T & t)
 }
 
 template <typename T>
+void appendMultiple(DynamicArray<T> * pArray, const T aT[], int cT)
+{
+	ensureCapacity(pArray, pArray->cItem + cT);
+
+	for (int i = 0; i < cT; i++)
+	{
+		pArray->pBuffer[pArray->cItem] = aT[i];
+		pArray->cItem++;
+	}
+}
+
+template <typename T>
 void prepend(DynamicArray<T> * pArray, const T & t)
 {
 	// Slowest way to insert
@@ -200,7 +253,7 @@ void prepend(DynamicArray<T> * pArray, const T & t)
 	T * pDst = pArray->pBuffer + 1;
 	T * pSrc = pArray->pBuffer;
 
-	memmove(pDst, pSrc, cItemShift);
+	memmove(pDst, pSrc, cItemShift * sizeof(T));
 
 	pArray->pBuffer[0] = t;
 	pArray->cItem++;
@@ -232,5 +285,3 @@ void remove(DynamicArray<T> * pArray, int iItem)
 
 	pArray->cItem--;
 }
-
-// TODO: operator[]

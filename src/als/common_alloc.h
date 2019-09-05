@@ -5,34 +5,34 @@
 #endif
 
 #ifndef ALS_COMMON_ALLOC_StaticAssert
-    #ifndef ALS_DEBUG
-        #define ALS_COMMON_ALLOC StaticAssert(x)
-    #elif defined(ALS_MACRO)
-        #define ALS_COMMON_ALLOC_StaticAssert(x) StaticAssert(x)
-    #else
-        // C11 _Static_assert
-        #define ALS_COMMON_ALLOC_StaticAssert(x) _Static_assert(x)
-    #endif
+#ifndef ALS_DEBUG
+#define ALS_COMMON_ALLOC_StaticAssert(X)
+#elif defined(ALS_MACRO)
+#define ALS_COMMON_ALLOC_StaticAssert(x) StaticAssert(x)
+#else
+// C11 _Static_assert
+#define ALS_COMMON_ALLOC_StaticAssert(x) _Static_assert(x)
+#endif
 #endif
 
 #ifndef ALS_COMMON_ALLOC_Assert
-    #ifndef ALS_DEBUG
-        #define ALS_COMMON_ALLOC Assert(x)
-    #elif defined(ALS_MACRO)
-        #define ALS_COMMON_ALLOC_Assert(x) Assert(x)
-    #else
-        // C assert
-        #include <assert.h>
-        #define ALS_COMMON_ALLOC_Assert(x) assert(x)
-    #endif
+#ifndef ALS_DEBUG
+#define ALS_COMMON_ALLOC_Assert(x)
+#elif defined(ALS_MACRO)
+#define ALS_COMMON_ALLOC_Assert(x) Assert(x)
+#else
+// C assert
+#include <assert.h>
+#define ALS_COMMON_ALLOC_Assert(x) assert(x)
+#endif
 #endif
 
 #ifndef ALS_COMMON_ALLOC_Verify
-	#ifndef ALS_DEBUG
-		#define ALS_COMMON_ALLOC_Verify(x) x
-	#else
-		#define ALS_COMMON_ALLOC_Verify(x) ALS_COMMON_ALLOC_Assert(x)
-	#endif
+#ifndef ALS_DEBUG
+#define ALS_COMMON_ALLOC_Verify(x) x
+#else
+#define ALS_COMMON_ALLOC_Verify(x) ALS_COMMON_ALLOC_Assert(x)
+#endif
 #endif
 
 namespace _Als_Helper
@@ -59,7 +59,7 @@ struct FixedPoolAllocator
 
     static constexpr unsigned int s_capacity = Capacity;
 
-	T aPool[Capacity];
+    T aPool[Capacity];
 	FreeListNode * pFree = reinterpret_cast<FreeListNode *>(aPool);
 };
 

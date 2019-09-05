@@ -47,9 +47,8 @@ AstNode * parseExpr(Parser * pParser);
 
 // Internal
 
-
-StaticAssert(AstErr::s_cChildrenMax == 2); // Keep the # of error children in sync!
 AstNode * astNewErr(Parser * pParser, ASTK astkErr, AstNode * pChild0=nullptr, AstNode * pChild1=nullptr);
+AstNode * astNewErr(Parser * pParser, ASTK astkErr, AstNode * aPChildren[], uint cPChildren);
 
 AstNode * astNew(Parser * pParser, ASTK astk);
 
@@ -70,6 +69,6 @@ Token * claimPendingToken(Parser * pParser);
 #if DEBUG
 
 void debugPrintAst(const AstNode & pRoot);
-void debugPrintSubAst(const AstNode & pNode);
+void debugPrintSubAst(const AstNode & pNode, int level, bool skipAfterArrow, DynamicArray<bool> * pMapLevelSkip);
 
 #endif

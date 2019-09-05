@@ -651,6 +651,8 @@ void writeCurrentLexemeIntoBuffer(Scanner * pScanner)
 
 	pScanner->pLexemeBuffer[pScanner->iLexemeBuffer + lexemeSize] = '\0';
 	pScanner->iLexemeBuffer += lexemeSize + 1;
+
+    Assert(pScanner->iLexemeBuffer < pScanner->lexemeBufferSize);
 }
 
 void makeToken(Scanner * pScanner, TOKENK tokenk, Token * poToken)

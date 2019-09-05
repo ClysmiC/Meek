@@ -107,10 +107,7 @@ struct AstErr
 	//	we can clean whatever information we can from their valid children.
 
 
-	// TODO: Error node needs to have dynamic array of children since func call can have unlimited arguments!!!
-
-	static constexpr int s_cChildrenMax = 2;
-	AstNode * aChildren[s_cChildrenMax] = { 0 };
+	DynamicArray<AstNode *> aPChildren;
 };
 
 
@@ -161,7 +158,7 @@ struct AstArrayAccessExpr
 struct AstFuncCallExpr
 {
 	AstNode * pFunc;
-	DynamicArray<AstNode *> pArgs;
+	DynamicArray<AstNode *> aPArgs;		// Args are EXPR
 };
 
 
@@ -199,6 +196,7 @@ struct AstNode
 
 	union
 	{
+
 		struct
 		{
 			// Second union trick is to make AstNode of every type really be the exact
@@ -223,13 +221,15 @@ struct AstNode
 				AstAssignStmt		assignExpr;
 			};
 
+            // NOTE: These fields MUST be after the above union in the struct
+
 			ASTK				astk;
 
 			int					id;
 			int					startLine;
 		};
 
-		char _padding[32];
+        char _padding[32];
 	};
 };
 
@@ -238,7 +238,7 @@ StaticAssert(sizeof(AstNode) == 32);		// Goal: Make it so 2 AstNodes fit in a ca
 
 inline ASTCATK category(ASTK astk)
 {
-	if (astk == ASTK_ErrMax) return ASTCATK_Error;
+	if (astk < ASTK_ErrMax) return ASTCATK_Error;
 	if (astk < ASTK_ExprMax) return ASTCATK_Expr;
 
 	Assert(astk < ASTK_StmtMax);

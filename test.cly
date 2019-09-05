@@ -1,1 +1,1 @@
-4.4 + 37 - (7 - 1) * 44 / 2
+twoDArrayOfStructs[7 + 4][myVariable].value + 37 - (myFunc(myArg0, myArg1 myArg2) - 1) * 44 / 2 * someStruct.someInnerStruct.someVariable
