@@ -36,6 +36,7 @@ enum TOKENK
 	TOKENK_Bang,
 	TOKENK_Lesser,
 	TOKENK_Greater,
+	TOKENK_Carat,
 
 	TOKENK_MinusMinus,
 	TOKENK_PlusPlus,
@@ -142,7 +143,7 @@ enum INTLITERALK
 struct Token
 {
 	int			id = 0;
-	int			line = 0;
+	int			line = 0;       // Technically the "start" line if there are any tokens that can span multiple lines
 	int			column = 0;
 
 	TOKENK		tokenk = TOKENK_Nil;
@@ -194,5 +195,8 @@ extern int g_cReservedWord;
 
 extern TOKENK g_aTokenkLiteral[];
 extern int g_cTokenkLiteral;
+
+extern TOKENK g_aTokenkUnopPre[];
+extern int g_cTokenkUnopPre;
 
 extern const char * g_mpTokenkDisplay[];

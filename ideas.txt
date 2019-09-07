@@ -76,3 +76,4 @@ defer
 	- how would this work with short circuit evaluation?
 	- would only really be useful for asserts... maybe warn if used outside of an assert?
 -"banish" keyword that makes a variable no longer in scope. Can be used to help avoid typos. Like if a parameters in cTabs and you want to make a variable cTabsNext = cTabs + 1 that you pass to recursive function calls, then you can banish cTabs to make sure you don't accidentally pass that.
+-different operators for pointer arithmetic? ptr + 4 increments by 4 * size of underlying ptr type, but ptr ++ 4 increments be 4 bytes?

@@ -6,8 +6,23 @@ TOKENK g_aTokenkLiteral[] = {
 	TOKENK_BoolLiteral,
 	TOKENK_StringLiteral
 };
-
 int g_cTokenkLiteral = ArrayLen(g_aTokenkLiteral);
+
+TOKENK g_aTokenkUnopPre[] = {
+	TOKENK_Plus,		// HMM: Is this worthwhile to have?
+	TOKENK_Minus,
+	TOKENK_Bang,
+	TOKENK_Carat,		// Address-of
+	TOKENK_Greater,		// Dereference... I kinda like this but hope it doesn't lead to ambiguity! Also it needs ot be able to stack, i.e., >> could be confused with bit shift?
+};
+int g_cTokenkUnopPre = ArrayLen(g_aTokenkUnopPre);
+
+// Not sure it is worth supporting this. If anything, maybe just make these pre-ops to make it easier to parse?
+
+// TOKENK g_aTokenkUnopPost[] = {
+// 	TOKENK_PlusPlus,
+// 	TOKENK_MinusMinus,
+// };
 
 ReservedWord g_aReservedWord[] = {
 	{ "if",			TOKENK_If },
@@ -64,6 +79,7 @@ const char * g_mpTokenkDisplay[] = {
 	"'!'",					// TOKENK_Bang
 	"'<'",					// TOKENK_Lesser
 	"'>'",					// TOKENK_Greater
+	"'^'",					// TOKENK_Carat
 	"'--'",					// TOKENK_MinusMinus
 	"'++'",					// TOKENK_PlusPlus
 	"'|'",					// TOKENK_Pipe
@@ -106,4 +122,4 @@ const char * g_mpTokenkDisplay[] = {
 	"'enum'",				// TOKENK_Enum
 	"<end of file>",		// TOKENK_Eof
 };
-StaticAssert(ArrayLen(g_mpTokenkDisplay) == TOKENK_Max)
+StaticAssert(ArrayLen(g_mpTokenkDisplay) == TOKENK_Max);

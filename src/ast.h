@@ -10,7 +10,8 @@ enum ASTCATK
 {
 	ASTCATK_Error,
 	ASTCATK_Expr,
-	ASTCATK_Stmt
+	ASTCATK_Stmt,
+	ASTCATK_Program
 };
 
 enum ASTK : u8
@@ -20,6 +21,7 @@ enum ASTK : u8
 	ASTK_BubbleErr,
 	ASTK_UnexpectedTokenkErr,
 	ASTK_ExpectedTokenkErr,
+	ASTK_ProgramErr,	// Root level node for parse w/ error
 
 	ASTK_ErrMax,
 
@@ -44,10 +46,14 @@ enum ASTK : u8
 	ASTK_StructDeclStmt,
 	ASTK_IfStmt,
 	ASTK_WhileStmt,
-
 	// TODO: for statement... once I figure out what I want it to look like
 
-	ASTK_StmtMax		// Illegal value, used to determine ASTCATK
+	ASTK_StmtMax,		// Illegal value, used to determine ASTCATK
+
+    ASTK_Program,
+
+	// NOTE: If you add more misc ASTK's down here (i.e., not Stmt, Expr, Err), make sure to update
+	//	the ASTCATK functions
 };
 
 // enum ASTERRK : u16
@@ -89,6 +95,10 @@ struct AstUnexpectedTokenkErr
 struct AstExpectedTokenkErr
 {
 	TOKENK tokenk;
+};
+
+struct AstProgramErr
+{
 };
 
 struct AstErr
@@ -186,6 +196,19 @@ struct AstFuncDeclStmt
 	// TODO
 };
 
+
+
+// Program
+
+struct AstProgram
+{
+	DynamicArray<AstNode *> aPNodes;
+};
+
+
+
+// Node
+
 struct AstNode
 {
     // Compiler implicitly deleted this constructor because of the union trickery it seems. Lame.
@@ -204,6 +227,8 @@ struct AstNode
 
 			union
 			{
+				// ERR
+
 				AstErr  			err;
 
 				// EXPR
@@ -219,6 +244,10 @@ struct AstNode
 				// STMT
 
 				AstAssignStmt		assignExpr;
+
+				// PROGRAM
+
+				AstProgram			program;
 			};
 
             // NOTE: These fields MUST be after the above union in the struct
@@ -240,17 +269,18 @@ inline ASTCATK category(ASTK astk)
 {
 	if (astk < ASTK_ErrMax) return ASTCATK_Error;
 	if (astk < ASTK_ExprMax) return ASTCATK_Expr;
+	if (astk < ASTK_StmtMax) return ASTCATK_Stmt;
 
-	Assert(astk < ASTK_StmtMax);
-	return ASTCATK_Stmt;
+	Assert(astk == ASTK_Program);
+	return ASTCATK_Program;
 }
 
-inline ASTCATK category(AstNode * pNode)
+inline ASTCATK category(AstNode & node)
 {
-	return category(pNode->astk);
+	return category(node.astk);
 }
 
-inline bool isErrorNode(AstNode * pNode)
+inline bool isErrorNode(const AstNode & node)
 {
-	return pNode->astk < ASTK_ErrMax;
+	return node.astk < ASTK_ErrMax;
 }

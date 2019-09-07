@@ -355,6 +355,11 @@ TOKENK produceNextToken(Scanner * pScanner, Token * poToken)
 				else makeToken(pScanner, TOKENK_Greater, poToken);
 			} break;
 
+			case '^':
+			{
+				makeToken(pScanner, TOKENK_Carat, poToken);
+			} break;
+
 			case '|':
 			{
 				if (tryConsume(pScanner, '|'))
@@ -830,16 +835,23 @@ void onStartToken(Scanner * pScanner)
 
 bool checkEndOfFile(Scanner * pScanner, int lookahead)
 {
-	if (!pScanner->pText)
+	Assert(lookahead >= 0);
+
+	// NOTE: 0 lookahead checks the next character, so we still want to
+	//	run this loop iteration at least once, hence <=
+
+	for (int i = 0; i <= lookahead; i++)
 	{
-		pScanner->scanexitk = SCANEXITK_ReadNullTerminator;
-		return true;
+		if (!(pScanner->pText + pScanner->iText + i))
+		{
+			pScanner->scanexitk = SCANEXITK_ReadNullTerminator;
+			return true;
+		}
 	}
 
 	if (pScanner->iText + lookahead >= pScanner->textSize)
 	{
 		if (lookahead == 0) pScanner->scanexitk = SCANEXITK_ReadAllBytes;
-
 		return true;
 	}
 

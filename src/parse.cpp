@@ -5,30 +5,31 @@
 //	a bit of pointer casting required, these helpers make it slightly more succinct
 
 #define Up(pNode) reinterpret_cast<AstNode *>(pNode)
+#define UpConst(pNode) reinterpret_cast<const AstNode *>(pNode)
+#define UpErr(pNode) reinterpret_cast<AstErr *>(pNode)
 #define UpErrConst(pNode) reinterpret_cast<const AstErr *>(pNode)
 #define Down(pNode, astk) reinterpret_cast<Ast##astk *>(pNode)
 #define DownConst(pNode, astk) reinterpret_cast<const Ast##astk *>(pNode)
-#define AstNew(pParser, astk) reinterpret_cast<Ast##astk *>(astNew(pParser, ASTK_##astk))
+#define AstNew(pParser, astk, line) reinterpret_cast<Ast##astk *>(astNew(pParser, ASTK_##astk, line))
 
 // Absolutely sucks that I need to use 0, 1, 2 suffixes. I tried this approach to simulate default parameters in a macro but MSVC has a bug
 //  with varargs expansion that made it blow up: https://stackoverflow.com/questions/3046889/optional-parameters-with-c-macros
 
-// TODO: need to redo this to support unlimited children. Maybe a macro isn't the way to go here. But maybe I just use a macro
-//	with var args that calls a function with var args???
-
-#define AstNewErr0Child(pParser, astkErr) reinterpret_cast<Ast##astkErr *>(astNewErr(pParser, ASTK_##astkErr, nullptr, nullptr))
-#define AstNewErr1Child(pParser, astkErr, pChild0) reinterpret_cast<Ast##astkErr *>(astNewErr(pParser, ASTK_##astkErr, pChild0, nullptr))
-#define AstNewErr2Child(pParser, astkErr, pChild0, pChild1) reinterpret_cast<Ast##astkErr *>(astNewErr(pParser, ASTK_##astkErr, pChild0, pChild1))
+#define AstNewErr0Child(pParser, astkErr, line) reinterpret_cast<Ast##astkErr *>(astNewErr(pParser, ASTK_##astkErr, line, nullptr, nullptr))
+#define AstNewErr1Child(pParser, astkErr, line, pChild0) reinterpret_cast<Ast##astkErr *>(astNewErr(pParser, ASTK_##astkErr, line, pChild0, nullptr))
+#define AstNewErr2Child(pParser, astkErr, line, pChild0, pChild1) reinterpret_cast<Ast##astkErr *>(astNewErr(pParser, ASTK_##astkErr, line, pChild0, pChild1))
 
 // NOTE: This macro is functionally equivalent to AstNewErr2Child since we rely on function overloading to choose the correct one.
 //	I'm not really happy with this solution but it's the best I have right now.
 
-#define AstNewErrListChild(pParser, astkErr, aPChildren, cPChildren) reinterpret_cast<Ast##astkErr *>(astNewErr(pParser, ASTK_##astkErr, aPChildren, cPChildren))
+#define AstNewErrListChild(pParser, astkErr, line, aPChildren, cPChildren) reinterpret_cast<Ast##astkErr *>(astNewErr(pParser, ASTK_##astkErr, line, aPChildren, cPChildren))
 
 // TODO: should assignment statement be in here?
 // What about . operator?
+//	I handle . already, but if I want to support something like "stringLiteral".length,
+//	then I would need to handle it like an operator.
 
-static const ParseOp s_aParseOp[] = {
+static const BinopInfo s_aParseOp[] = {
 	{ 0, { TOKENK_Star, TOKENK_Slash, TOKENK_Percent }, 3 },
 	{ 1, { TOKENK_Plus, TOKENK_Minus }, 2 },
 	{ 2, { TOKENK_Lesser, TOKENK_Greater, TOKENK_LesserEqual, TOKENK_GreaterEqual }, 4 },
@@ -45,6 +46,7 @@ bool init(Parser * pParser, Scanner * pScanner)
 	if (!pParser || !pScanner) return false;
 
 	pParser->pScanner = pScanner;
+	pParser->isPanicMode = false;
 	init(&pParser->astAlloc);
 	init(&pParser->tokenAlloc);
     init(&pParser->astNodes);
@@ -52,20 +54,87 @@ bool init(Parser * pParser, Scanner * pScanner)
 	return true;
 }
 
-AstNode * parse(Parser * pParser)
+AstNode * parseProgram(Parser * pParser)
 {
-	// TODO: Make this parse a list of statements. For now it is just driving some tests...
+	DynamicArray<AstNode *> aPNodesTemp;
+	Defer(Assert(aPNodesTemp.pBuffer = nullptr));
 
-	AstNode * pNode = parseExpr(pParser);
-	return pNode;
+	parseStmts(pParser, &aPNodesTemp);
+
+	// NOTE: Empty program is valid to parse, but I may still decide that
+	//	that is a semantic error.
+
+	if (aPNodesTemp.cItem > 0 && isErrorNode(*aPNodesTemp[0]))
+	{
+		AssertInfo(
+			aPNodesTemp.cItem == 1,
+			"If > 1 error nodes shouldn't they have rolled into a single bubble error?"
+		);
+
+        // @Slow since AstNewErrListChild copies when we could probably rejigger the interface to support a "move"
+
+		auto * pNode = AstNewErrListChild(pParser, ProgramErr, aPNodesTemp[0]->startLine, aPNodesTemp.pBuffer, aPNodesTemp.cItem);
+        destroy(&aPNodesTemp);
+		return Up(pNode);
+	}
+	else
+	{
+		Assert(aPNodesTemp.cItem == 0 || !isErrorNode(*aPNodesTemp[0]));
+
+		auto * pNode = AstNew(pParser, Program, 0);
+		initMove(&pNode->aPNodes, &aPNodesTemp);
+
+		return Up(pNode);
+	}
+}
+
+void parseStmts(Parser * pParser, DynamicArray<AstNode *> * poAPNodes)
+{
+	while (!checkEndOfFile(pParser->pScanner))
+	{
+		AstNode * pNode = parseStmt(pParser);
+
+		if (isErrorNode(*pNode))
+		{
+			pParser->isPanicMode = true;
+			recoverFromPanic(pParser);
+		}
+
+		append(poAPNodes, pNode);
+	}
 }
 
 AstNode * parseStmt(Parser * pParser)
 {
-	// TODO
-	return nullptr;
+	// TODO: Be careful deciding how to identify the kind of statement!!!
+	//	How to disambiguate between AssignStmt and ExprStmt? I want assignment
+	//	to have statement semantics, but it parses an awful lot like a binop
+	//	expression!
+
+	// TODO: Support other kinds of stmt once we can identify what stmt it is....
+
+	return parseExprStmt(pParser);
 }
 
+AstNode * parseExprStmt(Parser * pParser)
+{
+	AstNode * pExpr = parseExpr(pParser);
+	if (isErrorNode(*pExpr))
+	{
+		return pExpr;
+	}
+
+	if (!tryConsumeToken(pParser->pScanner, TOKENK_Semicolon, ensurePendingToken(pParser)))
+	{
+        Token * pErrToken = peekPendingToken(pParser);
+		auto * pErrNode = AstNewErr1Child(pParser, ExpectedTokenkErr, pErrToken->line, pExpr);
+		pErrNode->tokenk = TOKENK_Semicolon;
+	}
+
+	return pExpr;
+}
+
+#if LATER
 AstNode * parseAssignStmt(Parser * pParser)
 {
 	AstNode * pLhsExpr = parseExpr(pParser);		// Semantic analysis will enforce lvalues here
@@ -88,13 +157,14 @@ AstNode * parseAssignStmt(Parser * pParser)
 		return pLhsExpr;
 	}
 }
+#endif
 
 AstNode * parseExpr(Parser * pParser)
 {
-	return parseOp(pParser, s_aParseOp[s_iParseOpMax - 1]);
+	return parseBinop(pParser, s_aParseOp[s_iParseOpMax - 1]);
 }
 
-AstNode * parseOp(Parser * pParser, const ParseOp & op)
+AstNode * parseBinop(Parser * pParser, const BinopInfo & op)
 {
     auto oneStepLower = [](Parser * pParser, int precedence) -> AstNode *
     {
@@ -102,32 +172,33 @@ AstNode * parseOp(Parser * pParser, const ParseOp & op)
 
         if (precedence == 0)
         {
-            return parsePrimary(pParser);
+            return parseUnopPre(pParser);
         }
         else
         {
-            const ParseOp & opNext = s_aParseOp[precedence - 1];
-            return parseOp(pParser, opNext);
+            const BinopInfo & opNext = s_aParseOp[precedence - 1];
+            return parseBinop(pParser, opNext);
         }
     };
 
     AstNode * pExpr = oneStepLower(pParser, op.precedence);
-
     Assert(pExpr);
-	if (isErrorNode(pExpr)) return pExpr;
+
+    // NOTE: Error check is done after we get a chance to parse rhs so that we can catch errors in both expressions. If we don't
+    //  match a binop then we just want to return pExpr as is anyway, whether it is an error or not.
 
 	while (tryConsumeToken(pParser->pScanner, op.aTokenkMatch, op.cTokenMatch, ensurePendingToken(pParser)))
 	{
         Token * pOp = claimPendingToken(pParser);
 
         AstNode * pRhsExpr = oneStepLower(pParser, op.precedence);
-		if (isErrorNode(pRhsExpr))
+		if (isErrorNode(*pExpr) || isErrorNode(*pRhsExpr))
 		{
-			auto * pNode = AstNewErr2Child(pParser, BubbleErr, pExpr, pRhsExpr);
-            return Up(pNode);
+			auto * pErr = AstNewErr2Child(pParser, BubbleErr, pExpr->startLine, pExpr, pRhsExpr);
+            return Up(pErr);
 		}
 
-		auto pNode = AstNew(pParser, BinopExpr);
+		auto * pNode = AstNew(pParser, BinopExpr, pExpr->startLine);
 		pNode->pOp = pOp;
 		pNode->pLhsExpr = pExpr;
 		pNode->pRhsExpr = pRhsExpr;
@@ -138,28 +209,56 @@ AstNode * parseOp(Parser * pParser, const ParseOp & op)
 	return pExpr;
 }
 
+AstNode * parseUnopPre(Parser * pParser)
+{
+	if (tryConsumeToken(pParser->pScanner, g_aTokenkUnopPre, g_cTokenkUnopPre, ensurePendingToken(pParser)))
+	{
+		Token * pOp = claimPendingToken(pParser);
+
+		AstNode * pExpr = parseUnopPre(pParser);
+		if (isErrorNode(*pExpr))
+		{
+            return pExpr;
+		}
+
+		auto * pNode = AstNew(pParser, UnopExpr, pOp->line);
+		pNode->pOp = pOp;
+		pNode->pExpr = pExpr;
+
+		return Up(pNode);
+	}
+	else
+	{
+		return parsePrimary(pParser);
+	}
+}
+
 AstNode * parsePrimary(Parser * pParser)
 {
 	if (tryConsumeToken(pParser->pScanner, TOKENK_OpenParen, ensurePendingToken(pParser)))
 	{
 		// Group ( )
 
+        Token * pOpenParen = claimPendingToken(pParser);
 		AstNode * pExpr = parseExpr(pParser);
 
-		if (isErrorNode(pExpr))
+		if (isErrorNode(*pExpr))
 		{
-			auto * pNode = AstNewErr1Child(pParser, BubbleErr, pExpr);
-            return Up(pNode);
+            return pExpr;
 		}
 
-		if (!tryConsumeToken(pParser->pScanner, TOKENK_CloseParen, ensurePendingToken(pParser)))
+        Token throwaway;
+		if (!tryConsumeToken(pParser->pScanner, TOKENK_CloseParen, &throwaway))
 		{
-			auto * pNode = AstNewErr1Child(pParser, ExpectedTokenkErr, pExpr);
-			pNode->tokenk = TOKENK_CloseParen;
-			return Up(pNode);
+            // IDEA: Better error line message if we walk pExpr and find line of the highest AST node child it has.
+            //  We could easily cache that when constructing an AST node...
+
+			auto * pErr = AstNewErr1Child(pParser, ExpectedTokenkErr, pExpr->startLine, pExpr);
+			pErr->tokenk = TOKENK_CloseParen;
+			return Up(pErr);
 		}
 
-		auto * pNode = AstNew(pParser, GroupExpr);
+		auto * pNode = AstNew(pParser, GroupExpr, pOpenParen->line);
 		pNode->pExpr = pExpr;
 
 		return finishParsePrimary(pParser, Up(pNode));
@@ -168,8 +267,10 @@ AstNode * parsePrimary(Parser * pParser)
 	{
 		// Literal
 
-		auto * pNode = AstNew(pParser, LiteralExpr);
-		pNode->pToken = claimPendingToken(pParser);
+        Token * pLiteralToken = claimPendingToken(pParser);
+
+		auto * pNode = AstNew(pParser, LiteralExpr, pLiteralToken->line);
+        pNode->pToken = pLiteralToken;
 		return Up(pNode);
 	}
 	else if (tryConsumeToken(pParser->pScanner, TOKENK_Identifier, ensurePendingToken(pParser)))
@@ -178,7 +279,7 @@ AstNode * parsePrimary(Parser * pParser)
 
 		Token * pIdent = claimPendingToken(pParser);
 
-		auto * pNode = AstNew(pParser, VarExpr);
+		auto * pNode = AstNew(pParser, VarExpr, pIdent->line);
 		pNode->pOwner = nullptr;
 		pNode->pIdent = pIdent;
 
@@ -188,11 +289,12 @@ AstNode * parsePrimary(Parser * pParser)
 	{
 		// Error
 
-        Token throwaway;
+        Token errTokenTemp;
+        peekToken(pParser->pScanner, &errTokenTemp);
 
-		auto * pNode = AstNewErr0Child(pParser, UnexpectedTokenkErr);
-		pNode->tokenk = peekToken(pParser->pScanner, &throwaway);
-		return Up(pNode);
+		auto * pErr = AstNewErr0Child(pParser, UnexpectedTokenkErr, errTokenTemp.line);
+		pErr->tokenk = errTokenTemp.tokenk;
+		return Up(pErr);
 	}
 }
 
@@ -220,10 +322,11 @@ AstNode * finishParsePrimary(Parser * pParser, AstNode * pExpr)
 
 		if (!tryConsumeToken(pParser->pScanner, TOKENK_Identifier, ensurePendingToken(pParser)))
 		{
-			auto * pNode = AstNewErr1Child(pParser, ExpectedTokenkErr, pExpr);
-			pNode->tokenk = TOKENK_Identifier;
+            Token * errToken = peekPendingToken(pParser);
+			auto * pErrNode = AstNewErr1Child(pParser, ExpectedTokenkErr, errToken->line, pExpr);
+			pErrNode->tokenk = TOKENK_Identifier;
 
-			return Up(pNode);
+			return Up(pErrNode);
 		}
 
 		// COPYPASTE: from parsePrimary
@@ -231,7 +334,7 @@ AstNode * finishParsePrimary(Parser * pParser, AstNode * pExpr)
 		Token * pIdent = claimPendingToken(pParser);
 		Assert(pIdent->tokenk == TOKENK_Identifier);
 
-		auto * pNode = AstNew(pParser, VarExpr);
+		auto * pNode = AstNew(pParser, VarExpr, pIdent->line);
 		pNode->pOwner = pExpr;
 		pNode->pIdent = pIdent;
 
@@ -242,21 +345,22 @@ AstNode * finishParsePrimary(Parser * pParser, AstNode * pExpr)
 		// Array access
 
 		AstNode * pSubscriptExpr = parseExpr(pParser);
-		if (isErrorNode(pSubscriptExpr))
+		if (isErrorNode(*pSubscriptExpr))
 		{
-			auto * pNode = AstNewErr1Child(pParser, BubbleErr, pSubscriptExpr);
-            return Up(pNode);
+            auto * pErr = AstNewErr2Child(pParser, BubbleErr, pExpr->startLine, pExpr, pSubscriptExpr);
+            return Up(pErr);
 		}
 
 		if (!tryConsumeToken(pParser->pScanner, TOKENK_CloseBracket, ensurePendingToken(pParser)))
 		{
-			auto * pNode = AstNewErr2Child(pParser, ExpectedTokenkErr, pExpr, pSubscriptExpr);
-			pNode->tokenk = TOKENK_CloseBracket;
+            Token * pErrToken = peekPendingToken(pParser);
+			auto * pErrNode = AstNewErr2Child(pParser, ExpectedTokenkErr, pErrToken->line, pExpr, pSubscriptExpr);
+			pErrNode->tokenk = TOKENK_CloseBracket;
 
-			return Up(pNode);
+			return Up(pErrNode);
 		}
 
-		auto * pNode = AstNew(pParser, ArrayAccessExpr);
+		auto * pNode = AstNew(pParser, ArrayAccessExpr, pExpr->startLine);
 		pNode->pArray = pExpr;
 		pNode->pSubscript = pSubscriptExpr;
 
@@ -277,39 +381,37 @@ AstNode * finishParsePrimary(Parser * pParser, AstNode * pExpr)
 		{
 			if (!isFirstArg && !tryConsumeToken(pParser->pScanner, TOKENK_Comma, ensurePendingToken(pParser)))
 			{
+                Token * pErrToken = peekPendingToken(pParser);
+
 				DynamicArray<AstNode *> aPChildren;
 				initMove(&aPChildren, &aPArgs);
 				prepend(&aPChildren, pExpr);
 
-				auto * pNode = AstNewErrListChild(pParser, ExpectedTokenkErr, aPChildren.pBuffer, aPChildren.cItem);
-				pNode->tokenk = TOKENK_Comma;
+				auto * pErrNode = AstNewErrListChild(pParser, ExpectedTokenkErr, pErrToken->line, aPChildren.pBuffer, aPChildren.cItem);
+				pErrNode->tokenk = TOKENK_Comma;
 
-				return Up(pNode);
+				return Up(pErrNode);
 			}
-
-			// Consume expr
-			// If not error, add to list of arguments
-			// Once we read the close paren, create the funcCall node and put the list of arguments
-			//	in it!
 
 			AstNode * pExprArg = parseExpr(pParser);
 			append(&aPArgs, pExprArg);
 
-			if (isErrorNode(pExprArg))
+			if (isErrorNode(*pExprArg))
 			{
 				DynamicArray<AstNode *> aPChildren;
 				initMove(&aPChildren, &aPArgs);
 				prepend(&aPChildren, pExpr);
 
-				auto * pNode = AstNewErrListChild(pParser, BubbleErr, aPChildren.pBuffer, aPChildren.cItem);
+                AssertInfo(aPChildren.cItem >= 2, "Should at least contain first arg parse attempt and the pExpr of the function");
 
-				return Up(pNode);
+                auto * pErrNode = AstNewErrListChild(pParser, BubbleErr, aPChildren[0]->startLine, aPChildren.pBuffer, aPChildren.cItem);
+                return Up(pErrNode);
 			}
 
 			isFirstArg = false;
 		}
 
-		auto * pNode = AstNew(pParser, FuncCallExpr);
+		auto * pNode = AstNew(pParser, FuncCallExpr, pExpr->startLine);
 		pNode->pFunc = pExpr;
 		initMove(&pNode->aPArgs, &aPArgs);
 
@@ -321,11 +423,12 @@ AstNode * finishParsePrimary(Parser * pParser, AstNode * pExpr)
 	}
 }
 
-AstNode * astNew(Parser * pParser, ASTK astk)
+AstNode * astNew(Parser * pParser, ASTK astk, int line)
 {
 	AstNode * pNode = allocate(&pParser->astAlloc);
 	pNode->astk = astk;
 	pNode->id = pParser->iNode;
+    pNode->startLine = line;
 	pParser->iNode++;
 
 	append(&pParser->astNodes, pNode);
@@ -333,25 +436,72 @@ AstNode * astNew(Parser * pParser, ASTK astk)
 	return pNode;
 }
 
-AstNode * astNewErr(Parser * pParser, ASTK astkErr, AstNode * pChild0, AstNode * pChild1)
+AstNode * astNewErr(Parser * pParser, ASTK astkErr, int line, AstNode * pChild0, AstNode * pChild1)
 {
-	Assert(!pChild1 || pChild0);	// pChild1 implies pChild0
+	Assert(!pChild1 || pChild0);    // Implies
 
 	AstNode * aPChildren[2] = { pChild0, pChild1 };
 	int cPChildren = (!pChild0) ? 0 : (!pChild1) ? 1 : 2;
-	return astNewErr(pParser, astkErr, aPChildren, cPChildren);
+	return astNewErr(pParser, astkErr, line, aPChildren, cPChildren);
 }
 
-AstNode * astNewErr(Parser * pParser, ASTK astkErr, AstNode * aPChildren[], uint cPChildren)
+AstNode * astNewErr(Parser * pParser, ASTK astkErr, int line, AstNode * aPChildren[], uint cPChildren)
 {
     Assert(category(astkErr) == ASTCATK_Error);
     Assert(astkErr != ASTK_BubbleErr || cPChildren > 0);        // Implies
+    AssertInfo(
+        astkErr != ASTK_BubbleErr || cPChildren >= 2,           // Implies
+        "Bubble error by definition must have 2+ children"
+    );
 
-	auto * pNode = Down(astNew(pParser, astkErr), Err);
+	bool isBubble = astkErr == ASTK_BubbleErr;
+	bool hasErrorChild = false;
+
+	auto * pNode = Down(astNew(pParser, astkErr, line), Err);
     init(&pNode->aPChildren);
 	appendMultiple(&pNode->aPChildren, aPChildren, cPChildren);
 
+#if DEBUG
+	if (isBubble)
+	{
+		for (uint i = 0; i < pNode->aPChildren.cItem; i++)
+		{
+			if (isErrorNode(*(pNode->aPChildren[i])))
+			{
+				hasErrorChild = true;
+				break;
+			}
+		}
+
+		if (!hasErrorChild)
+		{
+			AssertInfo(false, "Bubble child by definition should have 1 or more error child(ren)");
+		}
+	}
+#endif
+
 	return Up(pNode);
+}
+
+void recoverFromPanic(Parser * pParser)
+{
+	if (!pParser->isPanicMode)
+	{
+		Assert(false);
+		return;
+	}
+
+	// Scan through next semicolon
+
+	Token token;
+	while(
+		!isFinished(pParser->pScanner) &&
+		!tryConsumeToken(pParser->pScanner, TOKENK_Semicolon, &token))
+	{
+		// Keep chewing!
+	}
+
+	pParser->isPanicMode = false;
 }
 
 Token * ensurePendingToken(Parser * pParser)
@@ -362,6 +512,12 @@ Token * ensurePendingToken(Parser * pParser)
 	}
 
 	return pParser->pPendingToken;
+}
+
+Token * peekPendingToken(Parser * pParser)
+{
+    Assert(pParser->pPendingToken);
+    return pParser->pPendingToken;
 }
 
 Token * claimPendingToken(Parser * pParser)
@@ -405,7 +561,7 @@ void debugPrintSubAst(const AstNode & node, int level, bool skipAfterArrow, Dyna
 
 	auto printTabs = [setSkip](int level, bool printArrows, bool skipAfterArrow, DynamicArray<bool> * pMapLevelSkip) {
 
-        Assert(!skipAfterArrow || printArrows); // Skip after arrow implies print arrows
+        Assert(!skipAfterArrow || printArrows);     // Implies
 		for (int i = 0; i < level; i++)
 		{
             if ((*pMapLevelSkip)[i])
@@ -479,6 +635,11 @@ void debugPrintSubAst(const AstNode & node, int level, bool skipAfterArrow, Dyna
 			printf("%s expected %s", parseErrorString, g_mpTokenkDisplay[pExpr->tokenk]);
             printErrChildren(*UpErrConst(&node), level, pMapLevelSkip);
 		} break;
+
+        case ASTK_ProgramErr:
+        {
+            // TODO
+        } break;
 
 
 
@@ -584,6 +745,20 @@ void debugPrintSubAst(const AstNode & node, int level, bool skipAfterArrow, Dyna
 
 
 		// STMT;
+
+        case ASTK_ExprStmt:
+        {
+            // TODO
+        } break;
+
+
+
+        // PROGRAM
+
+        case ASTK_Program:
+        {
+            // TODO
+        } break;
 
         default:
         {

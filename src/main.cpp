@@ -28,6 +28,7 @@ int main()
     // NOTE: Lexeme buffer size is multiplied by 2 to handle worst case scenario where each byte is its own lexeme,
     //  which gets written into the buffer and then null terminated.
 
+    int lexemeBufferSize = bytesRead * 2;
 	char * lexemeBuffer = new char[bytesRead * 2];
 	Defer(delete[] lexemeBuffer);
 
@@ -43,7 +44,7 @@ int main()
 	}
 
 	Scanner scanner;
-	if (!init(&scanner, buffer, bytesRead, lexemeBuffer, bytesRead))
+	if (!init(&scanner, buffer, bytesRead, lexemeBuffer, lexemeBufferSize))
 	{
 		// TODO: distinguish this as internal compiler error
 
@@ -60,7 +61,7 @@ int main()
         return 1;
     }
 
-    AstNode * pAst = parse(&parser);
+    AstNode * pAst = parseProgram(&parser);
 
 #if DEBUG
     debugPrintAst(*pAst);
