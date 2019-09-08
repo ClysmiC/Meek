@@ -180,9 +180,13 @@ void initMove (DynamicArray<T> * pArray, DynamicArray<T> * pArraySrc)
 template <typename T>
 void destroy (DynamicArray<T> * pArray)
 {
-    // UGH: This isn't robust against pBuffer being unitialized (CDCDCDCD)
+    // NOTE: This might help catch destroying dynamic array that was never inited too, but we can't guarantee
+    //  that the allocation zeroes out the memory.
+
+    AssertInfo(pArray->pBuffer, "Trying to destroy dynamic array that was already destroyed? Or was moved (which performs destroy)?");
 
 	if (pArray->pBuffer) free(pArray->pBuffer);
+    pArray->pBuffer = nullptr;
 }
 
 

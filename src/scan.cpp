@@ -21,7 +21,7 @@ bool init(Scanner * pScanner, char * pText, uint textSize, char * pLexemeBuffer,
 	return true;
 }
 
-TOKENK nextToken(Scanner * pScanner, Token * poToken)
+TOKENK consumeToken(Scanner * pScanner, Token * poToken)
 {
 	if (count(pScanner->peekBuffer) > 0)
 	{
@@ -506,7 +506,6 @@ void _finishAfterConsumeDigit(Scanner * pScanner, char firstDigit, bool startsWi
 
 			if (tryConsume(pScanner, 'x'))
 			{
-
 				base = 16;
 				cDigit = 0;		// Prefixes don't count toward cDigit
 			}
@@ -526,20 +525,22 @@ void _finishAfterConsumeDigit(Scanner * pScanner, char firstDigit, bool startsWi
 	GRFERRTOK grferrtok = GRFERRTOK_None;
 	if (base == 16)
 	{
+		// TODO: Move the case checking to semantic analysis
+
 		// Support both lower and upper case hex letters, but you can't
 		//  mix and match!
 		//  0xABCD works
 		//  0xabcd works
 		//  0xAbCd does not
 
-		enum CASEK
-		{
-			CASEK_Tbd,
-			CASEK_Lower,
-			CASEK_Upper
-		};
+		// enum CASEK
+		// {
+		// 	CASEK_Tbd,
+		// 	CASEK_Lower,
+		// 	CASEK_Upper
+		// };
 
-		CASEK casek = CASEK_Tbd;
+		// CASEK casek = CASEK_Tbd;
 
 		while (true)
 		{
@@ -547,33 +548,9 @@ void _finishAfterConsumeDigit(Scanner * pScanner, char firstDigit, bool startsWi
 			{
 				cDot++;
 			}
-			else if (tryConsume(pScanner, 'a', 'z'))
-			{
-				cDigit++;
-
-				if (casek == CASEK_Upper)
-				{
-					grferrtok |= FERRTOK_IntLiteralHexMixedCase;
-				}
-				else
-				{
-					casek = CASEK_Lower;
-				}
-			}
-			else if (tryConsume(pScanner, 'A', 'Z'))
-			{
-				cDigit++;
-
-				if (casek == CASEK_Lower)
-				{
-					grferrtok |= FERRTOK_IntLiteralHexMixedCase;
-				}
-				else
-				{
-					casek = CASEK_Upper;
-				}
-			}
-			else if (tryConsume(pScanner, '0', '9'))
+			else if (tryConsume(pScanner, 'a', 'f') ||
+					 tryConsume(pScanner, 'A', 'F') ||
+					 tryConsume(pScanner, '0', '9'))
 			{
 				cDigit++;
 			}
@@ -662,24 +639,8 @@ void writeCurrentLexemeIntoBuffer(Scanner * pScanner)
 
 void makeToken(Scanner * pScanner, TOKENK tokenk, Token * poToken)
 {
-	char * lexeme = nullptr;
-
-	if (tokenk == TOKENK_Identifier || tokenk == TOKENK_Error || isLiteral(tokenk))
-	{
-		lexeme = pScanner->pLexemeBuffer + pScanner->iLexemeBuffer;
-		writeCurrentLexemeIntoBuffer(pScanner);
-	}
-#if 1
-	else
-	{
-		// TODO: Delete this #if once I have a better way to test scanner,
-		//	since these lexemes are all deterministic... I just didn't feel
-		//	like writing a big switch statement!
-
-		lexeme = pScanner->pLexemeBuffer + pScanner->iLexemeBuffer;
-		writeCurrentLexemeIntoBuffer(pScanner);
-	}
-#endif
+	char * lexeme = pScanner->pLexemeBuffer + pScanner->iLexemeBuffer;
+	writeCurrentLexemeIntoBuffer(pScanner);
 
 	makeTokenWithLexeme(pScanner, tokenk, lexeme, poToken);
 }
@@ -693,57 +654,60 @@ void makeTokenWithLexeme(Scanner * pScanner, TOKENK tokenk, char * lexeme, Token
 	poToken->column = pScanner->columnTokenStart;
 	poToken->tokenk = tokenk;
 	poToken->lexeme = lexeme;
+    poToken->grferrtok = 0;
 
-	if (tokenk == TOKENK_BoolLiteral)
-	{
-		if (lexeme[0] == 't')	poToken->literalBool = true;
-		else					poToken->literalBool = false;
-	}
-	else if (tokenk == TOKENK_IntLiteral)
-	{
-		int base = pScanner->currentIntLiteralBase;
-		char * end;
-		long value = strtol(lexeme, &end, base);
+	// TODO: Move this to semantic analysis because these are semantic errors.
 
-		if (errno == ERANGE || value > S32_MAX || value < S32_MIN)
-		{
-			poToken->tokenk = TOKENK_Error;
-			poToken->grferrtok |= FERRTOK_NumberLiteralOutOfRange;
-		}
-		else if (errno || lexeme == end)
-		{
-			poToken->tokenk = TOKENK_Error;
-			poToken->grferrtok = FERRTOK_Unspecified;
-		}
-		else
-		{
-			poToken->intliteralk = (base == 10) ? INTLITERALK_Decimal : (base == 16) ? INTLITERALK_Hexadecimal : (base == 8) ? INTLITERALK_Octal : INTLITERALK_Binary;
-			poToken->literalInt = (int)value;
-		}
-	}
-	else if (tokenk == TOKENK_FloatLiteral)
-	{
-		// TODO:
-		//	-Support literals of float types other than f32
+	// if (tokenk == TOKENK_BoolLiteral)
+	// {
+	// 	if (lexeme[0] == 't')	poToken->literalBool = true;
+	// 	else					poToken->literalBool = false;
+	// }
+	// else if (tokenk == TOKENK_IntLiteral)
+	// {
+	// 	int base = pScanner->currentIntLiteralBase;
+	// 	char * end;
+	// 	long value = strtol(lexeme, &end, base);
 
-		char * end;
-		float value = strtof(lexeme, &end);
+	// 	if (errno == ERANGE || value > S32_MAX || value < S32_MIN)
+	// 	{
+	// 		poToken->tokenk = TOKENK_Error;
+	// 		poToken->grferrtok |= FERRTOK_NumberLiteralOutOfRange;
+	// 	}
+	// 	else if (errno || lexeme == end)
+	// 	{
+	// 		poToken->tokenk = TOKENK_Error;
+	// 		poToken->grferrtok = FERRTOK_Unspecified;
+	// 	}
+	// 	else
+	// 	{
+	// 		poToken->intliteralk = (base == 10) ? INTLITERALK_Decimal : (base == 16) ? INTLITERALK_Hexadecimal : (base == 8) ? INTLITERALK_Octal : INTLITERALK_Binary;
+	// 		poToken->literalInt = (int)value;
+	// 	}
+	// }
+	// else if (tokenk == TOKENK_FloatLiteral)
+	// {
+	// 	// TODO:
+	// 	//	-Support literals of float types other than f32
 
-		if (errno == ERANGE)
-		{
-			poToken->tokenk = TOKENK_Error;
-			poToken->grferrtok = FERRTOK_NumberLiteralOutOfRange;
-		}
-		else if (errno || lexeme == end)
-		{
-			poToken->tokenk = TOKENK_Error;
-			poToken->grferrtok = FERRTOK_Unspecified;
-		}
-		else
-		{
-			poToken->literalFloat = (float)value;
-		}
-	}
+	// 	char * end;
+	// 	float value = strtof(lexeme, &end);
+
+	// 	if (errno == ERANGE)
+	// 	{
+	// 		poToken->tokenk = TOKENK_Error;
+	// 		poToken->grferrtok = FERRTOK_NumberLiteralOutOfRange;
+	// 	}
+	// 	else if (errno || lexeme == end)
+	// 	{
+	// 		poToken->tokenk = TOKENK_Error;
+	// 		poToken->grferrtok = FERRTOK_Unspecified;
+	// 	}
+	// 	else
+	// 	{
+	// 		poToken->literalFloat = (float)value;
+	// 	}
+	// }
 
     forceWrite(&pScanner->prevBuffer, *poToken);
 	pScanner->madeToken = true;

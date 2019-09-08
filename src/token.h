@@ -113,17 +113,20 @@ enum FERRTOK : u32
 
 	FERRTOK_InvalidCharacter					= 1 << 1,
 
-	FERRTOK_IntLiteralHexMixedCase				= 1 << 2,
-	FERRTOK_IntLiteralNonBase10WithDecimal		= 1 << 3,
-	FERRTOK_IntLiteralNonBase10NoDigits			= 1 << 4,
+	// TODO: Report these kinds of errors at semantic analysis
 
-	FERRTOK_NumberLiteralOutOfRange				= 1 << 5,
-	FERRTOK_NumberLiteralMultipleDecimals		= 1 << 6,
+	// FERRTOK_IntLiteralHexMixedCase
+	// FERRTOK_NumberLiteralOutOfRange
 
-	FERRTOK_MultilineString 					= 1 << 7,
-	FERRTOK_UnterminatedString					= 1 << 8,
+	FERRTOK_IntLiteralNonBase10WithDecimal		= 1 << 2,
+	FERRTOK_IntLiteralNonBase10NoDigits			= 1 << 3,
 
-	FERRTOK_UnterminatedBlockComment			= 1 << 9,
+	FERRTOK_NumberLiteralMultipleDecimals		= 1 << 4,
+
+	FERRTOK_MultilineString 					= 1 << 5,
+	FERRTOK_UnterminatedString					= 1 << 6,
+
+	FERRTOK_UnterminatedBlockComment			= 1 << 7,
 
 	FERRTOK_DummyValue,
 	FERRTOK_HighestFlag = FERRTOK_DummyValue - 1,
@@ -149,9 +152,12 @@ struct Token
 	TOKENK		tokenk = TOKENK_Nil;
 
     // TODO: store lexeme length? I *do* make sure that they are null-terminated so
-    //  I can always just strlen them but that is pretty yikes
+    //  I can always just strlen them but that is pretty lame.
 
-	char *		lexeme = nullptr;	// Only set for identifiers, literals, and errors
+	char *		lexeme = nullptr;
+
+	// NOTE: Literal values do not get set until semantic analysis since there are classes of
+	//	semantic errors that can happen at that time (e.g., int literals that exceed max value)
 
 	union
 	{

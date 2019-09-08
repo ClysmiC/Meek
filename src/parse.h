@@ -19,6 +19,7 @@ struct BinopInfo
     //  it is the only one that will likely be right associative.
 };
 
+
 struct Parser
 {
 	Scanner * pScanner = nullptr;
@@ -35,7 +36,20 @@ struct Parser
 
 	DynamicArray<AstNode *> astNodes;
 
+
+
+	// Error and error recovery
+
+	struct PanicRecoveryInfo
+	{
+		int parenLevel = 0;
+		int bracketLevel = 0;
+		int braceLevel = 0;
+	};
+
+	PanicRecoveryInfo panicRecovery;
 	bool isPanicMode = false;
+    bool hadError = false;
 };
 
 

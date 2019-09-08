@@ -18,10 +18,11 @@ enum ASTK : u8
 {
 	// ERR
 
+	ASTK_ScanErr,
 	ASTK_BubbleErr,
 	ASTK_UnexpectedTokenkErr,
 	ASTK_ExpectedTokenkErr,
-	ASTK_ProgramErr,	// Root level node for parse w/ error
+	ASTK_ProgramErr,			// Root level node for parse w/ error
 
 	ASTK_ErrMax,
 
