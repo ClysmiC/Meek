@@ -2,6 +2,7 @@
 
 #ifdef _MSC_VER
     #define DEBUG _DEBUG
+    #define _CRT_SECURE_NO_DEPRECATE
 #endif
 
 #if DEBUG

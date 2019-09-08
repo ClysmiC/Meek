@@ -2,7 +2,7 @@
 
 #include "als.h"
 
-// Keep in sync with g_mpTokenkDisplay
+// SYNC: with g_mpTokenkDisplay
 
 enum TOKENK
 {
@@ -106,17 +106,13 @@ enum TOKENK
 };
 
 
+// SYNC: with ferrtokToDisplay(..)
 
 enum FERRTOK : u32
 {
 	FERRTOK_Unspecified							= 1 << 0,
 
 	FERRTOK_InvalidCharacter					= 1 << 1,
-
-	// TODO: Report these kinds of errors at semantic analysis
-
-	// FERRTOK_IntLiteralHexMixedCase
-	// FERRTOK_NumberLiteralOutOfRange
 
 	FERRTOK_IntLiteralNonBase10WithDecimal		= 1 << 2,
 	FERRTOK_IntLiteralNonBase10NoDigits			= 1 << 3,
@@ -128,12 +124,20 @@ enum FERRTOK : u32
 
 	FERRTOK_UnterminatedBlockComment			= 1 << 7,
 
+	// TODO: Report these kinds of errors at semantic analysis
+
+	// FERRTOK_IntLiteralHexMixedCase
+	// FERRTOK_NumberLiteralOutOfRange
+
 	FERRTOK_DummyValue,
+    FERRTOK_LowestFlag = 1,
 	FERRTOK_HighestFlag = FERRTOK_DummyValue - 1,
 
 	GRFERRTOK_None = 0
 };
 typedef u32 GRFERRTOK;
+
+void errMessagesFromGrferrtok(GRFERRTOK grferrtok, DynamicArray<StringBox<256>> * poMessages);
 
 enum INTLITERALK
 {
@@ -195,6 +199,7 @@ inline void nillify(Token * poToken)
 }
 
 // TODO: use a dict or trie for reserved words
+// TODO: Probably worth making these const correct.
 
 extern ReservedWord g_aReservedWord[];
 extern int g_cReservedWord;

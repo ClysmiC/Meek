@@ -40,15 +40,7 @@ struct Parser
 
 	// Error and error recovery
 
-	struct PanicRecoveryInfo
-	{
-		int parenLevel = 0;
-		int bracketLevel = 0;
-		int braceLevel = 0;
-	};
-
-	PanicRecoveryInfo panicRecovery;
-	bool isPanicMode = false;
+	// bool isPanicMode = false;
     bool hadError = false;
 };
 
@@ -77,7 +69,8 @@ AstNode * astNewErr(Parser * pParser, ASTK astkErr, int line, AstNode * aPChildr
 
 // Error handling
 
-void recoverFromPanic(Parser * pParser);
+bool tryRecoverFromPanic(Parser * pParser, TOKENK tokenkRecover);
+bool tryRecoverFromPanic(Parser * pParser, const TOKENK * aTokenkRecover, int cTokenkRecover, TOKENK * poTokenkMatched);
 
 // STMT
 

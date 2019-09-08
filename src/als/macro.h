@@ -21,4 +21,5 @@
 
 #include "macro_assert.h"
 #include "macro_defer.h"
+#include "macro_flags.h"
 #include "macro_mem.h"

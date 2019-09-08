@@ -23,10 +23,12 @@
     <ClInclude Include="src\als\common.h" />
     <ClInclude Include="src\als\common_alloc.h" />
     <ClInclude Include="src\als\common_array.h" />
+    <ClInclude Include="src\als\common_string.h" />
     <ClInclude Include="src\als\common_type.h" />
     <ClInclude Include="src\als\macro.h" />
     <ClInclude Include="src\als\macro_assert.h" />
     <ClInclude Include="src\als\macro_defer.h" />
+    <ClInclude Include="src\als\macro_flags.h" />
     <ClInclude Include="src\als\macro_mem.h" />
     <ClInclude Include="src\ast.h" />
     <ClInclude Include="src\parse.h" />

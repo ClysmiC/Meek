@@ -84,6 +84,11 @@ enum ASTK : u8
 
 // Errors
 
+struct AstScanErr
+{
+	Token * pErrToken;
+};
+
 struct AstBubbleErr
 {
 };
@@ -109,6 +114,7 @@ struct AstErr
 
 	union
 	{
+		AstScanErr scanErr;
 		AstBubbleErr bubbleErr;
 		AstUnexpectedTokenkErr unexpectedTokenErr;
 		AstExpectedTokenkErr expectedTokenErr;

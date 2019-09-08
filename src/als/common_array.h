@@ -183,7 +183,7 @@ void destroy (DynamicArray<T> * pArray)
     // NOTE: This might help catch destroying dynamic array that was never inited too, but we can't guarantee
     //  that the allocation zeroes out the memory.
 
-    AssertInfo(pArray->pBuffer, "Trying to destroy dynamic array that was already destroyed? Or was moved (which performs destroy)?");
+    ALS_COMMON_ARRAY_Assert(pArray->pBuffer);       // Trying to destroy dynamic array that was already destroyed? Or was moved (which performs destroy)?");
 
 	if (pArray->pBuffer) free(pArray->pBuffer);
     pArray->pBuffer = nullptr;

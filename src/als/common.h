@@ -21,4 +21,5 @@
 
 #include "common_alloc.h"
 #include "common_array.h"
+#include "common_string.h"
 #include "common_type.h"

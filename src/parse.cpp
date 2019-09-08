@@ -48,8 +48,7 @@ bool init(Parser * pParser, Scanner * pScanner)
 	if (!pParser || !pScanner) return false;
 
 	pParser->pScanner = pScanner;
-	pParser->isPanicMode = false;
-	ClearStruct(&pParser->panicRecovery);
+	// pParser->isPanicMode = false;
 	init(&pParser->astAlloc);
 	init(&pParser->tokenAlloc);
     init(&pParser->astNodes);
@@ -60,6 +59,7 @@ bool init(Parser * pParser, Scanner * pScanner)
 AstNode * parseProgram(Parser * pParser)
 {
 	DynamicArray<AstNode *> aPNodesTemp;
+    init(&aPNodesTemp);
 	Defer(Assert(aPNodesTemp.pBuffer == nullptr));
 
 	parseStmts(pParser, &aPNodesTemp);
@@ -88,14 +88,22 @@ AstNode * parseProgram(Parser * pParser)
 
 void parseStmts(Parser * pParser, DynamicArray<AstNode *> * poAPNodes)
 {
-	while (!checkEndOfFile(pParser->pScanner))
+    Token throwaway;
+	while (!isFinished(pParser->pScanner) && peekToken(pParser->pScanner, &throwaway) != TOKENK_Eof)
 	{
+
 		AstNode * pNode = parseStmt(pParser);
 
 		if (isErrorNode(*pNode))
 		{
-			pParser->isPanicMode = true;
-			recoverFromPanic(pParser);
+			// NOTE: should move this recoverFromPanic to the parseXXXStmt functions
+			//	themselves. Otherwise errors will always bubble up to here which is
+			//	inconsistent with how they behave in expression contexts.
+
+			// pParser->isPanicMode = true;
+			bool recovered = tryRecoverFromPanic(pParser, TOKENK_Semicolon);
+
+			Assert(recovered || isFinished(pParser->pScanner));		// Implies
 		}
 
 		append(poAPNodes, pNode);
@@ -190,6 +198,8 @@ AstNode * parseBinop(Parser * pParser, const BinopInfo & op)
         Token * pOp = claimPendingToken(pParser);
 
         AstNode * pRhsExpr = oneStepLower(pParser, op.precedence);
+        Assert(pRhsExpr);
+
 		if (isErrorNode(*pExpr) || isErrorNode(*pRhsExpr))
 		{
 			auto * pErr = AstNewErr2Child(pParser, BubbleErr, pExpr->startLine, pExpr, pRhsExpr);
@@ -237,29 +247,34 @@ AstNode * parsePrimary(Parser * pParser)
 	{
 		// Group ( )
 
-		pParser->panicRecovery.parenLevel++;
-
         Token * pOpenParen = claimPendingToken(pParser);
 		AstNode * pExpr = parseExpr(pParser);
 
 		if (isErrorNode(*pExpr))
 		{
-            return pExpr;
-		}
+			// Panic recovery
 
-        Token throwaway;
-		if (!tryConsumeToken(pParser->pScanner, TOKENK_CloseParen, &throwaway))
+			if (tryRecoverFromPanic(pParser, TOKENK_CloseParen))
+			{
+				goto finishGroup;
+			}
+
+			return pExpr;
+		}
+		else
 		{
-            // IDEA: Better error line message if we walk pExpr and find line of the highest AST node child it has.
-            //  We could easily cache that when constructing an AST node...
+            if (!tryConsumeToken(pParser->pScanner, TOKENK_CloseParen, ensurePendingToken(pParser)))
+            {
+                // IDEA: Better error line message if we walk pExpr and find line of the highest AST node child it has.
+                //  We could easily cache that when constructing an AST node...
 
-			auto * pErr = AstNewErr1Child(pParser, ExpectedTokenkErr, pExpr->startLine, pExpr);
-			pErr->tokenk = TOKENK_CloseParen;
-			return Up(pErr);
-		}
+                auto * pErr = AstNewErr1Child(pParser, ExpectedTokenkErr, pExpr->startLine, pExpr);
+                pErr->tokenk = TOKENK_CloseParen;
+                return Up(pErr);
+            }
+        }
 
-		pParser->panicRecovery.parenLevel--;
-
+	finishGroup:
 		auto * pNode = AstNew(pParser, GroupExpr, pOpenParen->line);
 		pNode->pExpr = pExpr;
 
@@ -289,23 +304,26 @@ AstNode * parsePrimary(Parser * pParser)
 	}
     else if (tryConsumeToken(pParser->pScanner, TOKENK_Error, ensurePendingToken(pParser)))
     {
-        // Scan error
+		// Scan error
 
-        // Token * pErrToken = claimPendingToken(pParser);
+        Token * pErrToken = claimPendingToken(pParser);
 
-		// auto * pNode = AstNew(
-
-        return nullptr;
+        auto * pErr = AstNewErr0Child(pParser, ScanErr, pErrToken->line);
+        pErr->pErrToken = pErrToken;
+        return Up(pErr);
     }
     else
 	{
-		// Parse error
+		// Unexpected token error
 
         Token errTokenTemp;
         peekToken(pParser->pScanner, &errTokenTemp);
 
 		auto * pErr = AstNewErr0Child(pParser, UnexpectedTokenkErr, errTokenTemp.line);
 		pErr->tokenk = errTokenTemp.tokenk;
+
+        AssertInfo(pErr->tokenk != TOKENK_Error, "This be a ScanErr!");
+
 		return Up(pErr);
 	}
 }
@@ -356,16 +374,20 @@ AstNode * finishParsePrimary(Parser * pParser, AstNode * pExpr)
 	{
 		// Array access
 
-		pParser->panicRecovery.bracketLevel++;
-
 		AstNode * pSubscriptExpr = parseExpr(pParser);
 		if (isErrorNode(*pSubscriptExpr))
 		{
-            auto * pErr = AstNewErr2Child(pParser, BubbleErr, pExpr->startLine, pExpr, pSubscriptExpr);
-            return Up(pErr);
-		}
+			// Panic recovery
 
-		if (!tryConsumeToken(pParser->pScanner, TOKENK_CloseBracket, ensurePendingToken(pParser)))
+			if (tryRecoverFromPanic(pParser, TOKENK_CloseBracket))
+			{
+				goto finishArrayAccess;
+			}
+
+			auto * pErr = AstNewErr2Child(pParser, BubbleErr, pExpr->startLine, pExpr, pSubscriptExpr);
+			return Up(pErr);
+		}
+		else if (!tryConsumeToken(pParser->pScanner, TOKENK_CloseBracket, ensurePendingToken(pParser)))
 		{
             Token * pErrToken = peekPendingToken(pParser);
 			auto * pErrNode = AstNewErr2Child(pParser, ExpectedTokenkErr, pErrToken->line, pExpr, pSubscriptExpr);
@@ -374,8 +396,7 @@ AstNode * finishParsePrimary(Parser * pParser, AstNode * pExpr)
 			return Up(pErrNode);
 		}
 
-		pParser->panicRecovery.bracketLevel--;
-
+	finishArrayAccess:
 		auto * pNode = AstNew(pParser, ArrayAccessExpr, pExpr->startLine);
 		pNode->pArray = pExpr;
 		pNode->pSubscript = pSubscriptExpr;
@@ -384,9 +405,7 @@ AstNode * finishParsePrimary(Parser * pParser, AstNode * pExpr)
 	}
 	else if (tryConsumeToken(pParser->pScanner, TOKENK_OpenParen, ensurePendingToken(pParser)))
 	{
-        // Function call
-
-		pParser->panicRecovery.parenLevel++;
+        // Func call
 
 		DynamicArray<AstNode *> aPArgs;
 		init(&aPArgs);
@@ -395,42 +414,88 @@ AstNode * finishParsePrimary(Parser * pParser, AstNode * pExpr)
 
 		bool isFirstArg = true;
 
+		// Error recovery variables
+
+		bool skipCommaCheck = false;
+		static const TOKENK s_aTokenkRecoverable[] = { TOKENK_CloseParen, TOKENK_Comma };
+
 		while (!tryConsumeToken(pParser->pScanner, TOKENK_CloseParen, ensurePendingToken(pParser)))
 		{
 			if (!isFirstArg && !tryConsumeToken(pParser->pScanner, TOKENK_Comma, ensurePendingToken(pParser)))
 			{
-                Token * pErrToken = peekPendingToken(pParser);
+                int line = peekPendingToken(pParser)->line;
 
-				DynamicArray<AstNode *> aPChildren;
-				initMove(&aPChildren, &aPArgs);
-				prepend(&aPChildren, pExpr);
+				TOKENK tokenkMatch;
+				bool recovered = tryRecoverFromPanic(pParser, s_aTokenkRecoverable, ArrayLen(s_aTokenkRecoverable), &tokenkMatch);
 
-				auto * pErrNode = AstNewErrListChild(pParser, ExpectedTokenkErr, pErrToken->line, aPChildren.pBuffer, aPChildren.cItem);
-				pErrNode->tokenk = TOKENK_Comma;
+				if (recovered)
+				{
+					auto * pErrNode = AstNewErr0Child(pParser, ExpectedTokenkErr, line);
+					pErrNode->tokenk = TOKENK_Comma;
 
-				return Up(pErrNode);
+					append(&aPArgs, Up(pErrNode));
+
+					// NOTE: We slot the error into the argument list. If we matched a ',',
+					//	we can keep parsing the next arguments. If we matched a ')' we
+					//	can jump to the end logic.
+
+					if (tokenkMatch == TOKENK_CloseParen)
+					{
+						goto finishFuncCall;
+					}
+				}
+				else
+				{
+					DynamicArray<AstNode *> aPChildren;
+					initMove(&aPChildren, &aPArgs);
+					prepend(&aPChildren, pExpr);
+
+					auto * pErrNode = AstNewErrListChild(pParser, ExpectedTokenkErr, line, aPChildren.pBuffer, aPChildren.cItem);
+					pErrNode->tokenk = TOKENK_Comma;
+
+					return Up(pErrNode);
+				}
 			}
+
+			skipCommaCheck = false;
+
+			// NOTE: We append the expr to args even if it is an error.
 
 			AstNode * pExprArg = parseExpr(pParser);
 			append(&aPArgs, pExprArg);
 
 			if (isErrorNode(*pExprArg))
 			{
-				DynamicArray<AstNode *> aPChildren;
-				initMove(&aPChildren, &aPArgs);
-				prepend(&aPChildren, pExpr);
+				TOKENK tokenkMatch;
+				tryRecoverFromPanic(pParser, s_aTokenkRecoverable, ArrayLen(s_aTokenkRecoverable), &tokenkMatch);
 
-                AssertInfo(aPChildren.cItem >= 2, "Should at least contain first arg parse attempt and the pExpr of the function");
+				if (tokenkMatch == TOKENK_CloseParen)
+				{
+					goto finishFuncCall;
+				}
+				else if (tokenkMatch == TOKENK_Comma)
+				{
+					// We already consumed the comma for the next argument
 
-                auto * pErrNode = AstNewErrListChild(pParser, BubbleErr, aPChildren[0]->startLine, aPChildren.pBuffer, aPChildren.cItem);
-                return Up(pErrNode);
+					skipCommaCheck = true;
+				}
+				else
+				{
+					Assert(tokenkMatch == TOKENK_Nil);
+
+					DynamicArray<AstNode *> aPChildren;
+					initMove(&aPChildren, &aPArgs);
+					prepend(&aPChildren, pExpr);
+
+					auto * pErrNode = AstNewErrListChild(pParser, BubbleErr, pExprArg->startLine, aPChildren.pBuffer, aPChildren.cItem);
+					return Up(pErrNode);
+				}
 			}
 
 			isFirstArg = false;
 		}
 
-		pParser->panicRecovery.parenLevel--;
-
+    finishFuncCall:
 		auto * pNode = AstNew(pParser, FuncCallExpr, pExpr->startLine);
 		pNode->pFunc = pExpr;
 		initMove(&pNode->aPArgs, &aPArgs);
@@ -503,52 +568,47 @@ AstNode * astNewErr(Parser * pParser, ASTK astkErr, int line, AstNode * aPChildr
 	return Up(pNode);
 }
 
-void recoverFromPanic(Parser * pParser)
+bool tryRecoverFromPanic(Parser * pParser, TOKENK tokenkRecover)
 {
-	if (!pParser->isPanicMode)
-	{
-		Assert(false);
-		return;
-	}
+	TOKENK throwaway;
+	return tryRecoverFromPanic(pParser, &tokenkRecover, 1, &throwaway);
+}
 
+bool tryRecoverFromPanic(Parser * pParser, const TOKENK * aTokenkRecover, int cTokenkRecover, TOKENK * poTokenkMatch)
+{
     pParser->hadError = true;
+	*poTokenkMatch = TOKENK_Nil;
 
-	// Scan through next semicolon, or until we find a ), ], } if we are
-	//	in an appropriate context.
+	// Scan up to (but not past) the next semicolon, or until we consume a tokenk that
+	//	we can recover from. Note that if that tokenk is a semicolon then we *do*
+	//	consume it.
 
-	Token token;
+	// NOTE: This will consume EOF token if it hits it!
+
 	while(true)
 	{
-		if (isFinished(pParser->pScanner)) break;
-		if (tryConsumeToken(pParser->pScanner, TOKENK_Semicolon, &token)) break;
+		if (isFinished(pParser->pScanner)) return false;
 
-		if (pParser->panicRecovery.parenLevel > 0 &&
-			tryConsumeToken(pParser->pScanner, TOKENK_CloseParen, &token))
+		Token token;
+        for (int i = 0; i < cTokenkRecover; i++)
 		{
-			pParser->panicRecovery.parenLevel--;
-			break;
+			if (tryConsumeToken(pParser->pScanner, aTokenkRecover[i], &token))
+			{
+				*poTokenkMatch = aTokenkRecover[i];
+				return true;
+			}
 		}
 
-		if (pParser->panicRecovery.bracketLevel > 0 &&
-			tryConsumeToken(pParser->pScanner, TOKENK_CloseBracket, &token))
+		peekToken(pParser->pScanner, &token);
+		if (token.tokenk == TOKENK_Semicolon)
 		{
-			pParser->panicRecovery.bracketLevel--;
-			break;
-		}
-
-		if (pParser->panicRecovery.braceLevel > 0 &&
-			tryConsumeToken(pParser->pScanner, TOKENK_CloseBrace, &token))
-		{
-			pParser->panicRecovery.braceLevel--;
-			break;
+			return false;
 		}
 
 		// Keep chewing!
 
         consumeToken(pParser->pScanner, &token);
 	}
-
-	pParser->isPanicMode = false;
 }
 
 Token * ensurePendingToken(Parser * pParser)
@@ -679,6 +739,7 @@ void debugPrintSubAst(const AstNode & node, int level, bool skipAfterArrow, Dyna
 		}
     };
 
+    static const char * scanErrorString = "[scan error]:";
 	static const char * parseErrorString = "[parse error]:";
 
     setSkip(pMapLevelSkip, level, false);
@@ -691,31 +752,67 @@ void debugPrintSubAst(const AstNode & node, int level, bool skipAfterArrow, Dyna
     {
 		// ERR
 
+        // TODO: Factor these error strings out into a function that can exist outside of DEBUG and have bells and whistles
+        //  like reporting error line #! Maybe even print the surrounding context... might be kinda hard since I don't store it
+        //  anywhere, but I could store an index into the text buffer and it could walk forward and backward until it hits
+        //  new lines or some length limit and then BOOM I've got context!
+
+        case ASTK_ScanErr:
+        {
+            auto * pErr = DownConst(&node, ScanErr);
+
+            DynamicArray<StringBox<256>> errMsgs;
+            init(&errMsgs);
+            Defer(destroy(&errMsgs));
+
+            errMessagesFromGrferrtok(pErr->pErrToken->grferrtok, &errMsgs);
+            Assert(errMsgs.cItem > 0);
+
+            if (errMsgs.cItem == 1)
+            {
+                printf("%s %s", scanErrorString, errMsgs[0].aBuffer);
+            }
+            else
+            {
+                printf("%s", scanErrorString);
+
+                for (uint i = 0; i < errMsgs.cItem; i++)
+                {
+                    printf("\n");
+                    printTabs(level, true, skipAfterArrow, pMapLevelSkip);
+                    printf("- %s", errMsgs[i].aBuffer);
+                }
+            }
+
+            printErrChildren(*DownErrConst(&node), level, pMapLevelSkip);
+        } break;
+
 		case ASTK_BubbleErr:
 		{
+            auto * pErr = DownConst(&node, BubbleErr);
 			printf("%s (bubble)", parseErrorString);
-            printErrChildren(*DownErrConst(&node), level, pMapLevelSkip);
+            printErrChildren(*UpErrConst(pErr), level, pMapLevelSkip);
 		} break;
 
 		case ASTK_UnexpectedTokenkErr:
 		{
-			auto * pExpr = DownConst(&node, UnexpectedTokenkErr);
-			printf("%s unexpected %s", parseErrorString, g_mpTokenkDisplay[pExpr->tokenk]);
-            printErrChildren(*UpErrConst(pExpr), level, pMapLevelSkip);
+			auto * pErr = DownConst(&node, UnexpectedTokenkErr);
+			printf("%s unexpected %s", parseErrorString, g_mpTokenkDisplay[pErr->tokenk]);
+            printErrChildren(*UpErrConst(pErr), level, pMapLevelSkip);
 		} break;
 
 		case ASTK_ExpectedTokenkErr:
 		{
-			auto * pExpr = DownConst(&node, ExpectedTokenkErr);
-			printf("%s expected %s", parseErrorString, g_mpTokenkDisplay[pExpr->tokenk]);
-            printErrChildren(*UpErrConst(pExpr), level, pMapLevelSkip);
+			auto * pErr = DownConst(&node, ExpectedTokenkErr);
+			printf("%s expected %s", parseErrorString, g_mpTokenkDisplay[pErr->tokenk]);
+            printErrChildren(*UpErrConst(pErr), level, pMapLevelSkip);
 		} break;
 
         case ASTK_ProgramErr:
         {
-			auto * pNode = DownConst(&node, ProgramErr);
+			auto * pErr = DownConst(&node, ProgramErr);
             printf("(erroneous program)");
-            printErrChildren(*UpErrConst(pNode), level, pMapLevelSkip);
+            printErrChildren(*UpErrConst(pErr), level, pMapLevelSkip);
         } break;
 
 

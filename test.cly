@@ -1,20 +1,7 @@
+0x254.33;
 
-// Error
-twoDArrayOfStructs[7 + 4][+-!>.myVariable].value + 37 -
-(myFunc(myArg0, !myArg1, myArg2) - 1) * -44 / 2 * someStruct.someInnerStruct.someVariable;
-
-// Valid
-2 + 2;
-
-// Error
-2 + ,2;
-
-// Valid
-(0xfaced00d / /* Dont /* mind /* the */ nested */ comments */ -37.66);
-
-// Error into eof
-
-( I +  forgot+  to +
-close +
-this+
-paren
+"Umm I think
+this is
+a multiline
+and unterminated
+string

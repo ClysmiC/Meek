@@ -1,5 +1,7 @@
 #include "token.h"
 
+#include <stdio.h>
+
 TOKENK g_aTokenkLiteral[] = {
 	TOKENK_IntLiteral,
 	TOKENK_FloatLiteral,
@@ -49,7 +51,6 @@ ReservedWord g_aReservedWord[] = {
 	{ "true",		TOKENK_BoolLiteral },
 	{ "false",		TOKENK_BoolLiteral },
 };
-
 int g_cReservedWord = ArrayLen(g_aReservedWord);
 
 const char * g_mpTokenkDisplay[] = {
@@ -123,3 +124,69 @@ const char * g_mpTokenkDisplay[] = {
 	"<end of file>",		// TOKENK_Eof
 };
 StaticAssert(ArrayLen(g_mpTokenkDisplay) == TOKENK_Max);
+
+
+
+void errMessagesFromGrferrtok(GRFERRTOK grferrtok, DynamicArray<StringBox<256>> * poMessages)
+{
+    StringBox<256> str;
+
+    if (grferrtok == FERRTOK_Unspecified)
+    {
+        sprintf(str.aBuffer, "Unspecified error");
+        append(poMessages, str);
+        return;
+    }
+
+    ForFlag(FERRTOK, ferrtok)
+    {
+        if (grferrtok & ferrtok)
+        {
+            switch (ferrtok)
+            {
+                case FERRTOK_InvalidCharacter:
+                {
+                    sprintf(str.aBuffer, "Invalid character");
+                } break;
+
+                case FERRTOK_IntLiteralNonBase10WithDecimal:
+                {
+                    sprintf(str.aBuffer, "Numeric literal may only contain a decimal if it is in base-10");
+                } break;
+
+                case FERRTOK_IntLiteralNonBase10NoDigits:
+                {
+                    sprintf(str.aBuffer, "Numeric literal with non-base-10 prefix must contain at least one digit");
+                } break;
+
+                case FERRTOK_NumberLiteralMultipleDecimals:
+                {
+                    sprintf(str.aBuffer, "Numeric literal cannot contain more than one decimal");
+                } break;
+
+                case FERRTOK_MultilineString:
+                {
+                    sprintf(str.aBuffer, "Multiline string literals are not permitted");
+                } break;
+
+                case FERRTOK_UnterminatedString:
+                {
+                    sprintf(str.aBuffer, "Unterminated string literal");
+                } break;
+
+                case FERRTOK_UnterminatedBlockComment:
+                {
+                    sprintf(str.aBuffer, "Unterminated block comment");
+                } break;
+
+                default:
+                {
+                    Assert(false);
+                    sprintf(str.aBuffer, "!!! Internal Compiler Error: errTokenMessages failing on flag value %d", ferrtok);
+                }
+            }
+
+            append(poMessages, str);
+        }
+    }
+}

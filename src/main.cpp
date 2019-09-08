@@ -1,7 +1,3 @@
-#ifdef _WIN32
-	#define _CRT_SECURE_NO_DEPRECATE
-#endif
-
 #include "als.h"
 
 #include "ast.h"

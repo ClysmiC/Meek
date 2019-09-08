@@ -53,6 +53,12 @@
     <ClInclude Include="src\token.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="src\als\macro_flags.h">
+      <Filter>Header Files\als</Filter>
+    </ClInclude>
+    <ClInclude Include="src\als\common_string.h">
+      <Filter>Header Files\als</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\ast.cpp">
