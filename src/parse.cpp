@@ -15,7 +15,7 @@
 #define AstNew(pParser, astk, line) reinterpret_cast<Ast##astk *>(astNew(pParser, ASTK_##astk, line))
 
 // Absolutely sucks that I need to use 0, 1, 2 suffixes. I tried this approach to simulate default parameters in a macro but MSVC has a bug
-//  with varargs expansion that made it blow up: https://stackoverflow.com/questions/3046889/optional-parameters-with-c-macros
+//	with varargs expansion that made it blow up: https://stackoverflow.com/questions/3046889/optional-parameters-with-c-macros
 
 #define AstNewErr0Child(pParser, astkErr, line) reinterpret_cast<Ast##astkErr *>(astNewErr(pParser, ASTK_##astkErr, line, nullptr, nullptr))
 #define AstNewErr1Child(pParser, astkErr, line, pChild0) reinterpret_cast<Ast##astkErr *>(astNewErr(pParser, ASTK_##astkErr, line, pChild0, nullptr))
@@ -51,7 +51,7 @@ bool init(Parser * pParser, Scanner * pScanner)
 	// pParser->isPanicMode = false;
 	init(&pParser->astAlloc);
 	init(&pParser->tokenAlloc);
-    init(&pParser->astNodes);
+	init(&pParser->astNodes);
 
 	return true;
 }
@@ -59,7 +59,7 @@ bool init(Parser * pParser, Scanner * pScanner)
 AstNode * parseProgram(Parser * pParser)
 {
 	DynamicArray<AstNode *> aPNodesTemp;
-    init(&aPNodesTemp);
+	init(&aPNodesTemp);
 	Defer(Assert(aPNodesTemp.pBuffer == nullptr));
 
 	parseStmts(pParser, &aPNodesTemp);
@@ -69,10 +69,10 @@ AstNode * parseProgram(Parser * pParser)
 
 	if (pParser->hadError)
 	{
-        // @Slow since AstNewErrListChild copies when we could probably rejigger the interface to support a "move"
+		// @Slow since AstNewErrListChild copies when we could probably rejigger the interface to support a "move"
 
 		auto * pNode = AstNewErrListChild(pParser, ProgramErr, aPNodesTemp[0]->startLine, aPNodesTemp.pBuffer, aPNodesTemp.cItem);
-        destroy(&aPNodesTemp);
+		destroy(&aPNodesTemp);
 		return Up(pNode);
 	}
 	else
@@ -88,7 +88,7 @@ AstNode * parseProgram(Parser * pParser)
 
 void parseStmts(Parser * pParser, DynamicArray<AstNode *> * poAPNodes)
 {
-    Token throwaway;
+	Token throwaway;
 	while (!isFinished(pParser->pScanner) && peekToken(pParser->pScanner, &throwaway) != TOKENK_Eof)
 	{
 
@@ -132,7 +132,7 @@ AstNode * parseExprStmt(Parser * pParser)
 
 	if (!tryConsumeToken(pParser->pScanner, TOKENK_Semicolon, ensurePendingToken(pParser)))
 	{
-        Token * pErrToken = peekPendingToken(pParser);
+		Token * pErrToken = peekPendingToken(pParser);
 		auto * pErrNode = AstNewErr1Child(pParser, ExpectedTokenkErr, pErrToken->line, pExpr);
 		pErrNode->tokenk = TOKENK_Semicolon;
 	}
@@ -172,38 +172,38 @@ AstNode * parseExpr(Parser * pParser)
 
 AstNode * parseBinop(Parser * pParser, const BinopInfo & op)
 {
-    auto oneStepLower = [](Parser * pParser, int precedence) -> AstNode *
-    {
-        Assert(precedence >= 0);
+	auto oneStepLower = [](Parser * pParser, int precedence) -> AstNode *
+	{
+		Assert(precedence >= 0);
 
-        if (precedence == 0)
-        {
-            return parseUnopPre(pParser);
-        }
-        else
-        {
-            const BinopInfo & opNext = s_aParseOp[precedence - 1];
-            return parseBinop(pParser, opNext);
-        }
-    };
+		if (precedence == 0)
+		{
+			return parseUnopPre(pParser);
+		}
+		else
+		{
+			const BinopInfo & opNext = s_aParseOp[precedence - 1];
+			return parseBinop(pParser, opNext);
+		}
+	};
 
-    AstNode * pExpr = oneStepLower(pParser, op.precedence);
-    Assert(pExpr);
+	AstNode * pExpr = oneStepLower(pParser, op.precedence);
+	Assert(pExpr);
 
-    // NOTE: Error check is done after we get a chance to parse rhs so that we can catch errors in both expressions. If we don't
-    //  match a binop then we just want to return pExpr as is anyway, whether it is an error or not.
+	// NOTE: Error check is done after we get a chance to parse rhs so that we can catch errors in both expressions. If we don't
+	//	match a binop then we just want to return pExpr as is anyway, whether it is an error or not.
 
 	while (tryConsumeToken(pParser->pScanner, op.aTokenkMatch, op.cTokenMatch, ensurePendingToken(pParser)))
 	{
-        Token * pOp = claimPendingToken(pParser);
+		Token * pOp = claimPendingToken(pParser);
 
-        AstNode * pRhsExpr = oneStepLower(pParser, op.precedence);
-        Assert(pRhsExpr);
+		AstNode * pRhsExpr = oneStepLower(pParser, op.precedence);
+		Assert(pRhsExpr);
 
 		if (isErrorNode(*pExpr) || isErrorNode(*pRhsExpr))
 		{
 			auto * pErr = AstNewErr2Child(pParser, BubbleErr, pExpr->startLine, pExpr, pRhsExpr);
-            return Up(pErr);
+			return Up(pErr);
 		}
 
 		auto * pNode = AstNew(pParser, BinopExpr, pExpr->startLine);
@@ -226,7 +226,7 @@ AstNode * parseUnopPre(Parser * pParser)
 		AstNode * pExpr = parseUnopPre(pParser);
 		if (isErrorNode(*pExpr))
 		{
-            return pExpr;
+			return pExpr;
 		}
 
 		auto * pNode = AstNew(pParser, UnopExpr, pOp->line);
@@ -247,7 +247,7 @@ AstNode * parsePrimary(Parser * pParser)
 	{
 		// Group ( )
 
-        Token * pOpenParen = claimPendingToken(pParser);
+		Token * pOpenParen = claimPendingToken(pParser);
 		AstNode * pExpr = parseExpr(pParser);
 
 		if (isErrorNode(*pExpr))
@@ -263,16 +263,16 @@ AstNode * parsePrimary(Parser * pParser)
 		}
 		else
 		{
-            if (!tryConsumeToken(pParser->pScanner, TOKENK_CloseParen, ensurePendingToken(pParser)))
-            {
-                // IDEA: Better error line message if we walk pExpr and find line of the highest AST node child it has.
-                //  We could easily cache that when constructing an AST node...
+			if (!tryConsumeToken(pParser->pScanner, TOKENK_CloseParen, ensurePendingToken(pParser)))
+			{
+				// IDEA: Better error line message if we walk pExpr and find line of the highest AST node child it has.
+				//	We could easily cache that when constructing an AST node...
 
-                auto * pErr = AstNewErr1Child(pParser, ExpectedTokenkErr, pExpr->startLine, pExpr);
-                pErr->tokenk = TOKENK_CloseParen;
-                return Up(pErr);
-            }
-        }
+				auto * pErr = AstNewErr1Child(pParser, ExpectedTokenkErr, pExpr->startLine, pExpr);
+				pErr->tokenk = TOKENK_CloseParen;
+				return Up(pErr);
+			}
+		}
 
 	finishGroup:
 		auto * pNode = AstNew(pParser, GroupExpr, pOpenParen->line);
@@ -284,10 +284,10 @@ AstNode * parsePrimary(Parser * pParser)
 	{
 		// Literal
 
-        Token * pLiteralToken = claimPendingToken(pParser);
+		Token * pLiteralToken = claimPendingToken(pParser);
 
 		auto * pNode = AstNew(pParser, LiteralExpr, pLiteralToken->line);
-        pNode->pToken = pLiteralToken;
+		pNode->pToken = pLiteralToken;
 		return Up(pNode);
 	}
 	else if (tryConsumeToken(pParser->pScanner, TOKENK_Identifier, ensurePendingToken(pParser)))
@@ -302,27 +302,27 @@ AstNode * parsePrimary(Parser * pParser)
 
 		return finishParsePrimary(pParser, Up(pNode));
 	}
-    else if (tryConsumeToken(pParser->pScanner, TOKENK_Error, ensurePendingToken(pParser)))
-    {
+	else if (tryConsumeToken(pParser->pScanner, TOKENK_Error, ensurePendingToken(pParser)))
+	{
 		// Scan error
 
-        Token * pErrToken = claimPendingToken(pParser);
+		Token * pErrToken = claimPendingToken(pParser);
 
-        auto * pErr = AstNewErr0Child(pParser, ScanErr, pErrToken->line);
-        pErr->pErrToken = pErrToken;
-        return Up(pErr);
-    }
-    else
+		auto * pErr = AstNewErr0Child(pParser, ScanErr, pErrToken->line);
+		pErr->pErrToken = pErrToken;
+		return Up(pErr);
+	}
+	else
 	{
 		// Unexpected token error
 
-        Token errTokenTemp;
-        peekToken(pParser->pScanner, &errTokenTemp);
+		Token errTokenTemp;
+		peekToken(pParser->pScanner, &errTokenTemp);
 
 		auto * pErr = AstNewErr0Child(pParser, UnexpectedTokenkErr, errTokenTemp.line);
 		pErr->tokenk = errTokenTemp.tokenk;
 
-        AssertInfo(pErr->tokenk != TOKENK_Error, "This be a ScanErr!");
+		AssertInfo(pErr->tokenk != TOKENK_Error, "This be a ScanErr!");
 
 		return Up(pErr);
 	}
@@ -352,7 +352,7 @@ AstNode * finishParsePrimary(Parser * pParser, AstNode * pExpr)
 
 		if (!tryConsumeToken(pParser->pScanner, TOKENK_Identifier, ensurePendingToken(pParser)))
 		{
-            Token * errToken = peekPendingToken(pParser);
+			Token * errToken = peekPendingToken(pParser);
 			auto * pErrNode = AstNewErr1Child(pParser, ExpectedTokenkErr, errToken->line, pExpr);
 			pErrNode->tokenk = TOKENK_Identifier;
 
@@ -389,7 +389,7 @@ AstNode * finishParsePrimary(Parser * pParser, AstNode * pExpr)
 		}
 		else if (!tryConsumeToken(pParser->pScanner, TOKENK_CloseBracket, ensurePendingToken(pParser)))
 		{
-            Token * pErrToken = peekPendingToken(pParser);
+			Token * pErrToken = peekPendingToken(pParser);
 			auto * pErrNode = AstNewErr2Child(pParser, ExpectedTokenkErr, pErrToken->line, pExpr, pSubscriptExpr);
 			pErrNode->tokenk = TOKENK_CloseBracket;
 
@@ -405,12 +405,12 @@ AstNode * finishParsePrimary(Parser * pParser, AstNode * pExpr)
 	}
 	else if (tryConsumeToken(pParser->pScanner, TOKENK_OpenParen, ensurePendingToken(pParser)))
 	{
-        // Func call
+		// Func call
 
 		DynamicArray<AstNode *> aPArgs;
 		init(&aPArgs);
 
-		Defer(Assert(!aPArgs.pBuffer));     // buffer should get "moved" into AST
+		Defer(Assert(!aPArgs.pBuffer));		// buffer should get "moved" into AST
 
 		bool isFirstArg = true;
 
@@ -423,7 +423,7 @@ AstNode * finishParsePrimary(Parser * pParser, AstNode * pExpr)
 		{
 			if (!isFirstArg && !tryConsumeToken(pParser->pScanner, TOKENK_Comma, ensurePendingToken(pParser)))
 			{
-                int line = peekPendingToken(pParser)->line;
+				int line = peekPendingToken(pParser)->line;
 
 				TOKENK tokenkMatch;
 				bool recovered = tryRecoverFromPanic(pParser, s_aTokenkRecoverable, ArrayLen(s_aTokenkRecoverable), &tokenkMatch);
@@ -495,7 +495,7 @@ AstNode * finishParsePrimary(Parser * pParser, AstNode * pExpr)
 			isFirstArg = false;
 		}
 
-    finishFuncCall:
+	finishFuncCall:
 		auto * pNode = AstNew(pParser, FuncCallExpr, pExpr->startLine);
 		pNode->pFunc = pExpr;
 		initMove(&pNode->aPArgs, &aPArgs);
@@ -513,7 +513,7 @@ AstNode * astNew(Parser * pParser, ASTK astk, int line)
 	AstNode * pNode = allocate(&pParser->astAlloc);
 	pNode->astk = astk;
 	pNode->id = pParser->iNode;
-    pNode->startLine = line;
+	pNode->startLine = line;
 	pParser->iNode++;
 
 	append(&pParser->astNodes, pNode);
@@ -523,7 +523,7 @@ AstNode * astNew(Parser * pParser, ASTK astk, int line)
 
 AstNode * astNewErr(Parser * pParser, ASTK astkErr, int line, AstNode * pChild0, AstNode * pChild1)
 {
-	Assert(!pChild1 || pChild0);    // Implies
+	Assert(!pChild1 || pChild0);	// Implies
 
 	AstNode * aPChildren[2] = { pChild0, pChild1 };
 	int cPChildren = (!pChild0) ? 0 : (!pChild1) ? 1 : 2;
@@ -532,18 +532,18 @@ AstNode * astNewErr(Parser * pParser, ASTK astkErr, int line, AstNode * pChild0,
 
 AstNode * astNewErr(Parser * pParser, ASTK astkErr, int line, AstNode * aPChildren[], uint cPChildren)
 {
-    Assert(category(astkErr) == ASTCATK_Error);
-    Assert(astkErr != ASTK_BubbleErr || cPChildren > 0);        // Implies
-    AssertInfo(
-        astkErr != ASTK_BubbleErr || cPChildren >= 2,           // Implies
-        "Bubble error by definition must have 2+ children"
-    );
+	Assert(category(astkErr) == ASTCATK_Error);
+	Assert(astkErr != ASTK_BubbleErr || cPChildren > 0);		// Implies
+	AssertInfo(
+		astkErr != ASTK_BubbleErr || cPChildren >= 2,			// Implies
+		"Bubble error by definition must have 2+ children"
+	);
 
 	bool isBubble = astkErr == ASTK_BubbleErr;
 	bool hasErrorChild = false;
 
 	auto * pNode = Down(astNew(pParser, astkErr, line), Err);
-    init(&pNode->aPChildren);
+	init(&pNode->aPChildren);
 	appendMultiple(&pNode->aPChildren, aPChildren, cPChildren);
 
 #if DEBUG
@@ -576,7 +576,7 @@ bool tryRecoverFromPanic(Parser * pParser, TOKENK tokenkRecover)
 
 bool tryRecoverFromPanic(Parser * pParser, const TOKENK * aTokenkRecover, int cTokenkRecover, TOKENK * poTokenkMatch)
 {
-    pParser->hadError = true;
+	pParser->hadError = true;
 	*poTokenkMatch = TOKENK_Nil;
 
 	// Scan up to (but not past) the next semicolon, or until we consume a tokenk that
@@ -590,7 +590,7 @@ bool tryRecoverFromPanic(Parser * pParser, const TOKENK * aTokenkRecover, int cT
 		if (isFinished(pParser->pScanner)) return false;
 
 		Token token;
-        for (int i = 0; i < cTokenkRecover; i++)
+		for (int i = 0; i < cTokenkRecover; i++)
 		{
 			if (tryConsumeToken(pParser->pScanner, aTokenkRecover[i], &token))
 			{
@@ -607,7 +607,7 @@ bool tryRecoverFromPanic(Parser * pParser, const TOKENK * aTokenkRecover, int cT
 
 		// Keep chewing!
 
-        consumeToken(pParser->pScanner, &token);
+		consumeToken(pParser->pScanner, &token);
 	}
 }
 
@@ -623,8 +623,8 @@ Token * ensurePendingToken(Parser * pParser)
 
 Token * peekPendingToken(Parser * pParser)
 {
-    Assert(pParser->pPendingToken);
-    return pParser->pPendingToken;
+	Assert(pParser->pPendingToken);
+	return pParser->pPendingToken;
 }
 
 Token * claimPendingToken(Parser * pParser)
@@ -643,75 +643,58 @@ Token * claimPendingToken(Parser * pParser)
 
 void debugPrintAst(const AstNode & root)
 {
-    DynamicArray<bool> mpLevelSkip;
-    init(&mpLevelSkip);
-    Defer(destroy(&mpLevelSkip));
+	DynamicArray<bool> mpLevelSkip;
+	init(&mpLevelSkip);
+	Defer(destroy(&mpLevelSkip));
 
-    debugPrintSubAst(root, 0, false, &mpLevelSkip);
-    printf("\n");
+	debugPrintSubAst(root, 0, false, &mpLevelSkip);
+	printf("\n");
 }
 
 void debugPrintSubAst(const AstNode & node, int level, bool skipAfterArrow, DynamicArray<bool> * pMapLevelSkip)
 {
-    auto setSkip = [](DynamicArray<bool> * pMapLevelSkip, uint level, bool skip) {
-        Assert(level <= pMapLevelSkip->cItem);
+	auto setSkip = [](DynamicArray<bool> * pMapLevelSkip, uint level, bool skip) {
+		Assert(level <= pMapLevelSkip->cItem);
 
-        if (level == pMapLevelSkip->cItem)
-        {
-            append(pMapLevelSkip, skip);
-        }
-        else
-        {
-            (*pMapLevelSkip)[level] = skip;
-        }
-    };
-
-	auto printTabs = [setSkip](int level, bool printArrows, bool skipAfterArrow, DynamicArray<bool> * pMapLevelSkip) {
-
-        Assert(!skipAfterArrow || printArrows);     // Implies
-		for (int i = 0; i < level; i++)
+		if (level == pMapLevelSkip->cItem)
 		{
-            if ((*pMapLevelSkip)[i])
-            {
-                printf("   ");
-            }
-            else
-            {
-                printf("|");
-
-                if (printArrows && i == level - 1)
-                {
-                    printf("- ");
-
-                    if (skipAfterArrow)
-                    {
-                        setSkip(pMapLevelSkip, level - 1, skipAfterArrow);
-                    }
-                }
-                else
-                {
-                    printf("  ");
-                }
-            }
+			append(pMapLevelSkip, skip);
+		}
+		else
+		{
+			(*pMapLevelSkip)[level] = skip;
 		}
 	};
 
-    auto printErrChildren = [printTabs](const AstErr & node, int level, DynamicArray<bool> * pMapLevelSkip)
-    {
-        // TODO: can probably combine this with printChildren?
+	auto printTabs = [setSkip](int level, bool printArrows, bool skipAfterArrow, DynamicArray<bool> * pMapLevelSkip) {
 
-        for (uint i = 0; i < node.aPChildren.cItem; i++)
-        {
-            bool lastChild = i == node.aPChildren.cItem - 1;
+		Assert(!skipAfterArrow || printArrows);		// Implies
+		for (int i = 0; i < level; i++)
+		{
+			if ((*pMapLevelSkip)[i])
+			{
+				printf("   ");
+			}
+			else
+			{
+				printf("|");
 
-            debugPrintSubAst(*node.aPChildren[i], level + 1, lastChild, pMapLevelSkip);
-            if (!lastChild)
-            {
-                printf("\n");
-                printTabs(level + 1, false, false, pMapLevelSkip);
-            }
-        }
-    };
+				if (printArrows && i == level - 1)
+				{
+					printf("- ");
+
+					if (skipAfterArrow)
+					{
+						setSkip(pMapLevelSkip, level - 1, skipAfterArrow);
+					}
+				}
+				else
+				{
+					printf("  ");
+				}
+			}
+		}
+	};
 
 	auto printChildren = [printTabs](const DynamicArray<AstNode *> & aPChildren, int level, const char * label, bool setSkipOnLastChild, DynamicArray<bool> * pMapLevelSkip)
 	{
@@ -737,129 +720,134 @@ void debugPrintSubAst(const AstNode & node, int level, bool skipAfterArrow, Dyna
 				pMapLevelSkip
 			);
 		}
-    };
+	};
 
-    static const char * scanErrorString = "[scan error]:";
+	auto printErrChildren = [printChildren](const AstErr & node, int level, DynamicArray<bool> * pMapLevelSkip)
+	{
+		printChildren(node.aPChildren, level, "child", true, pMapLevelSkip);
+	};
+
+	static const char * scanErrorString = "[scan error]:";
 	static const char * parseErrorString = "[parse error]:";
 
-    setSkip(pMapLevelSkip, level, false);
+	setSkip(pMapLevelSkip, level, false);
 	printf("\n");
 	printTabs(level, true, skipAfterArrow, pMapLevelSkip);
 
 	int levelNext = level + 1;
 
-    switch (node.astk)
-    {
+	switch (node.astk)
+	{
 		// ERR
 
-        // TODO: Factor these error strings out into a function that can exist outside of DEBUG and have bells and whistles
-        //  like reporting error line #! Maybe even print the surrounding context... might be kinda hard since I don't store it
-        //  anywhere, but I could store an index into the text buffer and it could walk forward and backward until it hits
-        //  new lines or some length limit and then BOOM I've got context!
+		// TODO: Factor these error strings out into a function that can exist outside of DEBUG and have bells and whistles
+		//	like reporting error line #! Maybe even print the surrounding context... might be kinda hard since I don't store it
+		//	anywhere, but I could store an index into the text buffer and it could walk forward and backward until it hits
+		//	new lines or some length limit and then BOOM I've got context!
 
-        case ASTK_ScanErr:
-        {
-            auto * pErr = DownConst(&node, ScanErr);
+		case ASTK_ScanErr:
+		{
+			auto * pErr = DownConst(&node, ScanErr);
 
-            DynamicArray<StringBox<256>> errMsgs;
-            init(&errMsgs);
-            Defer(destroy(&errMsgs));
+			DynamicArray<StringBox<256>> errMsgs;
+			init(&errMsgs);
+			Defer(destroy(&errMsgs));
 
-            errMessagesFromGrferrtok(pErr->pErrToken->grferrtok, &errMsgs);
-            Assert(errMsgs.cItem > 0);
+			errMessagesFromGrferrtok(pErr->pErrToken->grferrtok, &errMsgs);
+			Assert(errMsgs.cItem > 0);
 
-            if (errMsgs.cItem == 1)
-            {
-                printf("%s %s", scanErrorString, errMsgs[0].aBuffer);
-            }
-            else
-            {
-                printf("%s", scanErrorString);
+			if (errMsgs.cItem == 1)
+			{
+				printf("%s %s", scanErrorString, errMsgs[0].aBuffer);
+			}
+			else
+			{
+				printf("%s", scanErrorString);
 
-                for (uint i = 0; i < errMsgs.cItem; i++)
-                {
-                    printf("\n");
-                    printTabs(level, true, skipAfterArrow, pMapLevelSkip);
-                    printf("- %s", errMsgs[i].aBuffer);
-                }
-            }
+				for (uint i = 0; i < errMsgs.cItem; i++)
+				{
+					printf("\n");
+					printTabs(level, true, skipAfterArrow, pMapLevelSkip);
+					printf("- %s", errMsgs[i].aBuffer);
+				}
+			}
 
-            printErrChildren(*DownErrConst(&node), level, pMapLevelSkip);
-        } break;
+			printErrChildren(*DownErrConst(&node), levelNext, pMapLevelSkip);
+		} break;
 
 		case ASTK_BubbleErr:
 		{
-            auto * pErr = DownConst(&node, BubbleErr);
+			auto * pErr = DownConst(&node, BubbleErr);
 			printf("%s (bubble)", parseErrorString);
-            printErrChildren(*UpErrConst(pErr), level, pMapLevelSkip);
+			printErrChildren(*UpErrConst(pErr), levelNext, pMapLevelSkip);
 		} break;
 
 		case ASTK_UnexpectedTokenkErr:
 		{
 			auto * pErr = DownConst(&node, UnexpectedTokenkErr);
 			printf("%s unexpected %s", parseErrorString, g_mpTokenkDisplay[pErr->tokenk]);
-            printErrChildren(*UpErrConst(pErr), level, pMapLevelSkip);
+			printErrChildren(*UpErrConst(pErr), levelNext, pMapLevelSkip);
 		} break;
 
 		case ASTK_ExpectedTokenkErr:
 		{
 			auto * pErr = DownConst(&node, ExpectedTokenkErr);
 			printf("%s expected %s", parseErrorString, g_mpTokenkDisplay[pErr->tokenk]);
-            printErrChildren(*UpErrConst(pErr), level, pMapLevelSkip);
+			printErrChildren(*UpErrConst(pErr), levelNext, pMapLevelSkip);
 		} break;
 
-        case ASTK_ProgramErr:
-        {
+		case ASTK_ProgramErr:
+		{
 			auto * pErr = DownConst(&node, ProgramErr);
-            printf("(erroneous program)");
-            printErrChildren(*UpErrConst(pErr), level, pMapLevelSkip);
-        } break;
+			printf("(erroneous program)");
+			printErrChildren(*UpErrConst(pErr), levelNext, pMapLevelSkip);
+		} break;
 
 
 
 		// EXPR
 
-        case ASTK_BinopExpr:
-        {
-            auto * pExpr = DownConst(&node, BinopExpr);
-            printf("%s ", pExpr->pOp->lexeme);
-            debugPrintSubAst(*pExpr->pLhsExpr, levelNext, false, pMapLevelSkip);
+		case ASTK_BinopExpr:
+		{
+			auto * pExpr = DownConst(&node, BinopExpr);
+			printf("%s ", pExpr->pOp->lexeme);
+			debugPrintSubAst(*pExpr->pLhsExpr, levelNext, false, pMapLevelSkip);
 			printf("\n");
 			printTabs(levelNext, false, false, pMapLevelSkip);
-            debugPrintSubAst(*pExpr->pRhsExpr, levelNext, true, pMapLevelSkip);
-        } break;
+			debugPrintSubAst(*pExpr->pRhsExpr, levelNext, true, pMapLevelSkip);
+		} break;
 
-        case ASTK_GroupExpr:
-        {
-            printf("()");
-            auto * pExpr = DownConst(&node, GroupExpr);
-            debugPrintSubAst(*pExpr->pExpr, levelNext, true, pMapLevelSkip);
-        } break;
+		case ASTK_GroupExpr:
+		{
+			printf("()");
+			auto * pExpr = DownConst(&node, GroupExpr);
+			debugPrintSubAst(*pExpr->pExpr, levelNext, true, pMapLevelSkip);
+		} break;
 
-        case ASTK_LiteralExpr:
-        {
-            auto * pExpr = DownConst(&node, LiteralExpr);
-            printf("%s", pExpr->pToken->lexeme);
-        } break;
+		case ASTK_LiteralExpr:
+		{
+			auto * pExpr = DownConst(&node, LiteralExpr);
+			printf("%s", pExpr->pToken->lexeme);
+		} break;
 
 		case ASTK_UnopExpr:
 		{
-            auto * pExpr = DownConst(&node, UnopExpr);
-            printf("%s ", pExpr->pOp->lexeme);
-            debugPrintSubAst(*pExpr->pExpr, levelNext, true, pMapLevelSkip);
+			auto * pExpr = DownConst(&node, UnopExpr);
+			printf("%s ", pExpr->pOp->lexeme);
+			debugPrintSubAst(*pExpr->pExpr, levelNext, true, pMapLevelSkip);
 		} break;
 
 		case ASTK_VarExpr:
 		{
-            auto * pExpr = DownConst(&node, VarExpr);
+			auto * pExpr = DownConst(&node, VarExpr);
 
 			if (pExpr->pOwner)
 			{
-	            printf(". %s", pExpr->pIdent->lexeme);
+				printf(". %s", pExpr->pIdent->lexeme);
 				printf("\n");
 				printTabs(levelNext, false, false, pMapLevelSkip);
 				printf("(owner):");
-	            debugPrintSubAst(*pExpr->pOwner, levelNext, true, pMapLevelSkip);
+				debugPrintSubAst(*pExpr->pOwner, levelNext, true, pMapLevelSkip);
 			}
 			else
 			{
@@ -869,12 +857,12 @@ void debugPrintSubAst(const AstNode & node, int level, bool skipAfterArrow, Dyna
 
 		case ASTK_ArrayAccessExpr:
 		{
-            auto * pExpr = DownConst(&node, ArrayAccessExpr);
-            printf("[]");
+			auto * pExpr = DownConst(&node, ArrayAccessExpr);
+			printf("[]");
 			printf("\n");
 			printTabs(levelNext, false, false, pMapLevelSkip);
 			printf("(array):");
-            debugPrintSubAst(*pExpr->pArray, levelNext, false, pMapLevelSkip);
+			debugPrintSubAst(*pExpr->pArray, levelNext, false, pMapLevelSkip);
 			printf("\n");
 			printTabs(levelNext, false, false, pMapLevelSkip);
 			printf("(subscript):");
@@ -883,37 +871,37 @@ void debugPrintSubAst(const AstNode & node, int level, bool skipAfterArrow, Dyna
 
 		case ASTK_FuncCallExpr:
 		{
-            auto * pExpr = DownConst(&node, FuncCallExpr);
-            printf("(func call)");
+			auto * pExpr = DownConst(&node, FuncCallExpr);
+			printf("(func call)");
 			printf("\n");
 			printTabs(levelNext, false, false, pMapLevelSkip);
 			printf("(func):");
 
-            bool noArgs = pExpr->aPArgs.cItem == 0;
+			bool noArgs = pExpr->aPArgs.cItem == 0;
 
-            debugPrintSubAst(*pExpr->pFunc, levelNext, noArgs, pMapLevelSkip);
+			debugPrintSubAst(*pExpr->pFunc, levelNext, noArgs, pMapLevelSkip);
 
 			printChildren(pExpr->aPArgs, levelNext, "arg", true, pMapLevelSkip);
 			// for (uint i = 0; i < pExpr->aPArgs.cItem; i++)
 			// {
-            //     bool isLastArg = i == pExpr->aPArgs.cItem - 1;
+			//	   bool isLastArg = i == pExpr->aPArgs.cItem - 1;
 
-			// 	printf("\n");
-			// 	printTabs(
-            //         levelNext,
-            //         false,
-            //         false,
-            //         pMapLevelSkip
-            //     );
+			//	printf("\n");
+			//	printTabs(
+			//		   levelNext,
+			//		   false,
+			//		   false,
+			//		   pMapLevelSkip
+			//	   );
 
-			// 	printf("(arg %d):", i);
+			//	printf("(arg %d):", i);
 
-			// 	debugPrintSubAst(
-            //         *pExpr->aPArgs[i],
-            //         levelNext,
-            //         isLastArg,
-            //         pMapLevelSkip
-            //     );
+			//	debugPrintSubAst(
+			//		   *pExpr->aPArgs[i],
+			//		   levelNext,
+			//		   isLastArg,
+			//		   pMapLevelSkip
+			//	   );
 			// }
 		} break;
 
@@ -921,36 +909,36 @@ void debugPrintSubAst(const AstNode & node, int level, bool skipAfterArrow, Dyna
 
 		// STMT;
 
-        case ASTK_ExprStmt:
-        {
+		case ASTK_ExprStmt:
+		{
 			auto * pStmt = DownConst(&node, ExprStmt);
 
 			printf("(expr stmt)");
 			printf("\n");
 
 			debugPrintSubAst(*pStmt->pExpr, levelNext, true, pMapLevelSkip);
-        } break;
+		} break;
 
 
 
-        // PROGRAM
+		// PROGRAM
 
-        case ASTK_Program:
-        {
+		case ASTK_Program:
+		{
 			auto * pNode = DownConst(&node, Program);
-            printf("(program)");
+			printf("(program)");
 			printf("\n");
 
-            printChildren(pNode->aPNodes, levelNext, "stmt", true, pMapLevelSkip);
-        } break;
+			printChildren(pNode->aPNodes, levelNext, "stmt", true, pMapLevelSkip);
+		} break;
 
-        default:
-        {
-            // Not implemented!
+		default:
+		{
+			// Not implemented!
 
-            Assert(false);
-        }
-    }
+			Assert(false);
+		}
+	}
 }
 
 #endif
