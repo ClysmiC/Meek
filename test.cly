@@ -1,3 +1,13 @@
+constantInferred :: 4;
+constantExplicit : int : 8;
 
+mutableInferred := 15 + 4 * constantInferred;
+mutableExplicit : int = 16;
 
-jorbo(24.44, hh43, ber bar boo, )
+mutableUninitialized : int;
+
+// Errors
+
+mixedUp : 3 + 4 = int;
+forgotSemicolon : int = 4
+thisParseFailsBecauseAboveMissingSemicolon : float = 2.3;

@@ -49,7 +49,7 @@ struct Parser
 // Public
 
 bool init(Parser * pParser, Scanner * pScanner);
-AstNode * parseProgram(Parser * pParser);
+AstNode * parseProgram(Parser * pParser, bool * poSuccess);
 
 
 // HMM: Are these really public?
@@ -87,13 +87,12 @@ AstNode * parsePrimary(Parser * pParser);
 
 AstNode * finishParsePrimary(Parser * pParser, AstNode * pLhsExpr);
 
-Token * ensurePendingToken(Parser * pParser);
-
 // Only claimed tokens will stay allocated by the parser. If you merely peek, the
-//  node's memory will be overwritten next time you consume the pending token.
+//  node's memory will be overwritten next time you consume a token.
 
-Token * peekPendingToken(Parser * pParser);
+Token * ensurePendingToken(Parser * pParser);
 Token * claimPendingToken(Parser * pParser);
+Token * ensureAndClaimPendingToken(Parser * pParser);
 
 
 // Debug

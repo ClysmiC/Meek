@@ -22,7 +22,6 @@ enum ASTK : u8
 	ASTK_BubbleErr,
 	ASTK_UnexpectedTokenkErr,
 	ASTK_ExpectedTokenkErr,
-	ASTK_ProgramErr,			// Root level node for parse w/ error
 
 	ASTK_ErrMax,
 
@@ -95,16 +94,16 @@ struct AstBubbleErr
 
 struct AstUnexpectedTokenkErr
 {
-	TOKENK tokenk;
+	// NOTE: This could just be a TOKENK but by the time you realize you have
+	//	an unexpected token, you have often consumed it already (which means it
+	//	is allocated!) so we might as well just attach the entire token.
+
+	Token * pErrToken;
 };
 
 struct AstExpectedTokenkErr
 {
 	TOKENK tokenk;
-};
-
-struct AstProgramErr
-{
 };
 
 struct AstErr
@@ -195,7 +194,15 @@ struct AstAssignStmt
 
 struct AstVarDeclStmt
 {
-	// TODO
+	Token * pIdent;
+	Token * pType;
+	AstNode * pInitExpr;
+
+    // TODO: replace these with flags
+
+	bool isTypeInferred;
+	bool hasInitExpr;
+	bool isConstant;	// True corresponds to :: syntax, false to :=
 };
 
 struct AstFuncDeclStmt

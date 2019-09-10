@@ -3,6 +3,7 @@
 #include "als.h"
 
 // SYNC: with g_mpTokenkDisplay
+// SYNC: min/max values at bottom of enum
 
 enum TOKENK
 {
@@ -93,7 +94,6 @@ enum TOKENK
 	TOKENK_Struct,
 	TOKENK_Enum,
 						// TODO: union?
-
 						// TODO: char? string?
 
 	TOKENK_Eof,
@@ -102,7 +102,10 @@ enum TOKENK
 	TOKENK_Nil = -1,
 
 	TOKENK_LiteralMin = TOKENK_IntLiteral,
-	TOKENK_LiteralMax = TOKENK_StringLiteral + 1
+	TOKENK_LiteralMax = TOKENK_StringLiteral + 1,
+
+	TOKENK_ReservedWordBuiltInTypeMin = TOKENK_Bool,
+	TOKENK_ReservedWordBuiltInTypeMax = TOKENK_F64 + 1
 };
 
 
@@ -211,3 +214,5 @@ extern TOKENK g_aTokenkUnopPre[];
 extern int g_cTokenkUnopPre;
 
 extern const char * g_mpTokenkDisplay[];
+
+bool isReservedWordBuiltInType(TOKENK tokenk);

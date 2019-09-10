@@ -57,7 +57,8 @@ int main()
         return 1;
     }
 
-    AstNode * pAst = parseProgram(&parser);
+    bool success;
+    AstNode * pAst = parseProgram(&parser, &success);
 
 #if DEBUG
     debugPrintAst(*pAst);

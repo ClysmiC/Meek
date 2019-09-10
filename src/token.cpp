@@ -190,3 +190,8 @@ void errMessagesFromGrferrtok(GRFERRTOK grferrtok, DynamicArray<StringBox<256>> 
         }
     }
 }
+
+bool isReservedWordBuiltInType(TOKENK tokenk)
+{
+	return tokenk >= TOKENK_ReservedWordBuiltInTypeMin && tokenk < TOKENK_ReservedWordBuiltInTypeMax;
+}
