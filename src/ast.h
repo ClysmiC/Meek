@@ -1,10 +1,14 @@
 #pragma once
 
 #include "als.h"
-
 #include "token.h"
 
+// Forward declarations
+
 struct AstNode;
+struct ParseType;
+
+
 
 enum ASTCATK
 {
@@ -42,8 +46,8 @@ enum ASTK : u8
 	ASTK_ExprStmt,
 	ASTK_AssignStmt,	// This is a statement unless I find a good reason to make it an expression
 	ASTK_VarDeclStmt,
-	ASTK_FuncDeclStmt,
-	ASTK_StructDeclStmt,
+	ASTK_FuncDefnStmt,
+	ASTK_StructDefnStmt,
 	ASTK_IfStmt,
 	ASTK_WhileStmt,
 	// TODO: for statement... once I figure out what I want it to look like
@@ -123,7 +127,7 @@ struct AstErr
 	//	we can clean whatever information we can from their valid children.
 
 
-	DynamicArray<AstNode *> aPChildren;
+	DynamicArray<AstNode *> apChildren;
 };
 
 
@@ -174,7 +178,7 @@ struct AstArrayAccessExpr
 struct AstFuncCallExpr
 {
 	AstNode * pFunc;
-	DynamicArray<AstNode *> aPArgs;		// Args are EXPR
+	DynamicArray<AstNode *> apArgs;		// Args are EXPR
 };
 
 
@@ -195,17 +199,21 @@ struct AstAssignStmt
 struct AstVarDeclStmt
 {
 	Token * pIdent;
-	Token * pType;
-	AstNode * pInitExpr;
+	ParseType * pType;		// null means inferred type while parsing
+	AstNode * pInitExpr;	// null means default init
 
-    // TODO: replace these with flags
-
-	bool isTypeInferred;
-	bool hasInitExpr;
-	bool isConstant;	// True corresponds to :: syntax, false to :=
+	// TODO: I want different values here when parsing and after typechecking.
+	//	Namely, while parsing I want to store the expressions inside subscripts,
+	//	and after typechecking those expressions should all be resolved to ints.
 };
 
-struct AstFuncDeclStmt
+struct AstStructDefnStmt
+{
+	Token * pIdent;
+	DynamicArray<AstNode *> apVarDeclStmt;
+};
+
+struct AstFuncDefnStmt
 {
 	// TODO
 };
@@ -216,7 +224,7 @@ struct AstFuncDeclStmt
 
 struct AstProgram
 {
-	DynamicArray<AstNode *> aPNodes;
+	DynamicArray<AstNode *> apNodes;
 };
 
 

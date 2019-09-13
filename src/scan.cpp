@@ -23,14 +23,17 @@ bool init(Scanner * pScanner, char * pText, uint textSize, char * pLexemeBuffer,
 
 TOKENK consumeToken(Scanner * pScanner, Token * poToken)
 {
+	Token throwaway;
+	Token * pToken = (poToken) ? poToken : &throwaway;
+
 	if (count(pScanner->peekBuffer) > 0)
 	{
-		read(&pScanner->peekBuffer, poToken);
-		return poToken->tokenk;
+		read(&pScanner->peekBuffer, pToken);
+		return pToken->tokenk;
 	}
 	else
 	{
-		return produceNextToken(pScanner, poToken);
+		return produceNextToken(pScanner, pToken);
 	}
 }
 
@@ -48,18 +51,21 @@ TOKENK peekToken(Scanner * pScanner, Token * poToken, uint lookahead)
 		write(&rbuf, tokenLookahead);
 	}
 
-	// If we peek any amount past the end of the file we return nil token
+    Token throwaway;
+    Token * pToken = (poToken) ? poToken : &throwaway;
 
 	if (lookahead < rbuf.cItem)
 	{
-		Verify(peek(rbuf, lookahead, poToken));
+		Verify(peek(rbuf, lookahead, pToken));
 	}
 	else
 	{
-		nillify(poToken);
+	    // If we peek any amount past the end of the file we return nil token
+
+		nillify(pToken);
 	}
 
-	return poToken->tokenk;
+	return pToken->tokenk;
 }
 
 TOKENK prevToken(Scanner * pScanner, Token * poToken, uint lookbehind)
@@ -67,27 +73,48 @@ TOKENK prevToken(Scanner * pScanner, Token * poToken, uint lookbehind)
 	Assert(lookbehind < Scanner::s_lookMax);
 	auto & rbuf = pScanner->prevBuffer;
 
-	// If we peek any amount before beginning of the file we return nil token
+    Token throwaway;
+    Token * pToken = (poToken) ? poToken : &throwaway;
 
 	if (lookbehind < rbuf.cItem)
 	{
-		Verify(peek(rbuf, rbuf.cItem - lookbehind - 1, poToken));
+		Verify(peek(rbuf, rbuf.cItem - lookbehind - 1, pToken));
 	}
 	else
 	{
-		nillify(poToken);
+	    // If we peek any amount before beginning of the file we return nil token
+
+		nillify(pToken);
 	}
 
-	return poToken->tokenk;
+	return pToken->tokenk;
+}
+
+bool tryPeekTokenSequence(Scanner * pScanner, const TOKENK * aSequence, int cSequence)
+{
+    Assert(cSequence < pScanner->peekBuffer.s_capacity);
+
+    for (int i = 0; i < cSequence; i++)
+    {
+        TOKENK tokenkSequence = aSequence[i];
+        TOKENK tokenk = peekToken(pScanner, nullptr, i);
+
+        if (tokenk != tokenkSequence) return false;
+    }
+
+    return true;
 }
 
 bool tryConsumeToken(Scanner * pScanner, TOKENK tokenkMatch, Token * poToken)
 {
-	TOKENK tokenk = peekToken(pScanner, poToken);
+	Token throwaway;
+	Token * pToken = (poToken) ? poToken : &throwaway;
+
+	TOKENK tokenk = peekToken(pScanner, pToken);
 
 	if (tokenk == tokenkMatch)
 	{
-        Verify(read(&pScanner->peekBuffer, poToken));
+        Verify(read(&pScanner->peekBuffer, pToken));
 		return true;
 	}
 
@@ -96,13 +123,16 @@ bool tryConsumeToken(Scanner * pScanner, TOKENK tokenkMatch, Token * poToken)
 
 bool tryConsumeToken(Scanner * pScanner, const TOKENK * aTokenkMatch, int cTokenkMatch, Token * poToken)
 {
-	TOKENK tokenk = peekToken(pScanner, poToken);
+	Token throwaway;
+	Token * pToken = (poToken) ? poToken : &throwaway;
+
+	TOKENK tokenk = peekToken(pScanner, pToken);
 
 	for (int i = 0; i < cTokenkMatch; i++)
 	{
 		if (tokenk == aTokenkMatch[i])
 		{
-            Verify(read(&pScanner->peekBuffer, poToken));
+            Verify(read(&pScanner->peekBuffer, pToken));
 			return true;
 		}
 	}
@@ -152,7 +182,7 @@ TOKENK produceNextToken(Scanner * pScanner, Token * poToken)
 			case '.':
 			{
 				char firstDigit;
-				if (tryConsume(pScanner, '0', '9', &firstDigit))
+				if (tryConsumeChar(pScanner, '0', '9', &firstDigit))
 				{
 					finishAfterConsumeDotAndDigit(pScanner, firstDigit, poToken);
 				}
@@ -183,11 +213,11 @@ TOKENK produceNextToken(Scanner * pScanner, Token * poToken)
 
 				while (!checkEndOfFile(pScanner))
 				{
-					if (tryConsume(pScanner, '\n'))
+					if (tryConsumeChar(pScanner, '\n'))
 					{
 						grferrtok |= FERRTOK_MultilineString;
 					}
-					else if (tryConsume(pScanner, '\"'))
+					else if (tryConsumeChar(pScanner, '\"'))
 					{
 						grferrtok &= ~FERRTOK_UnterminatedString;
 						if (!grferrtok)
@@ -216,8 +246,8 @@ TOKENK produceNextToken(Scanner * pScanner, Token * poToken)
 
 			case '+':
 			{
-				if (tryConsume(pScanner, '=')) makeToken(pScanner, TOKENK_PlusEqual, poToken);
-				else if (tryConsume(pScanner, '+')) makeToken(pScanner, TOKENK_MinusMinus, poToken);
+				if (tryConsumeChar(pScanner, '=')) makeToken(pScanner, TOKENK_PlusEqual, poToken);
+				else if (tryConsumeChar(pScanner, '+')) makeToken(pScanner, TOKENK_MinusMinus, poToken);
 				else makeToken(pScanner, TOKENK_Plus, poToken);
 			} break;
 
@@ -234,18 +264,18 @@ TOKENK produceNextToken(Scanner * pScanner, Token * poToken)
 
 				char firstDigit;
 
-				if (tryConsume(pScanner, '='))
+				if (tryConsumeChar(pScanner, '='))
 				{
 					makeToken(pScanner, TOKENK_MinusEqual, poToken);
 				}
-				else if (tryConsume(pScanner, '0', '9', &firstDigit))
+				else if (tryConsumeChar(pScanner, '0', '9', &firstDigit))
 				{
 					finishAfterConsumeDigit(pScanner, firstDigit, poToken);
 				}
-				else if (tryPeek(pScanner, '.'))
+				else if (tryPeekChar(pScanner, '.'))
 				{
 					int lookahead = 1;
-					if (tryPeek(pScanner, '0', '9', &firstDigit, lookahead))
+					if (tryPeekChar(pScanner, '0', '9', &firstDigit, lookahead))
 					{
 						consumeChar(pScanner);  // '.'
 						consumeChar(pScanner);  // Digit
@@ -253,19 +283,19 @@ TOKENK produceNextToken(Scanner * pScanner, Token * poToken)
 						finishAfterConsumeDotAndDigit(pScanner, firstDigit, poToken);
 					}
 				}
-				else if (tryConsume(pScanner, '-')) makeToken(pScanner, TOKENK_MinusMinus, poToken);
+				else if (tryConsumeChar(pScanner, '-')) makeToken(pScanner, TOKENK_MinusMinus, poToken);
 				else makeToken(pScanner, TOKENK_Minus, poToken);
 			} break;
 
 			case '*':
 			{
-				if (tryConsume(pScanner, '=')) makeToken(pScanner, TOKENK_StarEqual, poToken);
+				if (tryConsumeChar(pScanner, '=')) makeToken(pScanner, TOKENK_StarEqual, poToken);
 				else makeToken(pScanner, TOKENK_Star, poToken);
 			} break;
 
 			case '%':
 			{
-				if (tryConsume(pScanner, '=')) makeToken(pScanner, TOKENK_PercentEqual, poToken);
+				if (tryConsumeChar(pScanner, '=')) makeToken(pScanner, TOKENK_PercentEqual, poToken);
 				else makeToken(pScanner, TOKENK_Percent, poToken);
 			} break;
 
@@ -276,17 +306,17 @@ TOKENK produceNextToken(Scanner * pScanner, Token * poToken)
 				//	supporting comments w/ semantics, maybe some form of metaprogramming
 
 				bool isComment = false;
-				if (tryConsume(pScanner, '/'))
+				if (tryConsumeChar(pScanner, '/'))
 				{
 					isComment = true;
 
 					while (!checkEndOfFile(pScanner))
 					{
-						if (tryConsume(pScanner, '\n')) break;
+						if (tryConsumeChar(pScanner, '\n')) break;
 						else consumeChar(pScanner);
 					}
 				}
-				else if (tryConsume(pScanner, '*'))
+				else if (tryConsumeChar(pScanner, '*'))
 				{
 					isComment = true;
 
@@ -296,16 +326,16 @@ TOKENK produceNextToken(Scanner * pScanner, Token * poToken)
 					GRFERRTOK grferrtok = FERRTOK_UnterminatedBlockComment;
 					while (!checkEndOfFile(pScanner))
 					{
-						if (tryConsume(pScanner, '/'))
+						if (tryConsumeChar(pScanner, '/'))
 						{
-							if (tryConsume(pScanner, '*'))
+							if (tryConsumeChar(pScanner, '*'))
 							{
 								pScanner->cNestedBlockComment++;
 							}
 						}
-						else if (tryConsume(pScanner, '*'))
+						else if (tryConsumeChar(pScanner, '*'))
 						{
-							if (tryConsume(pScanner, '/'))
+							if (tryConsumeChar(pScanner, '/'))
 							{
 								pScanner->cNestedBlockComment--;
 
@@ -327,31 +357,31 @@ TOKENK produceNextToken(Scanner * pScanner, Token * poToken)
 						makeErrorToken(pScanner, grferrtok, poToken);
 					}
 				}
-				else if (tryConsume(pScanner, '=')) makeToken(pScanner, TOKENK_SlashEqual, poToken);
+				else if (tryConsumeChar(pScanner, '=')) makeToken(pScanner, TOKENK_SlashEqual, poToken);
 				else makeToken(pScanner, TOKENK_Slash, poToken);
 			} break;
 
 			case '!':
 			{
-				if (tryConsume(pScanner, '=')) makeToken(pScanner, TOKENK_BangEqual, poToken);
+				if (tryConsumeChar(pScanner, '=')) makeToken(pScanner, TOKENK_BangEqual, poToken);
 				else makeToken(pScanner, TOKENK_Bang, poToken);
 			} break;
 
 			case '=':
 			{
-				if (tryConsume(pScanner, '=')) makeToken(pScanner, TOKENK_EqualEqual, poToken);
+				if (tryConsumeChar(pScanner, '=')) makeToken(pScanner, TOKENK_EqualEqual, poToken);
 				else makeToken(pScanner, TOKENK_Equal, poToken);
 			} break;
 
 			case '<':
 			{
-				if (tryConsume(pScanner, '=')) makeToken(pScanner, TOKENK_LesserEqual, poToken);
+				if (tryConsumeChar(pScanner, '=')) makeToken(pScanner, TOKENK_LesserEqual, poToken);
 				else makeToken(pScanner, TOKENK_Lesser, poToken);
 			} break;
 
 			case '>':
 			{
-				if (tryConsume(pScanner, '=')) makeToken(pScanner, TOKENK_GreaterEqual, poToken);
+				if (tryConsumeChar(pScanner, '=')) makeToken(pScanner, TOKENK_GreaterEqual, poToken);
 				else makeToken(pScanner, TOKENK_Greater, poToken);
 			} break;
 
@@ -362,12 +392,12 @@ TOKENK produceNextToken(Scanner * pScanner, Token * poToken)
 
 			case '|':
 			{
-				if (tryConsume(pScanner, '|'))
+				if (tryConsumeChar(pScanner, '|'))
 				{
-					if (tryConsume(pScanner, '=')) makeToken(pScanner, TOKENK_PipePipeEqual, poToken);
+					if (tryConsumeChar(pScanner, '=')) makeToken(pScanner, TOKENK_PipePipeEqual, poToken);
 					else makeToken(pScanner, TOKENK_PipePipe, poToken);
 				}
-				else if (tryConsume(pScanner, '='))
+				else if (tryConsumeChar(pScanner, '='))
 				{
 					makeToken(pScanner, TOKENK_PipeEqual, poToken);
 				}
@@ -379,12 +409,12 @@ TOKENK produceNextToken(Scanner * pScanner, Token * poToken)
 
 			case '&':
 			{
-				if (tryConsume(pScanner, '|'))
+				if (tryConsumeChar(pScanner, '|'))
 				{
-					if (tryConsume(pScanner, '=')) makeToken(pScanner, TOKENK_AmpAmpEqual, poToken);
+					if (tryConsumeChar(pScanner, '=')) makeToken(pScanner, TOKENK_AmpAmpEqual, poToken);
 					else makeToken(pScanner, TOKENK_AmpAmp, poToken);
 				}
-				else if (tryConsume(pScanner, '='))
+				else if (tryConsumeChar(pScanner, '='))
 				{
 					makeToken(pScanner, TOKENK_AmpEqual, poToken);
 				}
@@ -410,7 +440,7 @@ TOKENK produceNextToken(Scanner * pScanner, Token * poToken)
 				{
 					while (true)
 					{
-						if (!(tryConsume(pScanner, '_') || tryConsume(pScanner, 'a', 'z') || tryConsume(pScanner, 'A', 'Z') || tryConsume(pScanner, '0', '9')))
+						if (!(tryConsumeChar(pScanner, '_') || tryConsumeChar(pScanner, 'a', 'z') || tryConsumeChar(pScanner, 'A', 'Z') || tryConsumeChar(pScanner, '0', '9')))
 						{
 							// Try consume fails into here if end of file
 
@@ -504,17 +534,17 @@ void _finishAfterConsumeDigit(Scanner * pScanner, char firstDigit, bool startsWi
 			//  0xABCD works
 			//  0XABCD does not
 
-			if (tryConsume(pScanner, 'x'))
+			if (tryConsumeChar(pScanner, 'x'))
 			{
 				base = 16;
 				cDigit = 0;		// Prefixes don't count toward cDigit
 			}
-			else if (tryConsume(pScanner, 'b'))
+			else if (tryConsumeChar(pScanner, 'b'))
 			{
 				base = 2;
 				cDigit = 0;
 			}
-			else if (tryConsume(pScanner, 'o'))
+			else if (tryConsumeChar(pScanner, 'o'))
 			{
 				base = 8;
 				cDigit = 0;
@@ -544,13 +574,13 @@ void _finishAfterConsumeDigit(Scanner * pScanner, char firstDigit, bool startsWi
 
 		while (true)
 		{
-			if (tryConsume(pScanner, '.'))
+			if (tryConsumeChar(pScanner, '.'))
 			{
 				cDot++;
 			}
-			else if (tryConsume(pScanner, 'a', 'f') ||
-					 tryConsume(pScanner, 'A', 'F') ||
-					 tryConsume(pScanner, '0', '9'))
+			else if (tryConsumeChar(pScanner, 'a', 'f') ||
+					 tryConsumeChar(pScanner, 'A', 'F') ||
+					 tryConsumeChar(pScanner, '0', '9'))
 			{
 				cDigit++;
 			}
@@ -566,14 +596,14 @@ void _finishAfterConsumeDigit(Scanner * pScanner, char firstDigit, bool startsWi
 	{
 		while (true)
 		{
-			if (tryConsume(pScanner, '.'))
+			if (tryConsumeChar(pScanner, '.'))
 			{
 				cDot++;
 			}
 			else
 			{
 				char upperChar = '0' + base - 1;
-				if (tryConsume(pScanner, '0', upperChar))
+				if (tryConsumeChar(pScanner, '0', upperChar))
 				{
 					cDigit++;
 				}
@@ -743,7 +773,7 @@ char consumeChar(Scanner * pScanner)
 	return c;
 }
 
-bool tryConsume(Scanner * pScanner, char expected)
+bool tryConsumeChar(Scanner * pScanner, char expected)
 {
 	if (checkEndOfFile(pScanner)) return false;
 	if (pScanner->pText[pScanner->iText] != expected) return false;
@@ -753,7 +783,7 @@ bool tryConsume(Scanner * pScanner, char expected)
 	return true;
 }
 
-bool tryConsume(Scanner * pScanner, char rangeMin, char rangeMax, char * poMatch)
+bool tryConsumeChar(Scanner * pScanner, char rangeMin, char rangeMax, char * poMatch)
 {
 	if (checkEndOfFile(pScanner)) return false;
 	if (rangeMin > rangeMax) return false;
@@ -768,7 +798,7 @@ bool tryConsume(Scanner * pScanner, char rangeMin, char rangeMax, char * poMatch
 	return true;
 }
 
-bool tryPeek(Scanner * pScanner, char expected, int lookahead)
+bool tryPeekChar(Scanner * pScanner, char expected, int lookahead)
 {
 	if (checkEndOfFile(pScanner, lookahead)) return false;
 	if (pScanner->pText[pScanner->iText + lookahead] != expected) return false;
@@ -776,7 +806,7 @@ bool tryPeek(Scanner * pScanner, char expected, int lookahead)
 	return true;
 }
 
-bool tryPeek(Scanner * pScanner, char rangeMin, char rangeMax, char * poMatch, int lookahead)
+bool tryPeekChar(Scanner * pScanner, char rangeMin, char rangeMax, char * poMatch, int lookahead)
 {
 	if (checkEndOfFile(pScanner, lookahead)) return false;
 	if (rangeMin > rangeMax) return false;

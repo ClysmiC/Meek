@@ -4,6 +4,7 @@
 
 #include "ast.h"
 #include "token.h"
+#include "type.h"
 
 struct Scanner;
 
@@ -26,6 +27,7 @@ struct Parser
 
 	DynamicPoolAllocator<AstNode> astAlloc;
 	DynamicPoolAllocator<Token> tokenAlloc;
+	DynamicPoolAllocator<ParseType> parseTypeAlloc;
 
 	uint iNode = 0;		// Becomes node's id
 
@@ -66,16 +68,19 @@ AstNode * parseExpr(Parser * pParser);
 AstNode * astNew(Parser * pParser, ASTK astk, int line);
 AstNode * astNewErr(Parser * pParser, ASTK astkErr, int line, AstNode * pChild0=nullptr, AstNode * pChild1=nullptr);
 AstNode * astNewErr(Parser * pParser, ASTK astkErr, int line, AstNode * aPChildren[], uint cPChildren);
+AstNode * astNewErrMoveChildren(Parser * pParser, ASTK astkErr, int line, DynamicArray<AstNode *> * papChildren);
 
 // Error handling
 
 bool tryRecoverFromPanic(Parser * pParser, TOKENK tokenkRecover);
-bool tryRecoverFromPanic(Parser * pParser, const TOKENK * aTokenkRecover, int cTokenkRecover, TOKENK * poTokenkMatched);
+bool tryRecoverFromPanic(Parser * pParser, const TOKENK * aTokenkRecover, int cTokenkRecover, TOKENK * poTokenkMatched=nullptr);
 
 // STMT
 
 AstNode * parseStmt(Parser * pParser);
 AstNode * parseExprStmt(Parser * pParser);
+AstNode * parseStructDefnStmt(Parser * pParser);
+AstNode * parseVarDeclStmt(Parser * pParser);
 
 // EXPR
 
@@ -87,12 +92,20 @@ AstNode * parsePrimary(Parser * pParser);
 
 AstNode * finishParsePrimary(Parser * pParser, AstNode * pLhsExpr);
 
+// NOTE: This moves the children into the AST
+AstNode * handleScanOrUnexpectedTokenkErr(Parser * pParser, DynamicArray<AstNode *> * papChildren = nullptr);
+
 // Only claimed tokens will stay allocated by the parser. If you merely peek, the
 //  node's memory will be overwritten next time you consume a token.
 
 Token * ensurePendingToken(Parser * pParser);
 Token * claimPendingToken(Parser * pParser);
 Token * ensureAndClaimPendingToken(Parser * pParser);
+
+inline ParseType * newParseType(Parser * pParser)
+{
+	return allocate(&pParser->parseTypeAlloc);
+}
 
 
 // Debug

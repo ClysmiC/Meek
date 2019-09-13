@@ -61,22 +61,22 @@ struct Scanner
 // Public
 
 bool init(Scanner * pScanner, char * pText, uint textSize, char * pLexemeBuffer, uint lexemeBufferSize);
-TOKENK peekToken(Scanner * pScanner, Token * poToken, uint lookahead=0);
-TOKENK prevToken(Scanner * pScanner, Token * poToken, uint lookbehind=0);
-bool tryConsumeToken(Scanner * pScanner, TOKENK tokenk, Token * poToken);
-bool tryConsumeToken(Scanner * pScanner, const TOKENK * aTokenk, int cTokenk, Token * poToken);
-TOKENK consumeToken(Scanner * pScanner, Token * poToken);
+TOKENK peekToken(Scanner * pScanner, Token * poToken=nullptr, uint lookahead=0);
+TOKENK prevToken(Scanner * pScanner, Token * poToken=nullptr, uint lookbehind=0);
+bool tryPeekTokenSequence(Scanner * pScanner, const TOKENK * aSequence, int cSequence);
+bool tryConsumeToken(Scanner * pScanner, TOKENK tokenk, Token * poToken=nullptr);
+bool tryConsumeToken(Scanner * pScanner, const TOKENK * aTokenk, int cTokenk, Token * poToken=nullptr);
+TOKENK consumeToken(Scanner * pScanner, Token * poToken=nullptr);
 bool isFinished(Scanner * pScanner);
-
 
 
 // Internal
 
 TOKENK produceNextToken(Scanner * pScanner, Token * poToken);
-bool tryConsume(Scanner * pScanner, char expected);
-bool tryConsume(Scanner * pScanner, char rangeMin, char rangeMax, char * poMatch=nullptr);
-bool tryPeek(Scanner * pScanner, char expected, int lookahead=0);
-bool tryPeek(Scanner * pScanner, char rangeMin, char rangeMax, char * poMatch=nullptr, int lookahead=0);
+bool tryConsumeChar(Scanner * pScanner, char expected);
+bool tryConsumeChar(Scanner * pScanner, char rangeMin, char rangeMax, char * poMatch=nullptr);
+bool tryPeekChar(Scanner * pScanner, char expected, int lookahead=0);
+bool tryPeekChar(Scanner * pScanner, char rangeMin, char rangeMax, char * poMatch=nullptr, int lookahead=0);
 char consumeChar(Scanner * pScanner);
 
 void onStartToken(Scanner * pScanner);

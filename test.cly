@@ -1,13 +1,10 @@
-constantInferred :: 4;
-constantExplicit : int : 8;
+struct MySecondStruct
+{
+	var inferred;
+	int bar;
+	int foo = 15 + bar / (3 - 2);
 
-mutableInferred := 15 + 4 * constantInferred;
-mutableExplicit : int = 16;
-
-mutableUninitialized : int;
-
-// Errors
-
-mixedUp : 3 + 4 = int;
-forgotSemicolon : int = 4
-thisParseFailsBecauseAboveMissingSemicolon : float = 2.3;
+	[5+6]int elevenInts;
+	^[12]int paInts;
+	[12]^[3]^^^[12]int apInts = 5 + 3;		// This is a type error but parses just fine :)
+}

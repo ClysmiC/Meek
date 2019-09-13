@@ -73,26 +73,29 @@ enum TOKENK
 
 	// Reserved words (types)
 
-	TOKENK_Bool,
+	// TOKENK_Var,			// Used for type inference
 
-	TOKENK_Byte,
+	// TOKENK_Bool,
 
-	TOKENK_Int,
-	TOKENK_S16,
-	TOKENK_S32,
-	TOKENK_S64,
+	// TOKENK_Byte,
 
-	TOKENK_Uint,
-	TOKENK_U16,
-	TOKENK_U32,
-	TOKENK_U64,
+	// TOKENK_Int,
+	// TOKENK_S16,
+	// TOKENK_S32,
+	// TOKENK_S64,
 
-	TOKENK_Float,		// TODO: 16 bit float?
-	TOKENK_F32,
-	TOKENK_F64,
+	// TOKENK_Uint,
+	// TOKENK_U16,
+	// TOKENK_U32,
+	// TOKENK_U64,
+
+	// TOKENK_Float,		// TODO: 16 bit float?
+	// TOKENK_F32,
+	// TOKENK_F64,
 
 	TOKENK_Struct,
 	TOKENK_Enum,
+    TOKENK_Func,
 						// TODO: union?
 						// TODO: char? string?
 
@@ -104,8 +107,8 @@ enum TOKENK
 	TOKENK_LiteralMin = TOKENK_IntLiteral,
 	TOKENK_LiteralMax = TOKENK_StringLiteral + 1,
 
-	TOKENK_ReservedWordBuiltInTypeMin = TOKENK_Bool,
-	TOKENK_ReservedWordBuiltInTypeMax = TOKENK_F64 + 1
+	/*TOKENK_ReservedWordBuiltInTypeMin = TOKENK_Bool,
+	TOKENK_ReservedWordBuiltInTypeMax = TOKENK_F64 + 1*/
 };
 
 

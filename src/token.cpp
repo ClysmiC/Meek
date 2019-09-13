@@ -33,21 +33,22 @@ ReservedWord g_aReservedWord[] = {
 	{ "break",		TOKENK_Break },
 	{ "continue",	TOKENK_Continue },
 	{ "return",		TOKENK_Return },
-	{ "bool",		TOKENK_Bool },
-	{ "byte",		TOKENK_Byte },
-	{ "int",		TOKENK_Int },
-	{ "s16",		TOKENK_S16 },
-	{ "s32",		TOKENK_S32 },
-	{ "s64",		TOKENK_S64 },
-	{ "uint",		TOKENK_Uint },
-	{ "u16",		TOKENK_U16 },
-	{ "u32",		TOKENK_U32 },
-	{ "u64",		TOKENK_U64 },
-	{ "float",		TOKENK_Float },
-	{ "f32",		TOKENK_F32 },
-	{ "f64",		TOKENK_F64 },
+	{ "bool",		TOKENK_Identifier },
+	{ "byte",		TOKENK_Identifier },
+	{ "int",		TOKENK_Identifier },
+	{ "s16",		TOKENK_Identifier },
+	{ "s32",		TOKENK_Identifier },
+	{ "s64",		TOKENK_Identifier },
+	{ "uint",		TOKENK_Identifier },
+	{ "u16",		TOKENK_Identifier },
+	{ "u32",		TOKENK_Identifier },
+	{ "u64",		TOKENK_Identifier },
+	{ "float",		TOKENK_Identifier },
+	{ "f32",		TOKENK_Identifier },
+	{ "f64",		TOKENK_Identifier },
 	{ "struct",		TOKENK_Struct },
 	{ "enum",		TOKENK_Enum },
+    { "func",       TOKENK_Func },
 	{ "true",		TOKENK_BoolLiteral },
 	{ "false",		TOKENK_BoolLiteral },
 };
@@ -106,21 +107,22 @@ const char * g_mpTokenkDisplay[] = {
 	"'break'",				// TOKENK_Break
 	"'continue'",			// TOKENK_Continue
 	"'return'",				// TOKENK_Return
-	"'bool'",				// TOKENK_Bool
-	"'byte'",				// TOKENK_Byte
-	"'int'",				// TOKENK_Int
-	"'s16'",				// TOKENK_S16
-	"'s32'",				// TOKENK_S32
-	"'s64'",				// TOKENK_S64
-	"'uint'",				// TOKENK_Uint
-	"'u16'",				// TOKENK_U16
-	"'u32'",				// TOKENK_U32
-	"'u64'",				// TOKENK_U64
-	"'float'",				// TOKENK_Float
-	"'f32'",				// TOKENK_F32
-	"'f64'",				// TOKENK_F64
+	// "'bool'",				// TOKENK_Bool
+	// "'byte'",				// TOKENK_Byte
+	// "'int'",				// TOKENK_Int
+	// "'s16'",				// TOKENK_S16
+	// "'s32'",				// TOKENK_S32
+	// "'s64'",				// TOKENK_S64
+	// "'uint'",				// TOKENK_Uint
+	// "'u16'",				// TOKENK_U16
+	// "'u32'",				// TOKENK_U32
+	// "'u64'",				// TOKENK_U64
+	// "'float'",				// TOKENK_Float
+	// "'f32'",				// TOKENK_F32
+	// "'f64'",				// TOKENK_F64
 	"'struct'",				// TOKENK_Struct
 	"'enum'",				// TOKENK_Enum
+    "'func'",               // TOKENK_Func
 	"<end of file>",		// TOKENK_Eof
 };
 StaticAssert(ArrayLen(g_mpTokenkDisplay) == TOKENK_Max);
@@ -191,7 +193,7 @@ void errMessagesFromGrferrtok(GRFERRTOK grferrtok, DynamicArray<StringBox<256>> 
     }
 }
 
-bool isReservedWordBuiltInType(TOKENK tokenk)
-{
-	return tokenk >= TOKENK_ReservedWordBuiltInTypeMin && tokenk < TOKENK_ReservedWordBuiltInTypeMax;
-}
+//bool isReservedWordBuiltInType(TOKENK tokenk)
+//{
+//	return tokenk >= TOKENK_ReservedWordBuiltInTypeMin && tokenk < TOKENK_ReservedWordBuiltInTypeMax;
+//}

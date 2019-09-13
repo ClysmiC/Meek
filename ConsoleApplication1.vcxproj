@@ -34,6 +34,7 @@
     <ClInclude Include="src\parse.h" />
     <ClInclude Include="src\scan.h" />
     <ClInclude Include="src\token.h" />
+    <ClInclude Include="src\type.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\ast.cpp" />
@@ -41,6 +42,7 @@
     <ClCompile Include="src\parse.cpp" />
     <ClCompile Include="src\scan.cpp" />
     <ClCompile Include="src\token.cpp" />
+    <ClCompile Include="src\type.cpp" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{FAFEABCC-FEA7-4798-B916-7C0B7955B4EC}</ProjectGuid>
