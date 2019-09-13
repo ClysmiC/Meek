@@ -21,6 +21,7 @@ struct BinopInfo
 };
 
 
+
 struct Parser
 {
 	Scanner * pScanner = nullptr;
@@ -28,6 +29,7 @@ struct Parser
 	DynamicPoolAllocator<AstNode> astAlloc;
 	DynamicPoolAllocator<Token> tokenAlloc;
 	DynamicPoolAllocator<ParseType> parseTypeAlloc;
+	DynamicPoolAllocator<ParseFuncType> parseFuncTypeAlloc;
 
 	uint iNode = 0;		// Becomes node's id
 
@@ -48,7 +50,20 @@ struct Parser
 
 
 
+// enum EXPECTK
+// {
+// 	EXPECTK_Required,
+// 	EXPECTK_Forbidden,
+// 	EXPECTK_Optional
+// };
+
+
+
 // Public
+
+// NOTE: Any memory allocated by the parser is never freed, since it is all put into the AST and we really
+//	have no need to want to free AST nodes. If we ever find that need then we can offer an interface to
+//	deallocate stuff through the pool allocator's deallocate functions.
 
 bool init(Parser * pParser, Scanner * pScanner);
 AstNode * parseProgram(Parser * pParser, bool * poSuccess);
@@ -80,6 +95,7 @@ bool tryRecoverFromPanic(Parser * pParser, const TOKENK * aTokenkRecover, int cT
 AstNode * parseStmt(Parser * pParser);
 AstNode * parseExprStmt(Parser * pParser);
 AstNode * parseStructDefnStmt(Parser * pParser);
+AstNode * parseFuncDefnStmt(Parser * pParser);
 AstNode * parseVarDeclStmt(Parser * pParser);
 
 // EXPR
@@ -90,9 +106,12 @@ AstNode * parseBinop(Parser * pParser, const BinopInfo & op);
 AstNode * parseUnopPre(Parser * pParser);
 AstNode * parsePrimary(Parser * pParser);
 
+bool tryParseType(Parser * pParser, ParseType * pParseType);
+bool tryParseFuncHeader(Parser * pParser, bool isDefn, ParseFuncType * pFuncType, Token * pDefnIdent=nullptr);
 AstNode * finishParsePrimary(Parser * pParser, AstNode * pLhsExpr);
 
 // NOTE: This moves the children into the AST
+
 AstNode * handleScanOrUnexpectedTokenkErr(Parser * pParser, DynamicArray<AstNode *> * papChildren = nullptr);
 
 // Only claimed tokens will stay allocated by the parser. If you merely peek, the
@@ -105,6 +124,21 @@ Token * ensureAndClaimPendingToken(Parser * pParser);
 inline ParseType * newParseType(Parser * pParser)
 {
 	return allocate(&pParser->parseTypeAlloc);
+}
+
+inline ParseType * releaseParseType(Parser * pParser, ParseType * pParseType)
+{
+	return releaseParseType(&pParser->parseTypeAlloc, pParseType);
+}
+
+inline ParseFuncType * newParseFuncType(Parser * pParser)
+{
+	return allocate(&pParser->parseFuncTypeAlloc);
+}
+
+inline void releaseParseFuncType(Parser * pParser, ParseFuncType * pParseFuncType)
+{
+	return allocate(&pParser->parseFuncTypeAlloc, pParseFuncType);
 }
 
 

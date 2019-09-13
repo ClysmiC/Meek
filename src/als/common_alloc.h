@@ -91,7 +91,7 @@ void init(FixedPoolAllocator<T, Capacity> * pAlloc)
 template <typename T, unsigned int Capacity>
 T * allocate(FixedPoolAllocator<T, Capacity> * pAlloc)
 {
-    T* result = nullptr;
+    T * result = nullptr;
 
     if (pAlloc->pFree)
     {
@@ -108,7 +108,7 @@ T * allocate(FixedPoolAllocator<T, Capacity> * pAlloc)
 }
 
 template <typename T, unsigned int Capacity>
-void release(FixedPoolAllocator<T, Capacity> * pAlloc, T* pItem)
+void release(FixedPoolAllocator<T, Capacity> * pAlloc, T * pItem)
 {
     typedef FixedPoolAllocator<T, Capacity> fpa;
 
@@ -263,7 +263,7 @@ T * allocate(DynamicPoolAllocator<T, CapacityPerBucket> * pAlloc)
 {
 	typedef DynamicPoolAllocator<T, CapacityPerBucket> dpa;
 
-	T* result = nullptr;
+	T * result = nullptr;
 
 	if (!pAlloc->pFree)
 	{

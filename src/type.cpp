@@ -12,3 +12,15 @@ bool isUnmodifiedType(const ParseType & parseType)
 {
 	return parseType.aTypemods.cItem == 0;
 }
+
+ParseType * getParseType(const ParseParam & param)
+{
+	if (param.isDecl)
+	{
+		return param.pDecl->pType;
+	}
+	else
+	{
+		return param.pType;
+	}
+}

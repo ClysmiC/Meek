@@ -53,6 +53,7 @@ bool init(Parser * pParser, Scanner * pScanner)
 	init(&pParser->astAlloc);
 	init(&pParser->tokenAlloc);
 	init(&pParser->parseTypeAlloc);
+	init(&pParser->parseFuncTypeAlloc);
 	init(&pParser->astNodes);
 
 	return true;
@@ -117,12 +118,12 @@ AstNode * parseStmt(Parser * pParser)
 
 		return parseStructDefnStmt(pParser);
 	}
-	//else if (tokenkNext == TOKENK_Func && tokenkNextNext == TOKENK_Identifier)
-	//{
-	//	// Func defn
+	else if (tokenkNext == TOKENK_Func && tokenkNextNext == TOKENK_Identifier)
+	{
+		// Func defn
 
-	//	// TODO
-	//}
+		return parseFuncDefnStmt(pParser);
+	}
 	else if (tokenkNext == TOKENK_Enum && tokenkNextNext == TOKENK_Identifier)
 	{
 		// Enum defn
@@ -177,11 +178,6 @@ AstNode * parseExprStmt(Parser * pParser)
 
 AstNode * parseStructDefnStmt(Parser * pParser)
 {
-	// NOTE: All places that call this already confirm that we will at least match this sequence...
-	//	If we want to call this from a place that doesn't do that confirmation then we need some error
-	//	checking here.
-
-
     if (!tryConsumeToken(pParser->pScanner, TOKENK_Struct))
 	{
         // TODO: Add a peekTokenLine(..) function because I am doing this a lot just to get
@@ -239,7 +235,7 @@ AstNode * parseStructDefnStmt(Parser * pParser)
 		{
 			static const TOKENK s_aTokenkRecoverable[] = { TOKENK_Semicolon, TOKENK_CloseBrace };
 
-			// NOTE: Panic recovery needs reworking!
+			// NOTE: Panic recovery needs reworking! See comment @ tryRecoverFromPanic
 
 			TOKENK tokenkMatch;
 			tryRecoverFromPanic(pParser, s_aTokenkRecoverable, ArrayLen(s_aTokenkRecoverable), &tokenkMatch);
@@ -269,6 +265,11 @@ finishStruct:
 	initMove(&pNode->apVarDeclStmt, &apVarDeclStmt);
 
     return Up(pNode);
+}
+
+AstNode * parseFuncDefnStmt(Parser * pParser)
+{
+
 }
 
 AstNode * parseVarDeclStmt(Parser * pParser)
@@ -304,52 +305,82 @@ AstNode * parseVarDeclStmt(Parser * pParser)
         line = tokenNext.line;
     }
 
-	while (!tryConsumeToken(pParser->pScanner, TOKENK_Identifier, ensurePendingToken(pParser)))
+	bool isFuncType;
+
+	// BEGIN PARSE TYPE.... move this to separate function!
+
+	if (peekToken(pParser->pScanner) == TOKENK_Func)
 	{
-		if (tryConsumeToken(pParser->pScanner, TOKENK_OpenBracket, ensurePendingToken(pParser)))
+		isFuncType = true;
+		ParseFuncType * pPft = newParseFuncType(pParser);
+
+		if (tryParseFuncHeader(pParser, false, pPft))
 		{
-			// [
-
-			auto * pSubscriptExpr = parseExpr(pParser);
-			append(&apNodeChildren, pSubscriptExpr);
-
-			if (isErrorNode(*pSubscriptExpr))
-			{
-				auto * pErr = AstNewErrListChildMove(pParser, BubbleErr, pSubscriptExpr->startLine, &apNodeChildren);
-
-				// TODO: panic error recovery?
-
-				return Up(pErr);
-			}
-
-			if (!tryConsumeToken(pParser->pScanner, TOKENK_CloseBracket, ensurePendingToken(pParser)))
-			{
-				auto * pErr = AstNewErrListChildMove(pParser, ExpectedTokenkErr, pSubscriptExpr->startLine, &apNodeChildren);
-				pErr->tokenk = TOKENK_CloseBracket;
-				return Up(pErr);
-			}
-
-			ParseTypeModifier mod;
-			mod.typemodk = TYPEMODK_Array;
-			mod.pSubscriptExpr = pSubscriptExpr;
-			append(&aModifiers, mod);
-		}
-		else if (tryConsumeToken(pParser->pScanner, TOKENK_Carat, ensurePendingToken(pParser)))
-		{
-			// ^
-
-			ParseTypeModifier mod;
-			mod.typemodk = TYPEMODK_Pointer;
-			append(&aModifiers, mod);
+			// TODO: wrap pPft into an AST node and return it
 		}
 		else
 		{
-			return handleScanOrUnexpectedTokenkErr(pParser, &apNodeChildren);
+			releaseParseFuncType(pParser, pPft);
+
+			// TODO: how to handle this error. Probably need to return more granular information from tryParseFuncHeader
+			//	than just succed/fail. But since func header isn't its own AST node (should it be???) we can't really bubble
+			//	up.
+		}
+	}
+	else
+	{
+		isFuncType = false;
+
+		while (!tryConsumeToken(pParser->pScanner, TOKENK_Identifier, ensurePendingToken(pParser)))
+		{
+			if (tryConsumeToken(pParser->pScanner, TOKENK_OpenBracket, ensurePendingToken(pParser)))
+			{
+				// [
+
+				auto * pSubscriptExpr = parseExpr(pParser);
+				append(&apNodeChildren, pSubscriptExpr);
+
+				if (isErrorNode(*pSubscriptExpr))
+				{
+					auto * pErr = AstNewErrListChildMove(pParser, BubbleErr, pSubscriptExpr->startLine, &apNodeChildren);
+
+					// TODO: panic error recovery?
+
+					return Up(pErr);
+				}
+
+				if (!tryConsumeToken(pParser->pScanner, TOKENK_CloseBracket, ensurePendingToken(pParser)))
+				{
+					auto * pErr = AstNewErrListChildMove(pParser, ExpectedTokenkErr, pSubscriptExpr->startLine, &apNodeChildren);
+					pErr->tokenk = TOKENK_CloseBracket;
+					return Up(pErr);
+				}
+
+				ParseTypeModifier mod;
+				mod.typemodk = TYPEMODK_Array;
+				mod.pSubscriptExpr = pSubscriptExpr;
+				append(&aModifiers, mod);
+			}
+			else if (tryConsumeToken(pParser->pScanner, TOKENK_Carat, ensurePendingToken(pParser)))
+			{
+				// ^
+
+				ParseTypeModifier mod;
+				mod.typemodk = TYPEMODK_Pointer;
+				append(&aModifiers, mod);
+			}
+			else
+			{
+				return handleScanOrUnexpectedTokenkErr(pParser, &apNodeChildren);
+			}
 		}
 	}
 
 	Token * pTypeIdent = claimPendingToken(pParser);
 	Assert(pTypeIdent->tokenk == TOKENK_Identifier);
+
+
+	// END PARSE TYPE
 
 
 	if (!tryConsumeToken(pParser->pScanner, TOKENK_Identifier, ensurePendingToken(pParser)))
@@ -390,6 +421,7 @@ AstNode * parseVarDeclStmt(Parser * pParser)
 
 	ParseType * pParseType = newParseType(pParser);
 	pParseType->pType = pTypeIdent;
+	pParseType->isFuncType = isFuncType;
 	initMove(&pParseType->aTypemods, &aModifiers);
 
 	auto * pNode = AstNew(pParser, VarDeclStmt, line);
@@ -513,6 +545,7 @@ AstNode * parsePrimary(Parser * pParser)
 		if (isErrorNode(*pExpr))
 		{
 			// Panic recovery
+			// NOTE: Panic recovery needs reworking! See comment @ tryRecoverFromPanic
 
 			if (tryRecoverFromPanic(pParser, TOKENK_CloseParen))
 			{
@@ -618,6 +651,7 @@ AstNode * finishParsePrimary(Parser * pParser, AstNode * pExpr)
 		if (isErrorNode(*pSubscriptExpr))
 		{
 			// Panic recovery
+			// NOTE: Panic recovery needs reworking! See comment @ tryRecoverFromPanic
 
 			if (tryRecoverFromPanic(pParser, TOKENK_CloseBracket))
 			{
@@ -672,6 +706,7 @@ AstNode * finishParsePrimary(Parser * pParser, AstNode * pExpr)
                     line = pErrToken->line;
                 }
 
+				// NOTE: Panic recovery needs reworking! See comment @ tryRecoverFromPanic
 
 				TOKENK tokenkMatch;
 				bool recovered = tryRecoverFromPanic(pParser, s_aTokenkRecoverable, ArrayLen(s_aTokenkRecoverable), &tokenkMatch);
@@ -710,6 +745,8 @@ AstNode * finishParsePrimary(Parser * pParser, AstNode * pExpr)
 
 			if (isErrorNode(*pExprArg))
 			{
+				// NOTE: Panic recovery needs reworking! See comment @ tryRecoverFromPanic
+
 				TOKENK tokenkMatch;
 				tryRecoverFromPanic(pParser, s_aTokenkRecoverable, ArrayLen(s_aTokenkRecoverable), &tokenkMatch);
 

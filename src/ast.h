@@ -38,6 +38,10 @@ enum ASTK : u8
 	ASTK_VarExpr,
 	ASTK_ArrayAccessExpr,
 	ASTK_FuncCallExpr,
+		// TODO
+		//	ASTK_FuncLiteralExpr,
+
+
 
 	ASTK_ExprMax,		// Illegal value, used to determine ASTCATK
 
@@ -215,7 +219,7 @@ struct AstStructDefnStmt
 
 struct AstFuncDefnStmt
 {
-	// TODO
+	Token * pIdent;
 };
 
 
