@@ -63,7 +63,8 @@ struct Scanner
 bool init(Scanner * pScanner, char * pText, uint textSize, char * pLexemeBuffer, uint lexemeBufferSize);
 TOKENK peekToken(Scanner * pScanner, Token * poToken=nullptr, uint lookahead=0);
 TOKENK prevToken(Scanner * pScanner, Token * poToken=nullptr, uint lookbehind=0);
-bool tryPeekTokenSequence(Scanner * pScanner, const TOKENK * aSequence, int cSequence);
+// bool tryPeekTokenSequence(Scanner * pScanner, const TOKENK * aSequence, int cSequence);
+int peekTokenLine(Scanner * pScanner, uint lookahead=0);
 bool tryConsumeToken(Scanner * pScanner, TOKENK tokenk, Token * poToken=nullptr);
 bool tryConsumeToken(Scanner * pScanner, const TOKENK * aTokenk, int cTokenk, Token * poToken=nullptr);
 TOKENK consumeToken(Scanner * pScanner, Token * poToken=nullptr);

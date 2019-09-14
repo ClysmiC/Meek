@@ -50,12 +50,14 @@ struct Parser
 
 
 
-// enum EXPECTK
-// {
-// 	EXPECTK_Required,
-// 	EXPECTK_Forbidden,
-// 	EXPECTK_Optional
-// };
+// Might want to move this out of parse.h as this will probably be reusable elsewhere
+
+enum EXPECTK
+{
+	EXPECTK_Required,
+	EXPECTK_Forbidden,
+	EXPECTK_Optional
+};
 
 
 
@@ -96,7 +98,7 @@ AstNode * parseStmt(Parser * pParser);
 AstNode * parseExprStmt(Parser * pParser);
 AstNode * parseStructDefnStmt(Parser * pParser);
 AstNode * parseFuncDefnStmt(Parser * pParser);
-AstNode * parseVarDeclStmt(Parser * pParser);
+AstNode * parseVarDeclStmt(Parser * pParser, EXPECTK expectkName=EXPECTK_Required, EXPECTK expectkSemicolon=EXPECTK_Required);
 
 // EXPR
 
@@ -107,7 +109,8 @@ AstNode * parseUnopPre(Parser * pParser);
 AstNode * parsePrimary(Parser * pParser);
 
 bool tryParseType(Parser * pParser, ParseType * pParseType);
-bool tryParseFuncHeader(Parser * pParser, bool isDefn, ParseFuncType * pFuncType, Token * pDefnIdent=nullptr);
+bool tryParseFuncHeader(Parser * pParser, EXPECTK expectkName, ParseFuncType ** ppoFuncType, AstNode ** ppoErrNode, Token * poDefnIdent=nullptr);
+bool tryParseFuncHeaderParamList(Parser * pParser, DynamicArray<AstNode *> * papParamVarDecls);
 AstNode * finishParsePrimary(Parser * pParser, AstNode * pLhsExpr);
 
 // NOTE: This moves the children into the AST
@@ -126,9 +129,9 @@ inline ParseType * newParseType(Parser * pParser)
 	return allocate(&pParser->parseTypeAlloc);
 }
 
-inline ParseType * releaseParseType(Parser * pParser, ParseType * pParseType)
+inline void releaseParseType(Parser * pParser, ParseType * pParseType)
 {
-	return releaseParseType(&pParser->parseTypeAlloc, pParseType);
+	return release(&pParser->parseTypeAlloc, pParseType);
 }
 
 inline ParseFuncType * newParseFuncType(Parser * pParser)
@@ -138,7 +141,7 @@ inline ParseFuncType * newParseFuncType(Parser * pParser)
 
 inline void releaseParseFuncType(Parser * pParser, ParseFuncType * pParseFuncType)
 {
-	return allocate(&pParser->parseFuncTypeAlloc, pParseFuncType);
+    return release(&pParser->parseFuncTypeAlloc, pParseFuncType);
 }
 
 

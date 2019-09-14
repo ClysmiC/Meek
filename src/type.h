@@ -7,7 +7,7 @@
 // Forward declarations
 
 struct AstNode;
-
+struct ParseFuncType;
 
 
 enum TYPEMODK : u8
@@ -27,7 +27,13 @@ struct ParseType
 	union
 	{
 		Token * pType;					// Name of unnmodified type. Valid if !isFuncType
-		ParseFuncType * pFuncType;		// Valid if isFuncType;
+
+        // HMM: Do I need this level of indirection or can I just ember the
+        //  ParseFuncType here (maybe anonymously?). That might make the union
+        //  a bit more confusing to understand but the ParseType allocator would
+        //  subsume the need for a ParseFuncType allocator!
+
+		ParseFuncType * pParseFuncType;	// Valid if isFuncType
 	};
 
 	DynamicArray<ParseTypeModifier> aTypemods;
@@ -41,25 +47,24 @@ bool isUnmodifiedType(const ParseType & parseType);
 
 struct ParseFuncType
 {
-	DynamicArray<ParseParam> apParams;
-	DynamicArray<ParseParam> apReturns;
+	DynamicArray<AstNode *> apParamVarDecls;
+	DynamicArray<AstNode *> apReturnVarDecls;		// A.k.a. output params
 };
 
 // NOTE: Also used for return values since they have the same syntax as input params. Just think
 //	of them as "output params"
 
-struct ParseParam
-{
-	union
-	{
-		ParseType * pType;			// Value if !isDecl
-		AstVarDeclStmt * pDecl;		// Value if isDecl
-	};
+// struct ParseParam
+// {
+// 	union
+// 	{
+// 		ParseType * pType;			// Value if !isDecl
+// 		AstVarDeclStmt * pDecl;		// Value if isDecl
+// 	};
 
-	bool isDecl = false;
-};
+// 	bool isDecl = false;
+// };
 
-ParseType * getParseType(const ParseParam & param);
 
 
 

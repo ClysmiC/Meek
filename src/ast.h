@@ -15,6 +15,7 @@ enum ASTCATK
 	ASTCATK_Error,
 	ASTCATK_Expr,
 	ASTCATK_Stmt,
+	ASTCATK_Info,
 	ASTCATK_Program
 };
 
@@ -26,6 +27,7 @@ enum ASTK : u8
 	ASTK_BubbleErr,
 	ASTK_UnexpectedTokenkErr,
 	ASTK_ExpectedTokenkErr,
+	ASTK_InitUnnamedVarErr,
 
 	ASTK_ErrMax,
 
@@ -57,6 +59,12 @@ enum ASTK : u8
 	// TODO: for statement... once I figure out what I want it to look like
 
 	ASTK_StmtMax,		// Illegal value, used to determine ASTCATK
+
+	// INFO
+
+	// ASTK_ParamInfo,
+
+	ASTK_InfoMax,
 
     ASTK_Program,
 
@@ -114,6 +122,10 @@ struct AstExpectedTokenkErr
 	TOKENK tokenk;
 };
 
+struct AstInitUnnamedVarErr
+{
+};
+
 struct AstErr
 {
 	// NOTE: Error kind is encoded in ASTK
@@ -125,11 +137,11 @@ struct AstErr
 		AstBubbleErr bubbleErr;
 		AstUnexpectedTokenkErr unexpectedTokenErr;
 		AstExpectedTokenkErr expectedTokenErr;
+		AstInitUnnamedVarErr unnamedVarErr;
 	};
 
 	// Errors propogate up the AST, but still hang on to their child nodes so that
 	//	we can clean whatever information we can from their valid children.
-
 
 	DynamicArray<AstNode *> apChildren;
 };
@@ -202,7 +214,7 @@ struct AstAssignStmt
 
 struct AstVarDeclStmt
 {
-	Token * pIdent;
+	Token * pIdent;			// null means name is omitted (allowed in function in/out param types)
 	ParseType * pType;		// null means inferred type while parsing
 	AstNode * pInitExpr;	// null means default init
 
@@ -296,12 +308,13 @@ inline ASTCATK category(ASTK astk)
 	if (astk < ASTK_ErrMax) return ASTCATK_Error;
 	if (astk < ASTK_ExprMax) return ASTCATK_Expr;
 	if (astk < ASTK_StmtMax) return ASTCATK_Stmt;
+	if (astk < ASTK_InfoMax) return ASTCATK_Info;
 
 	Assert(astk == ASTK_Program);
 	return ASTCATK_Program;
 }
 
-inline ASTCATK category(AstNode & node)
+inline ASTCATK category(const AstNode & node)
 {
 	return category(node.astk);
 }
@@ -310,3 +323,5 @@ inline bool isErrorNode(const AstNode & node)
 {
 	return node.astk < ASTK_ErrMax;
 }
+
+bool containsErrorNode(const DynamicArray<AstNode *> & apNodes);

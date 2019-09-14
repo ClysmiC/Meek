@@ -217,14 +217,17 @@ AstNode * parseStructDefnStmt(Parser * pParser)
 
     while (!tryConsumeToken(pParser->pScanner, TOKENK_CloseBrace))
     {
-        if (peekToken(pParser->pScanner) == TOKENK_Eof)
-        {
-            Token * pEof = ensureAndClaimPendingToken(pParser);
-            consumeToken(pParser->pScanner, pEof);
-            auto * pErr = AstNewErrListChildMove(pParser, UnexpectedTokenkErr, pEof->line, &apVarDeclStmt);
-            pErr->pErrToken = pEof;
-            return Up(pErr);
-        }
+		// TODO: Do I need this? What does the error message look like without it and
+		//	would this be a better error message??
+
+        // if (peekToken(pParser->pScanner) == TOKENK_Eof)
+        // {
+        //     Token * pEof = ensureAndClaimPendingToken(pParser);
+        //     consumeToken(pParser->pScanner, pEof);
+        //     auto * pErr = AstNewErrListChildMove(pParser, UnexpectedTokenkErr, pEof->line, &apVarDeclStmt);
+        //     pErr->pErrToken = pEof;
+        //     return Up(pErr);
+        // }
 
         // Parse member var decls
 
@@ -269,11 +272,16 @@ finishStruct:
 
 AstNode * parseFuncDefnStmt(Parser * pParser)
 {
+    // TODO
 
+    return nullptr;
 }
 
-AstNode * parseVarDeclStmt(Parser * pParser)
+AstNode * parseVarDeclStmt(Parser * pParser, EXPECTK expectkName, EXPECTK expectkSemicolon)
 {
+	AssertInfo(expectkName != EXPECTK_Forbidden, "Function does not (currently) support being called with expectkName forbidden");
+	AssertInfo(expectkSemicolon != EXPECTK_Optional, "Semicolon should either be required or forbidden");
+
 	DynamicArray<ParseTypeModifier> aModifiers;
 	init(&aModifiers);
 	Defer(
@@ -305,123 +313,178 @@ AstNode * parseVarDeclStmt(Parser * pParser)
         line = tokenNext.line;
     }
 
-	bool isFuncType;
-
 	// BEGIN PARSE TYPE.... move this to separate function!
 
-	if (peekToken(pParser->pScanner) == TOKENK_Func)
-	{
-		isFuncType = true;
-		ParseFuncType * pPft = newParseFuncType(pParser);
 
-		if (tryParseFuncHeader(pParser, false, pPft))
+	while (!tryConsumeToken(pParser->pScanner, TOKENK_Identifier, ensurePendingToken(pParser)) &&
+		   !tryConsumeToken(pParser->pScanner, TOKENK_Func, ensurePendingToken(pParser)))
+	{
+		if (tryConsumeToken(pParser->pScanner, TOKENK_OpenBracket, ensurePendingToken(pParser)))
 		{
-			// TODO: wrap pPft into an AST node and return it
+			// [
+
+			auto * pSubscriptExpr = parseExpr(pParser);
+			append(&apNodeChildren, pSubscriptExpr);
+
+			if (isErrorNode(*pSubscriptExpr))
+			{
+				auto * pErr = AstNewErrListChildMove(pParser, BubbleErr, pSubscriptExpr->startLine, &apNodeChildren);
+
+				// TODO: panic error recovery?
+
+				return Up(pErr);
+			}
+
+			if (!tryConsumeToken(pParser->pScanner, TOKENK_CloseBracket, ensurePendingToken(pParser)))
+			{
+				auto * pErr = AstNewErrListChildMove(pParser, ExpectedTokenkErr, pSubscriptExpr->startLine, &apNodeChildren);
+				pErr->tokenk = TOKENK_CloseBracket;
+				return Up(pErr);
+			}
+
+			ParseTypeModifier mod;
+			mod.typemodk = TYPEMODK_Array;
+			mod.pSubscriptExpr = pSubscriptExpr;
+			append(&aModifiers, mod);
+		}
+		else if (tryConsumeToken(pParser->pScanner, TOKENK_Carat, ensurePendingToken(pParser)))
+		{
+			// ^
+
+			ParseTypeModifier mod;
+			mod.typemodk = TYPEMODK_Pointer;
+			append(&aModifiers, mod);
 		}
 		else
 		{
-			releaseParseFuncType(pParser, pPft);
-
-			// TODO: how to handle this error. Probably need to return more granular information from tryParseFuncHeader
-			//	than just succed/fail. But since func header isn't its own AST node (should it be???) we can't really bubble
-			//	up.
+			return handleScanOrUnexpectedTokenkErr(pParser, &apNodeChildren);
 		}
+	}
+
+	Token * pTypeIdentOrFunc = claimPendingToken(pParser);
+	ParseFuncType * pPft = nullptr;
+	bool addedPftToAst = false;
+	Defer(
+		if (!addedPftToAst && pPft)
+		{
+			releaseParseFuncType(pParser, pPft);
+		}
+	);
+
+	bool isFuncType = false;
+	if (pTypeIdentOrFunc->tokenk == TOKENK_Identifier)
+	{
+		isFuncType = false;
+	}
+	else if (pTypeIdentOrFunc->tokenk == TOKENK_Func)
+	{
+		isFuncType = true;
+		AstNode * pErrFuncHeader = nullptr;
+
+		const static EXPECTK s_expectkName = EXPECTK_Forbidden;
+		if (!tryParseFuncHeader(pParser, s_expectkName, &pPft, &pErrFuncHeader))
+		{
+			Assert(pErrFuncHeader);
+			append(&apNodeChildren, pErrFuncHeader);
+
+			auto * pErr = AstNewErrListChildMove(pParser, BubbleErr, pTypeIdentOrFunc->line, &apNodeChildren);
+			return Up(pErr);
+		}
+
+		Assert(pPft);	// Got a function header, nice!
 	}
 	else
 	{
-		isFuncType = false;
-
-		while (!tryConsumeToken(pParser->pScanner, TOKENK_Identifier, ensurePendingToken(pParser)))
-		{
-			if (tryConsumeToken(pParser->pScanner, TOKENK_OpenBracket, ensurePendingToken(pParser)))
-			{
-				// [
-
-				auto * pSubscriptExpr = parseExpr(pParser);
-				append(&apNodeChildren, pSubscriptExpr);
-
-				if (isErrorNode(*pSubscriptExpr))
-				{
-					auto * pErr = AstNewErrListChildMove(pParser, BubbleErr, pSubscriptExpr->startLine, &apNodeChildren);
-
-					// TODO: panic error recovery?
-
-					return Up(pErr);
-				}
-
-				if (!tryConsumeToken(pParser->pScanner, TOKENK_CloseBracket, ensurePendingToken(pParser)))
-				{
-					auto * pErr = AstNewErrListChildMove(pParser, ExpectedTokenkErr, pSubscriptExpr->startLine, &apNodeChildren);
-					pErr->tokenk = TOKENK_CloseBracket;
-					return Up(pErr);
-				}
-
-				ParseTypeModifier mod;
-				mod.typemodk = TYPEMODK_Array;
-				mod.pSubscriptExpr = pSubscriptExpr;
-				append(&aModifiers, mod);
-			}
-			else if (tryConsumeToken(pParser->pScanner, TOKENK_Carat, ensurePendingToken(pParser)))
-			{
-				// ^
-
-				ParseTypeModifier mod;
-				mod.typemodk = TYPEMODK_Pointer;
-				append(&aModifiers, mod);
-			}
-			else
-			{
-				return handleScanOrUnexpectedTokenkErr(pParser, &apNodeChildren);
-			}
-		}
+		Assert(false);
 	}
-
-	Token * pTypeIdent = claimPendingToken(pParser);
-	Assert(pTypeIdent->tokenk == TOKENK_Identifier);
-
 
 	// END PARSE TYPE
 
 
-	if (!tryConsumeToken(pParser->pScanner, TOKENK_Identifier, ensurePendingToken(pParser)))
+	// Parse name
+
+	Token * pVarIdent = nullptr;
+
 	{
-		auto * pErr = AstNewErrListChildMove(pParser, ExpectedTokenkErr, pTypeIdent->line, &apNodeChildren);
-		pErr->tokenk = TOKENK_Identifier;
-		return Up(pErr);
-	}
-
-	Token * pVarIdent = claimPendingToken(pParser);
-	Assert(pVarIdent->tokenk == TOKENK_Identifier);
-
-	AstNode * pInitExpr = nullptr;
-
-	if (tryConsumeToken(pParser->pScanner, TOKENK_Equal))
-	{
-		pInitExpr = parseExpr(pParser);
-		append(&apNodeChildren, pInitExpr);
-
-		if (isErrorNode(*pInitExpr))
+		if (expectkName == EXPECTK_Optional || expectkName == EXPECTK_Required)
 		{
-			auto * pErr = AstNewErrListChildMove(pParser, BubbleErr, pInitExpr->startLine, &apNodeChildren);
-			return Up(pErr);
+			if (tryConsumeToken(pParser->pScanner, TOKENK_Identifier, ensurePendingToken(pParser)))
+			{
+				pVarIdent = claimPendingToken(pParser);
+				Assert(pVarIdent->tokenk == TOKENK_Identifier);
+			}
+			else if (expectkName == EXPECTK_Required)
+			{
+				auto * pErr = AstNewErrListChildMove(pParser, ExpectedTokenkErr, pTypeIdentOrFunc->line, &apNodeChildren);
+				pErr->tokenk = TOKENK_Identifier;
+				return Up(pErr);
+			}
+		}
+		else
+		{
+			Assert(false);
 		}
 	}
 
-	if (!tryConsumeToken(pParser->pScanner, TOKENK_Semicolon, ensurePendingToken(pParser)))
-	{
-		Token * pErrToken = ensurePendingToken(pParser);
-		peekToken(pParser->pScanner, pErrToken);
+	// Parse init expr
 
-		auto * pErr = AstNewErrListChildMove(pParser, ExpectedTokenkErr, pErrToken->line, &apNodeChildren);
-		pErr->tokenk = TOKENK_Semicolon;
+	AstNode * pInitExpr = nullptr;
+
+	{
+		if (tryConsumeToken(pParser->pScanner, TOKENK_Equal))
+		{
+			pInitExpr = parseExpr(pParser);
+			append(&apNodeChildren, pInitExpr);
+
+			if (isErrorNode(*pInitExpr))
+			{
+				auto * pErr = AstNewErrListChildMove(pParser, BubbleErr, pInitExpr->startLine, &apNodeChildren);
+				return Up(pErr);
+			}
+		}
+	}
+
+	// Providing init expr isn't allowed if the var isn't named...
+
+	if (!pVarIdent && pInitExpr)
+	{
+	    auto * pErr = AstNewErrListChildMove(pParser, InitUnnamedVarErr, pInitExpr->startLine, &apNodeChildren);
 		return Up(pErr);
+	}
+
+	// Parse semicolon
+
+	if (expectkSemicolon == EXPECTK_Required)
+	{
+		if (!tryConsumeToken(pParser->pScanner, TOKENK_Semicolon, ensurePendingToken(pParser)))
+		{
+			Token * pErrToken = ensurePendingToken(pParser);
+			peekToken(pParser->pScanner, pErrToken);
+
+			auto * pErr = AstNewErrListChildMove(pParser, ExpectedTokenkErr, pErrToken->line, &apNodeChildren);
+			pErr->tokenk = TOKENK_Semicolon;
+			return Up(pErr);
+		}
 	}
 
 	// Success!
 
 	ParseType * pParseType = newParseType(pParser);
-	pParseType->pType = pTypeIdent;
-	pParseType->isFuncType = isFuncType;
+
+	if (isFuncType)
+	{
+		Assert(pTypeIdentOrFunc->tokenk == TOKENK_Func);
+		pParseType->isFuncType = true;
+		pParseType->pParseFuncType = pPft;
+		addedPftToAst = true;
+	}
+	else
+	{
+		Assert(pTypeIdentOrFunc->tokenk == TOKENK_Identifier);
+		pParseType->isFuncType = false;
+		pParseType->pType = pTypeIdentOrFunc;
+	}
+
 	initMove(&pParseType->aTypemods, &aModifiers);
 
 	auto * pNode = AstNew(pParser, VarDeclStmt, line);
@@ -601,6 +664,170 @@ AstNode * parsePrimary(Parser * pParser)
 	}
 }
 
+bool tryParseFuncHeader(Parser * pParser, EXPECTK expectkName, ParseFuncType ** ppoFuncType, AstNode ** ppoErrNode, Token * pDefnIdent)
+{
+	AssertInfo(expectkName == EXPECTK_Required || expectkName == EXPECTK_Forbidden,
+		"Name is required in function definition context, and forbidden anywhere else");
+
+	AssertInfo(Implies(expectkName == EXPECTK_Required, pDefnIdent),
+		"When called with required name, you must pass a token pointer!");
+
+	AssertInfo(Implies(expectkName == EXPECTK_Forbidden, !pDefnIdent),
+			   "When called with forbidden name, you must not pass a token pointer!");
+
+	// NOTE: If function succeeds, we assign ppoFuncType to the resulting func type that we create
+	//	If it fails, we assign ppoErrorNode to the resulting error node that we generate
+
+	*ppoFuncType = nullptr;
+	*ppoErrNode = nullptr;
+
+	// Parse "func"
+
+	if (!tryConsumeToken(pParser->pScanner, TOKENK_Func))
+	{
+		int line = peekTokenLine(pParser->pScanner);
+
+        auto * pErr = AstNewErr0Child(pParser, ExpectedTokenkErr, line);
+        pErr->tokenk = TOKENK_Func;
+		*ppoErrNode = Up(pErr);
+        return false;
+	}
+
+	// Parse definition name
+
+	if (expectkName == EXPECTK_Required)
+	{
+		if (!tryConsumeToken(pParser->pScanner, TOKENK_Identifier, ensurePendingToken(pParser)))
+		{
+			int line = peekTokenLine(pParser->pScanner);
+
+			auto * pErr = AstNewErr0Child(pParser, ExpectedTokenkErr, line);
+			pErr->tokenk = TOKENK_Identifier;
+			*ppoErrNode = Up(pErr);
+			return false;
+		}
+
+		pDefnIdent = claimPendingToken(pParser);
+	}
+	else if (expectkName == EXPECTK_Forbidden)
+	{
+		if (tryConsumeToken(pParser->pScanner, TOKENK_Identifier, ensurePendingToken(pParser)))
+		{
+			// TODO: Maybe this should be a more specific/informative error, since we basically
+			//	understand what they are trying to do. Something like NamedFuncNonDefnErr...?
+			//	This is probably a good test case for adding "context" messages to errors!!!
+
+			Token * pErrToken = claimPendingToken(pParser);
+
+			auto * pErr = AstNewErr0Child(pParser, UnexpectedTokenkErr, pErrToken->line);
+			pErr->pErrToken = pErrToken;
+			*ppoErrNode = Up(pErr);
+			return false;
+		}
+	}
+	else
+	{
+		Assert(false);
+	}
+
+	// Parse "in" parameters
+
+	DynamicArray<AstNode *> apInParamVarDecls;
+	init(&apInParamVarDecls);
+	Defer(Assert(!apInParamVarDecls.pBuffer));		// buffer should get "moved" into AST
+
+	if (!tryParseFuncHeaderParamList(pParser, &apInParamVarDecls))
+	{
+		Assert(containsErrorNode(apInParamVarDecls));
+
+		int line = peekTokenLine(pParser->pScanner);
+		auto * pErr = AstNewErrListChildMove(pParser, BubbleErr, line, &apInParamVarDecls);
+		*ppoErrNode = Up(pErr);
+		return false;
+	}
+
+	// TODO: Maybe add syntax for optional -> here (between input params and out params)
+	//	which could be useful in the following case
+	//
+	// func(func(int, func(int) -> (func(float)->(int))) -> (func(float) -> (int))) -> (int)
+	//
+	// Uhhh maybe this actually doesn't help at all lol
+
+
+	// Parse "out" parameters (a.k.a. return types)
+
+	DynamicArray<AstNode *> apOutParamVarDecls;
+	init(&apOutParamVarDecls);
+	Defer(Assert(!apOutParamVarDecls.pBuffer));		// buffer should get "moved" into AST
+
+	if (!tryParseFuncHeaderParamList(pParser, &apOutParamVarDecls))
+	{
+		Assert(containsErrorNode(apOutParamVarDecls));
+
+		// NOTE: Append output parameters to the list of input parameters to make our life
+		//	easier using the AstNewErr macro. Note that this means we have to manually destroy
+		//	the out param list since only the (now combined) in param list is getting "moved"
+		//	into the error node.
+
+		appendMultiple(&apInParamVarDecls, apOutParamVarDecls.pBuffer, apOutParamVarDecls.cItem);
+		destroy(&apOutParamVarDecls);
+
+		int line = peekTokenLine(pParser->pScanner);
+		auto * pErr = AstNewErrListChildMove(pParser, BubbleErr, line, &apInParamVarDecls);
+		*ppoErrNode = Up(pErr);
+		return false;
+	}
+
+	// Success!
+
+	ParseFuncType * pft = newParseFuncType(pParser);
+	initMove(&pft->apParamVarDecls, &apInParamVarDecls);
+	initMove(&pft->apReturnVarDecls, &apOutParamVarDecls);
+
+	return true;
+}
+
+bool tryParseFuncHeaderParamList(Parser * pParser, DynamicArray<AstNode *> * papParamVarDecls)
+{
+	if (!tryConsumeToken(pParser->pScanner, TOKENK_OpenParen))
+	{
+		int line = peekTokenLine(pParser->pScanner);
+
+		auto * pErr = AstNewErr0Child(pParser, ExpectedTokenkErr, line);
+		pErr->tokenk = TOKENK_OpenParen;
+		append(papParamVarDecls, Up(pErr));
+		return false;
+	}
+
+	bool isFirstParam = true;
+
+	while (!tryConsumeToken(pParser->pScanner, TOKENK_CloseParen))
+	{
+		if (!isFirstParam && !tryConsumeToken(pParser->pScanner, TOKENK_Comma))
+		{
+			int line = peekTokenLine(pParser->pScanner);
+
+			auto * pErr = AstNewErrListChildMove(pParser, ExpectedTokenkErr, line, papParamVarDecls);
+			pErr->tokenk = TOKENK_Comma;
+			append(papParamVarDecls, Up(pErr));
+			return false;
+		}
+
+		const static EXPECTK s_expectkName = EXPECTK_Optional;
+		const static EXPECTK s_expectkSemicolon = EXPECTK_Forbidden;
+
+		AstNode * pNode = parseVarDeclStmt(pParser, s_expectkName, s_expectkSemicolon);
+		append(papParamVarDecls, pNode);
+
+		if (isErrorNode(*pNode))
+		{
+			return false;
+		}
+	}
+
+	return true;
+}
+
 AstNode * finishParsePrimary(Parser * pParser, AstNode * pExpr)
 {
 	switch (pExpr->astk)
@@ -685,7 +912,6 @@ AstNode * finishParsePrimary(Parser * pParser, AstNode * pExpr)
 
 		DynamicArray<AstNode *> apArgs;
 		init(&apArgs);
-
 		Defer(Assert(!apArgs.pBuffer));		// buffer should get "moved" into AST
 
 		bool isFirstArg = true;
@@ -697,14 +923,9 @@ AstNode * finishParsePrimary(Parser * pParser, AstNode * pExpr)
 
 		while (!tryConsumeToken(pParser->pScanner, TOKENK_CloseParen, ensurePendingToken(pParser)))
 		{
-			if (!isFirstArg && !tryConsumeToken(pParser->pScanner, TOKENK_Comma, ensurePendingToken(pParser)))
+			if (!isFirstArg && !tryConsumeToken(pParser->pScanner, TOKENK_Comma))
 			{
-                int line;
-                {
-                    Token * pErrToken = ensurePendingToken(pParser);
-                    peekToken(pParser->pScanner, pErrToken);
-                    line = pErrToken->line;
-                }
+                int line = peekTokenLine(pParser->pScanner);
 
 				// NOTE: Panic recovery needs reworking! See comment @ tryRecoverFromPanic
 

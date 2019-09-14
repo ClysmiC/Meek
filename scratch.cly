@@ -108,3 +108,63 @@ struct ConnectionInfo
 // Usage
 buffer[12]
 pBuffer[]	// Pointer dereference? implicit 0?
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+func(
+	func(
+		int,
+		func(
+			int
+		)
+		->(
+			func(
+				float
+			)
+			->(
+				int
+			)
+		)
+	)
+	->(
+		func(
+			float
+		)
+		->(
+			int
+		)
+	)
+)
+->(
+	int
+)
