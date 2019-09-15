@@ -327,7 +327,7 @@ AstNode * parseFuncDefnStmt(Parser * pParser)
 		AstNode * pStmt = parseStmt(pParser);
 		append(&apStmts, pStmt);
 
-		if (isErrorNode(pStmt))
+		if (isErrorNode(*pStmt))
 		{
 			auto * pErr = AstNewErrListChildMove(pParser, BubbleErr, peekTokenLine(pParser->pScanner), &apStmts);
 			return Up(pErr);
@@ -761,8 +761,8 @@ bool tryParseFuncHeader(
 {
 	EXPECTK expectkName = (funcheaderk == FUNCHEADERK_Defn) ? EXPECTK_Required : EXPECTK_Forbidden;
 
-	AssertInfo(Implies(expectkName == EXPECTK_Forbidden, !pDefnIdent), "Don't provide an ident pointer in a context where a name is illegal!");
-	Assert(Implies(expectkName != EXPECTK_Forbidden, pDefnIdent), "Should provide an ident pointer in a context where a name is legal!");
+	AssertInfo(Implies(expectkName == EXPECTK_Forbidden, !ppoDefnIdent), "Don't provide an ident pointer in a context where a name is illegal!");
+	AssertInfo(Implies(expectkName != EXPECTK_Forbidden, ppoDefnIdent), "Should provide an ident pointer in a context where a name is legal!");
 
 	// NOTE: If function succeeds, we assign ppoFuncType to the resulting func type that we create
 	//	If it fails, we assign ppoErrorNode to the resulting error node that we generate
@@ -796,7 +796,7 @@ bool tryParseFuncHeader(
 			return false;
 		}
 
-		*pDefnIdent = claimPendingToken(pParser);
+		*ppoDefnIdent = claimPendingToken(pParser);
 	}
 	else
 	{
@@ -1407,7 +1407,7 @@ void debugPrintSubAst(const AstNode & node, int level, bool skipAfterArrow, Dyna
 		printChildren(node.apChildren, level, "child", true, pMapLevelSkip);
 	};
 
-	auto debugPrintParseFuncType = [printTabs, setSkip](const ParseFuncType & parseFuncType, int level, bool skipAfterArrow, DynamicArray<bool> * pMapLevelSkip)
+	auto debugPrintParseFuncType = [printTabs, printChildren](const ParseFuncType & parseFuncType, int level, bool skipAfterArrow, DynamicArray<bool> * pMapLevelSkip)
 	{
 		if (parseFuncType.apParamVarDecls.cItem == 0)
 		{
@@ -1417,50 +1417,18 @@ void debugPrintSubAst(const AstNode & node, int level, bool skipAfterArrow, Dyna
 		}
 		else
 		{
-			for (uint i = 0; i < parseFuncType.apParamVarDecls.cItem; i++)
-			{
-				printf("\n");
-				printTabs(level, false, false, pMapLevelSkip);
-				printf("(param %d)", i);
-
-				debugPrintSubAst(
-					*parseFuncType.apParamVarDecls[i],
-					level,
-					false,
-					pMapLevelSkip
-				);
-
-                printf("\n");
-                printTabs(level, false, false, pMapLevelSkip);
-			}
+            printChildren(parseFuncType.apParamVarDecls, level, "param", false, pMapLevelSkip);
 		}
 
 		if (parseFuncType.apReturnVarDecls.cItem == 0)
 		{
 			printf("\n");
-			printTabs(level, true, true, pMapLevelSkip);
+			printTabs(level, true, skipAfterArrow, pMapLevelSkip);
 			printf("(no return vals)");
 		}
 		else
 		{
-			for (uint i = 0; i < parseFuncType.apReturnVarDecls.cItem; i++)
-			{
-				bool isLastItem = (i == parseFuncType.apReturnVarDecls.cItem - 1);
-
-				printf("\n");
-				printTabs(level, false, false, pMapLevelSkip);
-				printf("(return val %d)", i);
-
-				debugPrintSubAst(
-					*parseFuncType.apReturnVarDecls[i],
-					level,
-					isLastItem,
-					pMapLevelSkip
-				);
-
-                printf("\n");
-                printTabs(level, false, false, pMapLevelSkip);
-			}
+            printChildren(parseFuncType.apParamVarDecls, level, "return val", skipAfterArrow, pMapLevelSkip);
 		}
 	};
 
@@ -1824,7 +1792,7 @@ void debugPrintSubAst(const AstNode & node, int level, bool skipAfterArrow, Dyna
 		{
 			auto * pStmt = DownConst(&node, StructDefnStmt);
 
-			printf("(struct decl)");
+			printf("(struct defn)");
 
             printf("\n");
             printTabs(levelNext, false, false, pMapLevelSkip);
@@ -1843,10 +1811,33 @@ void debugPrintSubAst(const AstNode & node, int level, bool skipAfterArrow, Dyna
 			printChildren(pStmt->apVarDeclStmt, levelNext, "vardecl", true, pMapLevelSkip);
 		} break;
 
-		case ASTK_FunDefnStmt:
+		case ASTK_FuncDefnStmt:
 		{
 			// TODO
-			AssertInfo(false, "Stop being lazy and implement this already!");
+			auto * pStmt = DownConst(&node, FuncDefnStmt);
+
+			printf("(func defn)");
+
+            printf("\n");
+            printTabs(levelNext, false, false, pMapLevelSkip);
+
+            printf("\n");
+            printTabs(levelNext, false, false, pMapLevelSkip);
+            printf("(name)");
+
+            printf("\n");
+            printTabs(levelNext, true, false, pMapLevelSkip);
+            printf("%s", pStmt->pIdent->lexeme);
+
+			printf("\n");
+            printTabs(levelNext, false, false, pMapLevelSkip);
+
+			debugPrintParseFuncType(*pStmt->pFuncType, levelNext, false, pMapLevelSkip);
+
+			printf("\n");
+            printTabs(levelNext, false, false, pMapLevelSkip);
+
+			printChildren(pStmt->apStmts, levelNext, "stmt", true, pMapLevelSkip);
 		} break;
 
 

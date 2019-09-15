@@ -7,6 +7,7 @@
 
 struct AstNode;
 struct ParseType;
+struct ParseFuncType;
 
 
 
@@ -235,7 +236,7 @@ struct AstStructDefnStmt
 
 struct AstFuncDefnStmt
 {
-	Token * pIdent
+    Token * pIdent;
 	ParseFuncType * pFuncType;
 
 	DynamicArray<AstNode *> apStmts;
