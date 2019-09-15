@@ -33,6 +33,7 @@ ReservedWord g_aReservedWord[] = {
 	{ "break",		TOKENK_Break },
 	{ "continue",	TOKENK_Continue },
 	{ "return",		TOKENK_Return },
+	{ "do",			TOKENK_Do },
 	{ "bool",		TOKENK_Identifier },
 	{ "byte",		TOKENK_Identifier },
 	{ "int",		TOKENK_Identifier },
@@ -107,19 +108,7 @@ const char * g_mpTokenkDisplay[] = {
 	"'break'",				// TOKENK_Break
 	"'continue'",			// TOKENK_Continue
 	"'return'",				// TOKENK_Return
-	// "'bool'",				// TOKENK_Bool
-	// "'byte'",				// TOKENK_Byte
-	// "'int'",				// TOKENK_Int
-	// "'s16'",				// TOKENK_S16
-	// "'s32'",				// TOKENK_S32
-	// "'s64'",				// TOKENK_S64
-	// "'uint'",				// TOKENK_Uint
-	// "'u16'",				// TOKENK_U16
-	// "'u32'",				// TOKENK_U32
-	// "'u64'",				// TOKENK_U64
-	// "'float'",				// TOKENK_Float
-	// "'f32'",				// TOKENK_F32
-	// "'f64'",				// TOKENK_F64
+	"'do'",					// TOKENK_Do
 	"'struct'",				// TOKENK_Struct
 	"'enum'",				// TOKENK_Enum
     "'func'",               // TOKENK_Func
@@ -192,8 +181,3 @@ void errMessagesFromGrferrtok(GRFERRTOK grferrtok, DynamicArray<StringBox<256>> 
         }
     }
 }
-
-//bool isReservedWordBuiltInType(TOKENK tokenk)
-//{
-//	return tokenk >= TOKENK_ReservedWordBuiltInTypeMin && tokenk < TOKENK_ReservedWordBuiltInTypeMax;
-//}

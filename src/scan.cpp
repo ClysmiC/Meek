@@ -112,6 +112,13 @@ int peekTokenLine(Scanner * pScanner, uint lookahead)
 	return throwaway.line;
 }
 
+int prevTokenLine(Scanner * pScanner, uint lookbehind)
+{
+	Token throwaway;
+	prevToken(pScanner, &throwaway, lookbehind);
+	return throwaway.line;
+}
+
 bool tryConsumeToken(Scanner * pScanner, TOKENK tokenkMatch, Token * poToken)
 {
 	Token throwaway;

@@ -21,3 +21,20 @@ func main()()
 
 // TODO: parse assignment!
 // printer = printInDecimal;
+
+
+// One line
+
+if x do printStatement();
+
+if x do
+	printStatement();
+
+// Multiline
+
+if x
+{
+	//
+	//
+	//
+}

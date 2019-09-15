@@ -90,7 +90,7 @@ AstNode * parseExpr(Parser * pParser);
 // Node allocation
 
 AstNode * astNew(Parser * pParser, ASTK astk, int line);
-AstNode * astNewErr(Parser * pParser, ASTK astkErr, int line, AstNode * pChild0=nullptr, AstNode * pChild1=nullptr);
+AstNode * astNewErr(Parser * pParser, ASTK astkErr, int line, AstNode * pChild0=nullptr, AstNode * pChild1=nullptr, AstNode * pChild2=nullptr);
 AstNode * astNewErr(Parser * pParser, ASTK astkErr, int line, AstNode * aPChildren[], uint cPChildren);
 AstNode * astNewErrMoveChildren(Parser * pParser, ASTK astkErr, int line, DynamicArray<AstNode *> * papChildren);
 
@@ -101,11 +101,15 @@ bool tryRecoverFromPanic(Parser * pParser, const TOKENK * aTokenkRecover, int cT
 
 // STMT
 
-AstNode * parseStmt(Parser * pParser);
+AstNode * parseStmt(Parser * pParser, bool isDoStmt=false);
 AstNode * parseExprStmtOrAssignStmt(Parser * pParser);
 AstNode * parseStructDefnStmt(Parser * pParser);
 AstNode * parseFuncDefnStmt(Parser * pParser);
 AstNode * parseVarDeclStmt(Parser * pParser, EXPECTK expectkName=EXPECTK_Required, EXPECTK expectkInit=EXPECTK_Optional, EXPECTK expectkSemicolon=EXPECTK_Required);
+AstNode * parseIfStmt(Parser * pParser);
+AstNode * parseWhileStmt(Parser * pParser);
+AstNode * parseDoStmtOrBlockStmt(Parser * pParser);
+AstNode * parseBlockStmt(Parser * pParser);
 
 // EXPR
 

@@ -63,6 +63,7 @@ enum ASTK : u8
 	ASTK_StructDefnStmt,
 	ASTK_IfStmt,
 	ASTK_WhileStmt,
+	ASTK_BlockStmt,
 	// TODO: for statement... once I figure out what I want it to look like
 
 	ASTK_StmtMax,		// Illegal value, used to determine ASTCATK
@@ -126,7 +127,8 @@ struct AstUnexpectedTokenkErr
 
 struct AstExpectedTokenkErr
 {
-	TOKENK tokenk;
+	int cTokenkValid = 0;
+	TOKENK tokenkoValid[8];
 };
 
 struct AstInitUnnamedVarErr {};
@@ -243,11 +245,28 @@ struct AstStructDefnStmt
 	DynamicArray<AstNode *> apVarDeclStmt;
 };
 
+struct AstIfStmt
+{
+	AstNode * pCondExpr;
+	AstNode * pThenStmt;
+	AstNode * pElseStmt;
+};
+
+struct AstWhileStmt
+{
+	AstNode * pCondExpr;
+	AstNode * pBodyStmt;
+};
+
 struct AstFuncDefnStmt
 {
     Token * pIdent;
 	ParseFuncType * pFuncType;
+	AstNode * pBodyStmt;
+};
 
+struct AstBlockStmt
+{
 	DynamicArray<AstNode *> apStmts;
 };
 
@@ -303,6 +322,9 @@ struct AstNode
                 AstVarDeclStmt      varDeclStmt;
                 AstFuncDefnStmt     funcDefnStmt;
                 AstStructDefnStmt   structDefnStmt;
+				AstIfStmt			ifStmt;
+				AstWhileStmt		whileStmt;
+				AstBlockStmt		blockStmt;
 
 				// PROGRAM
 

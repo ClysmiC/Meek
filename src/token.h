@@ -70,34 +70,13 @@ enum TOKENK
 	TOKENK_Break,		// IDEA: a way to specify the "number" of loops we are breaking out of? break(2) for example? Not very friendly for refactoring though... but I also don't really like labels
 	TOKENK_Continue,
 	TOKENK_Return,
-
-	// Reserved words (types)
-
-	// TOKENK_Var,			// Used for type inference
-
-	// TOKENK_Bool,
-
-	// TOKENK_Byte,
-
-	// TOKENK_Int,
-	// TOKENK_S16,
-	// TOKENK_S32,
-	// TOKENK_S64,
-
-	// TOKENK_Uint,
-	// TOKENK_U16,
-	// TOKENK_U32,
-	// TOKENK_U64,
-
-	// TOKENK_Float,		// TODO: 16 bit float?
-	// TOKENK_F32,
-	// TOKENK_F64,
+	TOKENK_Do,
 
 	TOKENK_Struct,
 	TOKENK_Enum,
     TOKENK_Func,
 						// TODO: union?
-						// TODO: char? string?
+						// TODO: char? string? mstring? (i.e., mutable string... would mainly just be a dynamic array of bytes assuming we have a dynamic array built in type!)
 
 	TOKENK_Eof,
 

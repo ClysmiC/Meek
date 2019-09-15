@@ -21,6 +21,7 @@
 #define AstNewErr0Child(pParser, astkErr, line) reinterpret_cast<Ast##astkErr *>(astNewErr(pParser, ASTK_##astkErr, line, nullptr, nullptr))
 #define AstNewErr1Child(pParser, astkErr, line, pChild0) reinterpret_cast<Ast##astkErr *>(astNewErr(pParser, ASTK_##astkErr, line, pChild0, nullptr))
 #define AstNewErr2Child(pParser, astkErr, line, pChild0, pChild1) reinterpret_cast<Ast##astkErr *>(astNewErr(pParser, ASTK_##astkErr, line, pChild0, pChild1))
+#define AstNewErr3Child(pParser, astkErr, line, pChild0, pChild1, pChild2) reinterpret_cast<Ast##astkErr *>(astNewErr(pParser, ASTK_##astkErr, line, pChild0, pChild1, pChild2))
 
 // NOTE: This macro is functionally equivalent to AstNewErr2Child since we rely on function overloading to choose the correct one.
 //	I'm not really happy with this solution but it's the best I have right now.
@@ -94,7 +95,7 @@ void parseStmts(Parser * pParser, DynamicArray<AstNode *> * poAPNodes)
 	}
 }
 
-AstNode * parseStmt(Parser * pParser)
+AstNode * parseStmt(Parser * pParser, bool isDoStmt)
 {
 	// HMM: Need different syntax for const and compile time const vardecls. for struct defn's and
 	//	top-level fun defn's they want to be compile time const. But maybe we can aggressively infer
@@ -136,6 +137,23 @@ AstNode * parseStmt(Parser * pParser)
 
 	//	// TODO
 	//}
+	else if (tokenkNext == TOKENK_If)
+	{
+		return parseIfStmt(pParser);
+	}
+	else if (tokenkNext == TOKENK_While)
+	{
+		return parseWhileStmt(pParser);
+	}
+	else if (tokenk == TOKENK_OpenBrace)
+	{
+		if (!doStmt) return parseBlockStmt(pParser);
+		else
+		{
+			// Error!
+			return nullptr;	// TODO
+		}
+	}
 	else if (tokenkNext == TOKENK_OpenBracket ||
 			 tokenkNext == TOKENK_Carat ||
 			 (tokenkNext == TOKENK_Identifier && tokenkNextNext == TOKENK_Identifier) ||
@@ -147,7 +165,12 @@ AstNode * parseStmt(Parser * pParser)
 
 		// Var decl
 
-		return parseVarDeclStmt(pParser);
+		if (!doStmt) return parseVarDeclStmt(pParser);
+		else
+		{
+			// Error!
+			return nullptr;	// TODO
+		}
 	}
 
 
@@ -344,48 +367,56 @@ AstNode * parseFuncDefnStmt(Parser * pParser)
 
 	// Parse header
 
-	AstNode * pErrFuncHeader = nullptr;
-
-	if (!tryParseFuncHeader(pParser, FUNCHEADERK_Defn, &pPft, &pErrFuncHeader, &pIdent))
 	{
-		Assert(pErrFuncHeader);
-		Assert(!pPft);
-
-		return pErrFuncHeader;
-	}
-
-	Assert(pIdent);
-	Assert(pPft);
-	Assert (!pErrFuncHeader);
-
-	// Parse {
-
-	if (!tryConsumeToken(pParser->pScanner, TOKENK_OpenBrace))
-	{
-		int line = peekTokenLine(pParser->pScanner);
-		auto * pErr = AstNewErr0Child(pParser, ExpectedTokenkErr, line);
-		pErr->tokenk = TOKENK_OpenBrace;
-		return Up(pErr);
-	}
-
-	// Parse statements until }
-
-	DynamicArray<AstNode *> apStmts;
-	init(&apStmts);
-	Defer(Assert(!apStmts.pBuffer));		// buffer should get "moved" into AST
-
-	while (!tryConsumeToken(pParser->pScanner, TOKENK_CloseBrace))
-	{
-		AstNode * pStmt = parseStmt(pParser);
-		append(&apStmts, pStmt);
-
-		if (isErrorNode(*pStmt))
+		AstNode * pErrFuncHeader = nullptr;
+		if (!tryParseFuncHeader(pParser, FUNCHEADERK_Defn, &pPft, &pErrFuncHeader, &pIdent))
 		{
-			auto * pErr = AstNewErrListChildMove(pParser, BubbleErr, peekTokenLine(pParser->pScanner), &apStmts);
-			return Up(pErr);
+			Assert(pErrFuncHeader);
+			Assert(!pPft);
+
+			return pErrFuncHeader;
 		}
 
-		Assert(category(*pStmt) == ASTCATK_Stmt);
+		Assert(pIdent);
+		Assert(pPft);
+		Assert (!pErrFuncHeader);
+	}
+
+	// // Parse {
+
+	// if (!tryConsumeToken(pParser->pScanner, TOKENK_OpenBrace))
+	// {
+	// 	int line = peekTokenLine(pParser->pScanner);
+	// 	auto * pErr = AstNewErr0Child(pParser, ExpectedTokenkErr, line);
+	// 	pErr->tokenk = TOKENK_OpenBrace;
+	// 	return Up(pErr);
+	// }
+
+	// // Parse statements until }
+
+	// DynamicArray<AstNode *> apStmts;
+	// init(&apStmts);
+	// Defer(Assert(!apStmts.pBuffer));		// buffer should get "moved" into AST
+
+	// while (!tryConsumeToken(pParser->pScanner, TOKENK_CloseBrace))
+	// {
+	// 	AstNode * pStmt = parseStmt(pParser);
+	// 	append(&apStmts, pStmt);
+
+	// 	if (isErrorNode(*pStmt))
+	// 	{
+	// 		auto * pErr = AstNewErrListChildMove(pParser, BubbleErr, peekTokenLine(pParser->pScanner), &apStmts);
+	// 		return Up(pErr);
+	// 	}
+
+	// 	Assert(category(*pStmt) == ASTCATK_Stmt);
+	// }
+
+	AstNode * pBody = parseDoStmtOrBlockStmt(pParser);
+
+	if (isErrorNode(pBody))
+	{
+		return pBody;
 	}
 
 	// Success!
@@ -395,7 +426,7 @@ AstNode * parseFuncDefnStmt(Parser * pParser)
 	auto * pNode = AstNew(pParser, FuncDefnStmt, startingLine);
 	pNode->pIdent = pIdent;
 	pNode->pFuncType = pPft;
-	initMove(&pNode->apStmts, &apStmts);
+	pNode->pBody = pBody;
 	return Up(pNode);
 }
 
@@ -511,7 +542,6 @@ AstNode * parseVarDeclStmt(Parser * pParser, EXPECTK expectkName, EXPECTK expect
         int lineOfFunc = pParser->pPendingToken->line;
 
 		AstNode * pErrFuncHeader = nullptr;
-
 		if (!tryParseFuncHeader(pParser, FUNCHEADERK_VarType, &pPft, &pErrFuncHeader))
 		{
 			Assert(pErrFuncHeader);
@@ -643,30 +673,133 @@ AstNode * parseVarDeclStmt(Parser * pParser, EXPECTK expectkName, EXPECTK expect
 	return Up(pNode);
 }
 
-#if LATER
-AstNode * parseAssignStmt(Parser * pParser)
+AstNode * parseIfStmt(Parser * pParser)
 {
-	AstNode * pLhsExpr = parseExpr(pParser);		// Semantic analysis will enforce lvalues here
-	if (isErrorNode(pLhsExpr)) return pLhsExpr;
+	return nullptr;		// TODO
+}
 
-	Token token;
-	if (tryConsumeToken(pParser->pScanner, TOKENK_Equal, &token))
+AstNode * parseWhileStmt(Parser * pParser)
+{
+	// Parse 'while'
+
+	if (!tryConsumeToken(pParser->pScanner, TOKENK_While))
 	{
-		AstNode * pRhsExpr = parseExpr(pParser);
-		if (isErrorNode(pRhsExpr)) return pRhsExpr;
+		auto * pErr = AstNewErr0Child(pParser, ExpectedTokenkErr, peekTokenLine(pParser->pScanner));
+		pErr->tokenk = TOKENK_While;
+		return Up(pErr);
+	}
 
-		auto pNode = AstNew(pParser, AssignStmt);
-		pNode->pLhsExpr = pLhsExpr;
-		pNode->pRhsExpr = pRhsExpr;
+	int whileLine = prevTokenLine(pParser->pScanner);
 
-		return Up(pNode);
+	// Parse cond expr
+
+	AstNode * pCondExpr = parseExpr(Parser * pParser);
+	if (isErrorNode(pCondExpr))
+	{
+		return pCondExpr;
+	}
+
+	// Parse 'do <stmt>' or block stmt
+
+	AstNode * pBodyStmt = parseDoStmtOrBlockStmt(pParser);
+	if (isErrorNode(pBodyStmt))
+	{
+		auto * pErr = AstNewErr2Child(pParser, BubbleErr, pStmt->startLine, pBodyStmt->startLine, pCondExpr, pBodyStmt);
+		return Up(pErr);
+	}
+
+	// Success!
+
+	auto * pNode = AstNew(pParser, WhileStmt, whileLine);
+	pNode->pCondExpr = pCondExpr;
+	pNode->pBodyStmt = pBodyStmt;
+	return Up(pNode);
+}
+
+AstNode * parseDoStmtOrBlockStmt(Parser * pParser)
+{
+	TOKENK tokenk = peekToken(pParser->pScanner);
+	if (tokenk != TOKENK_OpenBrace &&
+		tokenk != TOKENK_Do)
+	{
+		auto * pErr = AstNewErr0Child(pParser, ExpectedTokenkErr, peekTokenLine(pParser->pScanner));
+		pErr->tokenkValid[0] = TOKENK_OpenBrace;
+		pErr->tokenkValid[1] = TOKENK_Do;
+		pErr->cTokenkValid = 2;
+		return Up(pErr);
+	}
+
+	AstNode * pStmt = nullptr;
+	if (tokenk == TOKENK_OpenBrace)
+	{
+		AstNode * pStmt = parseBlockStmt(Parser * pParser);
+
+		if (isErrorNode(pStmt))
+		{
+			auto * pErr = AstNewErr1Child(pParser, BubbleErr, pStmt->startLine, pStmt);
+			return Up(pErr);
+		}
 	}
 	else
 	{
-		return pLhsExpr;
+		Assert(tokenk == TOKENK_Do);
+		consumeToken(pParser->pScanner);		// 'do'
+
+		bool isDoStmt = true;
+		AstNode * pStmt = parseStmt(pParser, isDoStmt);
+
+		Assert(pStmt->astk != ASTK_BlockStmt);
+		Assert(pStmt->astk != ASTK_VarDeclStmt);
+
+		if (isErrorNode(pStmt))
+		{
+			auto * pErr = AstNewErr1Child(pParser, BubbleErr, pStmt->startLine, pStmt);
+			return Up(pErr);
+		}
 	}
+
+	return pStmt;
 }
-#endif
+
+AstNode * parseBlockStmt(Parser * pParser)
+{
+	// Parse {
+
+	if (!tryConsumeToken(pParser->pScanner, TOKENK_OpenBrace))
+	{
+		auto * pErr = AstNewErr0Child(pParser, ExpectedTokenkErr, peekTokenLine(pParser->pScanner));
+		pErr->tokenkValid[0] = TOKENK_OpenBrace;
+		pErr->cTokenkValid = 1;
+		return Up(pErr);
+	}
+
+	int openBraceLine = prevTokenLine(pParser->pScanner);
+
+	// Parse statements until }
+
+	DynamicArray<AstNode *> apStmts;
+	init(&apStmts);
+	Defer(Assert(!apStmts.pBuffer));		// buffer should get "moved" into AST
+
+	while (!tryConsumeToken(pParser->pScanner, TOKENK_CloseBrace))
+	{
+		AstNode * pStmt = parseStmt(pParser);
+		append(&apStmts, pStmt);
+
+		if (isErrorNode(*pStmt))
+		{
+			auto * pErr = AstNewErrListChildMove(pParser, BubbleErr, peekTokenLine(pParser->pScanner), &apStmts);
+			return Up(pErr);
+		}
+	}
+
+	// Success!
+
+	auto * pNode = AstNew(pParser, BlockStmt, openBraceLine);
+	initMove(&pNode->apStmts, &apStmts);
+
+	return Up(pNode);
+}
 
 AstNode * parseExpr(Parser * pParser)
 {
@@ -1213,12 +1346,13 @@ AstNode * astNew(Parser * pParser, ASTK astk, int line)
 	return pNode;
 }
 
-AstNode * astNewErr(Parser * pParser, ASTK astkErr, int line, AstNode * pChild0, AstNode * pChild1)
+AstNode * astNewErr(Parser * pParser, ASTK astkErr, int line, AstNode * pChild0, AstNode * pChild1, AstNode * pChild2)
 {
+	Assert(Implies(pChild2, pChild1));
 	Assert(Implies(pChild1, pChild0));
 
-	AstNode * apChildren[2] = { pChild0, pChild1 };
-	int cPChildren = (!pChild0) ? 0 : (!pChild1) ? 1 : 2;
+	AstNode * apChildren[3] = { pChild0, pChild1, pChild2 };
+	int cPChildren = (pChild2) ? 3 : (pChild1) ? 2 : (pChild0) ? 1 : 0;
 	return astNewErr(pParser, astkErr, line, apChildren, cPChildren);
 }
 
