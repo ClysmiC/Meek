@@ -29,9 +29,7 @@ struct ParseType
 		Token * pType;					// Name of unnmodified type. Valid if !isFuncType
 
         // HMM: Do I need this level of indirection or can I just ember the
-        //  ParseFuncType here (maybe anonymously?). That might make the union
-        //  a bit more confusing to understand but the ParseType allocator would
-        //  subsume the need for a ParseFuncType allocator!
+        //  ParseFuncType here?
 
 		ParseFuncType * pParseFuncType;	// Valid if isFuncType
 	};

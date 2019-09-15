@@ -28,6 +28,7 @@ enum ASTK : u8
 	ASTK_UnexpectedTokenkErr,
 	ASTK_ExpectedTokenkErr,
 	ASTK_InitUnnamedVarErr,
+		ASTK_IllegalInitErr,
 
 	ASTK_ErrMax,
 
@@ -122,8 +123,10 @@ struct AstExpectedTokenkErr
 	TOKENK tokenk;
 };
 
-struct AstInitUnnamedVarErr
+struct AstInitUnnamedVarErr {};
+struct AstIllegalInitErr
 {
+	Token * pVarIdent;
 };
 
 struct AstErr
@@ -138,6 +141,7 @@ struct AstErr
 		AstUnexpectedTokenkErr unexpectedTokenErr;
 		AstExpectedTokenkErr expectedTokenErr;
 		AstInitUnnamedVarErr unnamedVarErr;
+		AstIllegalInitErr illegalInitErr;
 	};
 
 	// Errors propogate up the AST, but still hang on to their child nodes so that
@@ -231,7 +235,10 @@ struct AstStructDefnStmt
 
 struct AstFuncDefnStmt
 {
-	Token * pIdent;
+	Token * pIdent
+	ParseFuncType * pFuncType;
+
+	DynamicArray<AstNode *> apStmts;
 };
 
 
@@ -281,7 +288,11 @@ struct AstNode
 
 				// STMT
 
+                AstExprStmt         exprStmt;
 				AstAssignStmt		assignExpr;
+                AstVarDeclStmt      varDeclStmt;
+                AstFuncDefnStmt     funcDefnStmt;
+                AstStructDefnStmt   structDefnStmt;
 
 				// PROGRAM
 

@@ -1,10 +1,94 @@
 struct MySecondStruct
 {
+
+	// Parses fine, but this is a semantic error since we are using type inference ('var')
+	//	but aren't initializing it with anything to help us infer!
+
 	var inferred;
+
 	int bar;
 	int foo = 15 + bar / (3 - 2);
 
 	[5+6]int elevenInts;
-	^[12]int paInts;
-	[12]^[3]^^^[12]int apInts = 5 + 3;		// This is a type error but parses just fine :)
+	^[12]int pointerToArrayOf12Ints;
+
+	// This is a type error since we are trying to initialize this with tha value '5+3'...
+	//	but it is still a valid parse
+
+	[12]^[3]^^^[12]int twelvePtrTo3PtrToPtrToPtrTo12Ints = 5 + 3;
+
+
+	// First class function tests
+
+	func(int)(float, [12]func(bool)(func()())) crazyMapperFunction;
+
+	^^[4]func(
+		[15]^func(
+			int,
+			func(
+				int
+			)
+			(
+				func(
+					float
+				)
+				(
+					int
+				)
+			)
+		)
+		(
+			[2][4]func(
+				float
+			)
+			(
+				^^int
+			)
+		)
+	)
+	(
+		int
+	) javaScriptEngine;
+
+	^func(int named)(float alsoNamed) ptrToFuncFromIntToFloat;
+}
+
+// Func definitions
+
+// func printInteger(int value = 0)()
+// {
+// 	// Do something...
+// }
+
+
+
+
+
+
+
+
+
+
+
+
+
+func printInBinary(int i)()
+{
+	// do stuff...
+}
+
+func printInDecimal(int i)()
+{
+	// do stuff...
+}
+
+func main()()
+{
+	func(int)() printer = printInBinary;
+
+	printer(15);	// Prints "1111"
+
+	printer = printInDecimal;
+
+	printer(15);	// Prints "15"
 }

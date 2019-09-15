@@ -59,6 +59,13 @@ enum EXPECTK
 	EXPECTK_Optional
 };
 
+enum FUNCHEADERK
+{
+	FUNCHEADERK_Defn,
+	FUNCHEADERK_VarType,
+	FUNCHEADERK_Literal
+};
+
 
 
 // Public
@@ -98,7 +105,7 @@ AstNode * parseStmt(Parser * pParser);
 AstNode * parseExprStmt(Parser * pParser);
 AstNode * parseStructDefnStmt(Parser * pParser);
 AstNode * parseFuncDefnStmt(Parser * pParser);
-AstNode * parseVarDeclStmt(Parser * pParser, EXPECTK expectkName=EXPECTK_Required, EXPECTK expectkSemicolon=EXPECTK_Required);
+AstNode * parseVarDeclStmt(Parser * pParser, EXPECTK expectkName=EXPECTK_Required, EXPECTK expectkInit=EXPECTK_Optional, EXPECTK expectkSemicolon=EXPECTK_Required);
 
 // EXPR
 
@@ -108,9 +115,9 @@ AstNode * parseBinop(Parser * pParser, const BinopInfo & op);
 AstNode * parseUnopPre(Parser * pParser);
 AstNode * parsePrimary(Parser * pParser);
 
-bool tryParseType(Parser * pParser, ParseType * pParseType);
-bool tryParseFuncHeader(Parser * pParser, EXPECTK expectkName, ParseFuncType ** ppoFuncType, AstNode ** ppoErrNode, Token * poDefnIdent=nullptr);
-bool tryParseFuncHeaderParamList(Parser * pParser, DynamicArray<AstNode *> * papParamVarDecls);
+// bool tryParseType(Parser * pParser, ParseType * pParseType); // TODO
+bool tryParseFuncHeader(Parser * pParser, FUNCHEADERK funcheaderk, ParseFuncType ** ppoFuncType, AstNode ** ppoErrNode, Token ** ppoDefnIdent=nullptr);
+bool tryParseFuncHeaderParamList(Parser * pParser, FUNCHEADERK funcheaderk, DynamicArray<AstNode *> * papParamVarDecls);
 AstNode * finishParsePrimary(Parser * pParser, AstNode * pLhsExpr);
 
 // NOTE: This moves the children into the AST
@@ -131,7 +138,7 @@ inline ParseType * newParseType(Parser * pParser)
 
 inline void releaseParseType(Parser * pParser, ParseType * pParseType)
 {
-	return release(&pParser->parseTypeAlloc, pParseType);
+	release(&pParser->parseTypeAlloc, pParseType);
 }
 
 inline ParseFuncType * newParseFuncType(Parser * pParser)
@@ -141,7 +148,12 @@ inline ParseFuncType * newParseFuncType(Parser * pParser)
 
 inline void releaseParseFuncType(Parser * pParser, ParseFuncType * pParseFuncType)
 {
-    return release(&pParser->parseFuncTypeAlloc, pParseFuncType);
+    release(&pParser->parseFuncTypeAlloc, pParseFuncType);
+}
+
+inline void releaseToken(Parser * pParser, Token * pToken)
+{
+	release(&pParser->tokenAlloc, pToken);
 }
 
 

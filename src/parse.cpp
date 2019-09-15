@@ -65,12 +65,12 @@ AstNode * parseProgram(Parser * pParser, bool * poSuccess)
 	//	that is a semantic error.
 
 	auto * pNode = AstNew(pParser, Program, 0);
-    init(&pNode->apNodes);
+	init(&pNode->apNodes);
 
 	parseStmts(pParser, &pNode->apNodes);
 
-    *poSuccess = pParser->hadError;
-    return Up(pNode);
+	*poSuccess = pParser->hadError;
+	return Up(pNode);
 }
 
 void parseStmts(Parser * pParser, DynamicArray<AstNode *> * poAPNodes)
@@ -164,72 +164,72 @@ AstNode * parseExprStmt(Parser * pParser)
 
 	if (!tryConsumeToken(pParser->pScanner, TOKENK_Semicolon, ensurePendingToken(pParser)))
 	{
-        Token * pErrToken = ensurePendingToken(pParser);
-        peekToken(pParser->pScanner, pErrToken);
+		Token * pErrToken = ensurePendingToken(pParser);
+		peekToken(pParser->pScanner, pErrToken);
 
 		auto * pErrNode = AstNewErr1Child(pParser, ExpectedTokenkErr, pErrToken->line, pExpr);
 		pErrNode->tokenk = TOKENK_Semicolon;
 	}
 
-    auto * pNode = AstNew(pParser, ExprStmt, pExpr->startLine);
-    pNode->pExpr = pExpr;
+	auto * pNode = AstNew(pParser, ExprStmt, pExpr->startLine);
+	pNode->pExpr = pExpr;
 	return Up(pNode);
 }
 
 AstNode * parseStructDefnStmt(Parser * pParser)
 {
-    if (!tryConsumeToken(pParser->pScanner, TOKENK_Struct))
+	if (!tryConsumeToken(pParser->pScanner, TOKENK_Struct))
 	{
-        // TODO: Add a peekTokenLine(..) function because I am doing this a lot just to get
-        //  line # for error tokens
+		// TODO: Add a peekTokenLine(..) function because I am doing this a lot just to get
+		//	line # for error tokens
 
-        Token errToken;
-        peekToken(pParser->pScanner, &errToken);
+		Token errToken;
+		peekToken(pParser->pScanner, &errToken);
 
-        auto * pErr = AstNewErr0Child(pParser, ExpectedTokenkErr, errToken.line);
-        pErr->tokenk = TOKENK_Struct;
-        return Up(pErr);
+		auto * pErr = AstNewErr0Child(pParser, ExpectedTokenkErr, errToken.line);
+		pErr->tokenk = TOKENK_Struct;
+		return Up(pErr);
 	}
 
 	if (!tryConsumeToken(pParser->pScanner, TOKENK_Identifier, ensurePendingToken(pParser)))
 	{
-        Token errToken;
-        peekToken(pParser->pScanner, &errToken);
+		Token errToken;
+		peekToken(pParser->pScanner, &errToken);
 
-        auto * pErr = AstNewErr0Child(pParser, ExpectedTokenkErr, errToken.line);
-        pErr->tokenk = TOKENK_Identifier;
-        return Up(pErr);
+		auto * pErr = AstNewErr0Child(pParser, ExpectedTokenkErr, errToken.line);
+		pErr->tokenk = TOKENK_Identifier;
+		return Up(pErr);
 	}
 
-    Token * pIdent = claimPendingToken(pParser);
+	Token * pIdent = claimPendingToken(pParser);
 	Assert(pIdent->tokenk == TOKENK_Identifier);
 
-    if (!tryConsumeToken(pParser->pScanner, TOKENK_OpenBrace))
-    {
-        auto * pErr = AstNewErr0Child(pParser, ExpectedTokenkErr, pIdent->line);
-        pErr->tokenk = TOKENK_OpenBrace;
-        return Up(pErr);
-    }
+	if (!tryConsumeToken(pParser->pScanner, TOKENK_OpenBrace))
+	{
+		auto * pErr = AstNewErr0Child(pParser, ExpectedTokenkErr, pIdent->line);
+		pErr->tokenk = TOKENK_OpenBrace;
+		return Up(pErr);
+	}
 
 	DynamicArray<AstNode *> apVarDeclStmt;
 	init(&apVarDeclStmt);
 	Defer(Assert(apVarDeclStmt.pBuffer == nullptr));
 
-    while (!tryConsumeToken(pParser->pScanner, TOKENK_CloseBrace))
-    {
+	while (!tryConsumeToken(pParser->pScanner, TOKENK_CloseBrace))
+	{
 		// TODO: Do I need this? What does the error message look like without it and
 		//	would this be a better error message??
 
-        // if (peekToken(pParser->pScanner) == TOKENK_Eof)
-        // {
-        //     Token * pEof = ensureAndClaimPendingToken(pParser);
-        //     consumeToken(pParser->pScanner, pEof);
-        //     auto * pErr = AstNewErrListChildMove(pParser, UnexpectedTokenkErr, pEof->line, &apVarDeclStmt);
-        //     pErr->pErrToken = pEof;
-        //     return Up(pErr);
-        // }
+		// if (peekToken(pParser->pScanner) == TOKENK_Eof)
+		// {
+		//	   Token * pEof = ensureAndClaimPendingToken(pParser);
+		//	   consumeToken(pParser->pScanner, pEof);
+		//	   auto * pErr = AstNewErrListChildMove(pParser, UnexpectedTokenkErr, pEof->line, &apVarDeclStmt);
+		//	   pErr->pErrToken = pEof;
+		//	   return Up(pErr);
+		// }
 
-        // Parse member var decls
+		// Parse member var decls
 
 		AstNode * pVarDeclStmt = parseVarDeclStmt(pParser);
 		append(&apVarDeclStmt, pVarDeclStmt);
@@ -260,24 +260,94 @@ AstNode * parseStructDefnStmt(Parser * pParser)
 				return Up(pErr);
 			}
 		}
-    }
+	}
 
 finishStruct:
 	auto * pNode = AstNew(pParser, StructDefnStmt, pIdent->line);
 	pNode->pIdent = pIdent;
 	initMove(&pNode->apVarDeclStmt, &apVarDeclStmt);
 
-    return Up(pNode);
+	return Up(pNode);
 }
 
 AstNode * parseFuncDefnStmt(Parser * pParser)
 {
-    // TODO
+	int startingLine = peekTokenLine(pParser->pScanner);
 
-    return nullptr;
+	// TODO: This solution still isn't *that* great since if we error we don't attach any of the func header
+	//	to the AST which will lead to a bunch more errors since the variables that we would expect to
+	//	find in the header will not be anywhere in the AST!
+
+	bool addedIntermediatesToAst = false;
+
+	ParseFuncType * pPft = nullptr;
+	Token * pIdent = nullptr;
+	Defer(
+		if (!addedIntermediatesToAst)
+		{
+			if (pPft) releaseParseFuncType(pParser, pPft);
+			if (pIdent) releaseToken(pParser, pIdent);
+		}
+	);
+
+	// Parse header
+
+	AstNode * pErrFuncHeader = nullptr;
+
+	if (!tryParseFuncHeader(pParser, FUNCHEADERK_Defn, &pPft, &pErrFuncHeader, &pIdent))
+	{
+		Assert(pErrFuncHeader);
+		Assert(!pPft);
+
+		return pErrFuncHeader;
+	}
+
+	Assert(pIdent);
+	Assert(pPft);
+	Assert (!pErrFuncHeader);
+
+	// Parse {
+
+	if (!tryConsumeToken(pParser->pScanner, TOKENK_OpenBrace))
+	{
+		int line = peekTokenLine(pParser->pScanner);
+		auto * pErr = AstNewErr0Child(pParser, ExpectedTokenkErr, line);
+		pErr->tokenk = TOKENK_OpenBrace;
+		return Up(pErr);
+	}
+
+	// Parse statements until }
+
+	DynamicArray<AstNode *> apStmts;
+	init(&apStmts);
+	Defer(Assert(!apStmts.pBuffer));		// buffer should get "moved" into AST
+
+	while (!tryConsumeToken(pParser->pScanner, TOKENK_CloseBrace))
+	{
+		AstNode * pStmt = parseStmt(pParser);
+		append(&apStmts, pStmt);
+
+		if (isErrorNode(pStmt))
+		{
+			auto * pErr = AstNewErrListChildMove(pParser, BubbleErr, peekTokenLine(pParser->pScanner), &apStmts);
+			return Up(pErr);
+		}
+
+		Assert(category(*pStmt) == ASTCATK_Stmt);
+	}
+
+	// Success!
+
+	addedIntermediatesToAst = true;
+
+	auto * pNode = AstNew(pParser, FuncDefnStmt, startingLine);
+	pNode->pIdent = pIdent;
+	pNode->pFuncType = pPft;
+	initMove(&pNode->apStmts, &apStmts);
+	return Up(pNode);
 }
 
-AstNode * parseVarDeclStmt(Parser * pParser, EXPECTK expectkName, EXPECTK expectkSemicolon)
+AstNode * parseVarDeclStmt(Parser * pParser, EXPECTK expectkName, EXPECTK expectkInit, EXPECTK expectkSemicolon)
 {
 	AssertInfo(expectkName != EXPECTK_Forbidden, "Function does not (currently) support being called with expectkName forbidden");
 	AssertInfo(expectkSemicolon != EXPECTK_Optional, "Semicolon should either be required or forbidden");
@@ -304,20 +374,20 @@ AstNode * parseVarDeclStmt(Parser * pParser, EXPECTK expectkName, EXPECTK expect
 		}
 	);
 
-    // Remember line # of the first token
+	// Remember line # of the first token
 
-    int line;
-    {
-        Token tokenNext;
-        peekToken(pParser->pScanner, &tokenNext);
-        line = tokenNext.line;
-    }
+	int line;
+	{
+		Token tokenNext;
+		peekToken(pParser->pScanner, &tokenNext);
+		line = tokenNext.line;
+	}
 
 	// BEGIN PARSE TYPE.... move this to separate function!
 
 
-	while (!tryConsumeToken(pParser->pScanner, TOKENK_Identifier, ensurePendingToken(pParser)) &&
-		   !tryConsumeToken(pParser->pScanner, TOKENK_Func, ensurePendingToken(pParser)))
+	while (peekToken(pParser->pScanner, ensurePendingToken(pParser)) != TOKENK_Identifier &&
+            peekToken(pParser->pScanner, ensurePendingToken(pParser)) != TOKENK_Func)
 	{
 		if (tryConsumeToken(pParser->pScanner, TOKENK_OpenBracket, ensurePendingToken(pParser)))
 		{
@@ -361,7 +431,8 @@ AstNode * parseVarDeclStmt(Parser * pParser, EXPECTK expectkName, EXPECTK expect
 		}
 	}
 
-	Token * pTypeIdentOrFunc = claimPendingToken(pParser);
+    Token * pTypeIdent = nullptr;       // Only for non-func type
+
 	ParseFuncType * pPft = nullptr;
 	bool addedPftToAst = false;
 	Defer(
@@ -372,26 +443,36 @@ AstNode * parseVarDeclStmt(Parser * pParser, EXPECTK expectkName, EXPECTK expect
 	);
 
 	bool isFuncType = false;
-	if (pTypeIdentOrFunc->tokenk == TOKENK_Identifier)
+	if (pParser->pPendingToken->tokenk == TOKENK_Identifier)
 	{
+        // We want to claim and consume the token if it is an identifier,
+        //  but if it is a function we only want to have peeked it, since
+        //  tryParseFuncHeader will be expecting "func" as its first token
+
 		isFuncType = false;
+        pTypeIdent = claimPendingToken(pParser);
+        consumeToken(pParser->pScanner, pTypeIdent);
 	}
-	else if (pTypeIdentOrFunc->tokenk == TOKENK_Func)
+	else if (pParser->pPendingToken->tokenk == TOKENK_Func)
 	{
 		isFuncType = true;
+        int lineOfFunc = pParser->pPendingToken->line;
+
 		AstNode * pErrFuncHeader = nullptr;
 
-		const static EXPECTK s_expectkName = EXPECTK_Forbidden;
-		if (!tryParseFuncHeader(pParser, s_expectkName, &pPft, &pErrFuncHeader))
+		if (!tryParseFuncHeader(pParser, FUNCHEADERK_VarType, &pPft, &pErrFuncHeader))
 		{
 			Assert(pErrFuncHeader);
+            Assert(!pPft);
+
 			append(&apNodeChildren, pErrFuncHeader);
 
-			auto * pErr = AstNewErrListChildMove(pParser, BubbleErr, pTypeIdentOrFunc->line, &apNodeChildren);
+			auto * pErr = AstNewErrListChildMove(pParser, BubbleErr, lineOfFunc, &apNodeChildren);
 			return Up(pErr);
 		}
 
 		Assert(pPft);	// Got a function header, nice!
+        Assert(!pErrFuncHeader);
 	}
 	else
 	{
@@ -405,42 +486,39 @@ AstNode * parseVarDeclStmt(Parser * pParser, EXPECTK expectkName, EXPECTK expect
 
 	Token * pVarIdent = nullptr;
 
+	if (expectkName == EXPECTK_Optional || expectkName == EXPECTK_Required)
 	{
-		if (expectkName == EXPECTK_Optional || expectkName == EXPECTK_Required)
+		if (tryConsumeToken(pParser->pScanner, TOKENK_Identifier, ensurePendingToken(pParser)))
 		{
-			if (tryConsumeToken(pParser->pScanner, TOKENK_Identifier, ensurePendingToken(pParser)))
-			{
-				pVarIdent = claimPendingToken(pParser);
-				Assert(pVarIdent->tokenk == TOKENK_Identifier);
-			}
-			else if (expectkName == EXPECTK_Required)
-			{
-				auto * pErr = AstNewErrListChildMove(pParser, ExpectedTokenkErr, pTypeIdentOrFunc->line, &apNodeChildren);
-				pErr->tokenk = TOKENK_Identifier;
-				return Up(pErr);
-			}
+			pVarIdent = claimPendingToken(pParser);
+			Assert(pVarIdent->tokenk == TOKENK_Identifier);
 		}
-		else
+		else if (expectkName == EXPECTK_Required)
 		{
-			Assert(false);
+            int line = peekTokenLine(pParser->pScanner);
+			auto * pErr = AstNewErrListChildMove(pParser, ExpectedTokenkErr, line, &apNodeChildren);
+			pErr->tokenk = TOKENK_Identifier;
+			return Up(pErr);
 		}
+	}
+	else
+	{
+		Assert(false);
 	}
 
 	// Parse init expr
 
 	AstNode * pInitExpr = nullptr;
 
+	if (tryConsumeToken(pParser->pScanner, TOKENK_Equal))
 	{
-		if (tryConsumeToken(pParser->pScanner, TOKENK_Equal))
-		{
-			pInitExpr = parseExpr(pParser);
-			append(&apNodeChildren, pInitExpr);
+		pInitExpr = parseExpr(pParser);
+		append(&apNodeChildren, pInitExpr);
 
-			if (isErrorNode(*pInitExpr))
-			{
-				auto * pErr = AstNewErrListChildMove(pParser, BubbleErr, pInitExpr->startLine, &apNodeChildren);
-				return Up(pErr);
-			}
+		if (isErrorNode(*pInitExpr))
+		{
+			auto * pErr = AstNewErrListChildMove(pParser, BubbleErr, pInitExpr->startLine, &apNodeChildren);
+			return Up(pErr);
 		}
 	}
 
@@ -448,9 +526,20 @@ AstNode * parseVarDeclStmt(Parser * pParser, EXPECTK expectkName, EXPECTK expect
 
 	if (!pVarIdent && pInitExpr)
 	{
-	    auto * pErr = AstNewErrListChildMove(pParser, InitUnnamedVarErr, pInitExpr->startLine, &apNodeChildren);
+		auto * pErr = AstNewErrListChildMove(pParser, InitUnnamedVarErr, pInitExpr->startLine, &apNodeChildren);
 		return Up(pErr);
 	}
+
+    // Providing init expr is an error in some contexts!
+
+    if (pInitExpr && expectkInit == EXPECTK_Forbidden)
+    {
+		Assert(pVarIdent);
+
+        auto * pErr = AstNewErrListChildMove(pParser, IllegalInitErr, pInitExpr->startLine, &apNodeChildren);
+		pErr->pVarIdent = pVarIdent;
+        return Up(pErr);
+    }
 
 	// Parse semicolon
 
@@ -473,16 +562,15 @@ AstNode * parseVarDeclStmt(Parser * pParser, EXPECTK expectkName, EXPECTK expect
 
 	if (isFuncType)
 	{
-		Assert(pTypeIdentOrFunc->tokenk == TOKENK_Func);
 		pParseType->isFuncType = true;
 		pParseType->pParseFuncType = pPft;
 		addedPftToAst = true;
 	}
 	else
 	{
-		Assert(pTypeIdentOrFunc->tokenk == TOKENK_Identifier);
+		Assert(pTypeIdent->tokenk == TOKENK_Identifier);
 		pParseType->isFuncType = false;
-		pParseType->pType = pTypeIdentOrFunc;
+		pParseType->pType = pTypeIdent;
 	}
 
 	initMove(&pParseType->aTypemods, &aModifiers);
@@ -664,16 +752,17 @@ AstNode * parsePrimary(Parser * pParser)
 	}
 }
 
-bool tryParseFuncHeader(Parser * pParser, EXPECTK expectkName, ParseFuncType ** ppoFuncType, AstNode ** ppoErrNode, Token * pDefnIdent)
+bool tryParseFuncHeader(
+	Parser * pParser,
+	FUNCHEADERK funcheaderk,
+	ParseFuncType ** ppoFuncType,
+	AstNode ** ppoErrNode,
+	Token ** ppoDefnIdent)
 {
-	AssertInfo(expectkName == EXPECTK_Required || expectkName == EXPECTK_Forbidden,
-		"Name is required in function definition context, and forbidden anywhere else");
+	EXPECTK expectkName = (funcheaderk == FUNCHEADERK_Defn) ? EXPECTK_Required : EXPECTK_Forbidden;
 
-	AssertInfo(Implies(expectkName == EXPECTK_Required, pDefnIdent),
-		"When called with required name, you must pass a token pointer!");
-
-	AssertInfo(Implies(expectkName == EXPECTK_Forbidden, !pDefnIdent),
-			   "When called with forbidden name, you must not pass a token pointer!");
+	AssertInfo(Implies(expectkName == EXPECTK_Forbidden, !pDefnIdent), "Don't provide an ident pointer in a context where a name is illegal!");
+	Assert(Implies(expectkName != EXPECTK_Forbidden, pDefnIdent), "Should provide an ident pointer in a context where a name is legal!");
 
 	// NOTE: If function succeeds, we assign ppoFuncType to the resulting func type that we create
 	//	If it fails, we assign ppoErrorNode to the resulting error node that we generate
@@ -687,10 +776,10 @@ bool tryParseFuncHeader(Parser * pParser, EXPECTK expectkName, ParseFuncType ** 
 	{
 		int line = peekTokenLine(pParser->pScanner);
 
-        auto * pErr = AstNewErr0Child(pParser, ExpectedTokenkErr, line);
-        pErr->tokenk = TOKENK_Func;
+		auto * pErr = AstNewErr0Child(pParser, ExpectedTokenkErr, line);
+		pErr->tokenk = TOKENK_Func;
 		*ppoErrNode = Up(pErr);
-        return false;
+		return false;
 	}
 
 	// Parse definition name
@@ -707,10 +796,12 @@ bool tryParseFuncHeader(Parser * pParser, EXPECTK expectkName, ParseFuncType ** 
 			return false;
 		}
 
-		pDefnIdent = claimPendingToken(pParser);
+		*pDefnIdent = claimPendingToken(pParser);
 	}
-	else if (expectkName == EXPECTK_Forbidden)
+	else
 	{
+		Assert(expectkName == EXPECTK_Forbidden);
+
 		if (tryConsumeToken(pParser->pScanner, TOKENK_Identifier, ensurePendingToken(pParser)))
 		{
 			// TODO: Maybe this should be a more specific/informative error, since we basically
@@ -725,10 +816,6 @@ bool tryParseFuncHeader(Parser * pParser, EXPECTK expectkName, ParseFuncType ** 
 			return false;
 		}
 	}
-	else
-	{
-		Assert(false);
-	}
 
 	// Parse "in" parameters
 
@@ -736,7 +823,7 @@ bool tryParseFuncHeader(Parser * pParser, EXPECTK expectkName, ParseFuncType ** 
 	init(&apInParamVarDecls);
 	Defer(Assert(!apInParamVarDecls.pBuffer));		// buffer should get "moved" into AST
 
-	if (!tryParseFuncHeaderParamList(pParser, &apInParamVarDecls))
+	if (!tryParseFuncHeaderParamList(pParser, funcheaderk, &apInParamVarDecls))
 	{
 		Assert(containsErrorNode(apInParamVarDecls));
 
@@ -760,7 +847,7 @@ bool tryParseFuncHeader(Parser * pParser, EXPECTK expectkName, ParseFuncType ** 
 	init(&apOutParamVarDecls);
 	Defer(Assert(!apOutParamVarDecls.pBuffer));		// buffer should get "moved" into AST
 
-	if (!tryParseFuncHeaderParamList(pParser, &apOutParamVarDecls))
+	if (!tryParseFuncHeaderParamList(pParser, funcheaderk, &apOutParamVarDecls))
 	{
 		Assert(containsErrorNode(apOutParamVarDecls));
 
@@ -783,11 +870,11 @@ bool tryParseFuncHeader(Parser * pParser, EXPECTK expectkName, ParseFuncType ** 
 	ParseFuncType * pft = newParseFuncType(pParser);
 	initMove(&pft->apParamVarDecls, &apInParamVarDecls);
 	initMove(&pft->apReturnVarDecls, &apOutParamVarDecls);
-
+    *ppoFuncType = pft;
 	return true;
 }
 
-bool tryParseFuncHeaderParamList(Parser * pParser, DynamicArray<AstNode *> * papParamVarDecls)
+bool tryParseFuncHeaderParamList(Parser * pParser, FUNCHEADERK funcheaderk, DynamicArray<AstNode *> * papParamVarDecls)
 {
 	if (!tryConsumeToken(pParser->pScanner, TOKENK_OpenParen))
 	{
@@ -813,16 +900,20 @@ bool tryParseFuncHeaderParamList(Parser * pParser, DynamicArray<AstNode *> * pap
 			return false;
 		}
 
-		const static EXPECTK s_expectkName = EXPECTK_Optional;
+		const static EXPECTK s_expectkVarName = EXPECTK_Optional;
 		const static EXPECTK s_expectkSemicolon = EXPECTK_Forbidden;
 
-		AstNode * pNode = parseVarDeclStmt(pParser, s_expectkName, s_expectkSemicolon);
+		EXPECTK expectkVarInit = (funcheaderk == FUNCHEADERK_VarType) ? EXPECTK_Forbidden : EXPECTK_Optional;
+
+		AstNode * pNode = parseVarDeclStmt(pParser, s_expectkVarName, expectkVarInit, s_expectkSemicolon);
 		append(papParamVarDecls, pNode);
 
 		if (isErrorNode(*pNode))
 		{
 			return false;
 		}
+
+        isFirstParam = false;
 	}
 
 	return true;
@@ -891,7 +982,7 @@ AstNode * finishParsePrimary(Parser * pParser, AstNode * pExpr)
 		else if (!tryConsumeToken(pParser->pScanner, TOKENK_CloseBracket, ensurePendingToken(pParser)))
 		{
 			Token * pErrToken = ensurePendingToken(pParser);
-            peekToken(pParser->pScanner, pErrToken);
+			peekToken(pParser->pScanner, pErrToken);
 
 			auto * pErrNode = AstNewErr2Child(pParser, ExpectedTokenkErr, pErrToken->line, pExpr, pSubscriptExpr);
 			pErrNode->tokenk = TOKENK_CloseBracket;
@@ -925,7 +1016,7 @@ AstNode * finishParsePrimary(Parser * pParser, AstNode * pExpr)
 		{
 			if (!isFirstArg && !tryConsumeToken(pParser->pScanner, TOKENK_Comma))
 			{
-                int line = peekTokenLine(pParser->pScanner);
+				int line = peekTokenLine(pParser->pScanner);
 
 				// NOTE: Panic recovery needs reworking! See comment @ tryRecoverFromPanic
 
@@ -1010,7 +1101,7 @@ AstNode * finishParsePrimary(Parser * pParser, AstNode * pExpr)
 
 AstNode * handleScanOrUnexpectedTokenkErr(Parser * pParser, DynamicArray<AstNode *> * papChildren)
 {
-	Token * pErrToken =  ensureAndClaimPendingToken(pParser);
+	Token * pErrToken =	 ensureAndClaimPendingToken(pParser);
 	consumeToken(pParser->pScanner, pErrToken);
 
 	if (pErrToken->tokenk == TOKENK_Error)
@@ -1142,18 +1233,18 @@ AstNode * astNewErrMoveChildren(Parser * pParser, ASTK astkErr, int line, Dynami
 
 // struct NestedStructWithError
 // {
-// 	int bar;
-// 	int foo;
+//	int bar;
+//	int foo;
 
-// 	%bar
+//	%bar
 
-// 	struct Nested
-// 	 {
-// 		 int j;
-// 		 int k;
-// 	}
+//	struct Nested
+//	 {
+//		 int j;
+//		 int k;
+//	}
 
-// 	int z;
+//	int z;
 // }
 
 bool tryRecoverFromPanic(Parser * pParser, TOKENK tokenkRecover)
@@ -1165,7 +1256,7 @@ bool tryRecoverFromPanic(Parser * pParser, const TOKENK * aTokenkRecover, int cT
 {
 	pParser->hadError = true;
 
-    if (poTokenkMatch) *poTokenkMatch = TOKENK_Nil;
+	if (poTokenkMatch) *poTokenkMatch = TOKENK_Nil;
 
 	// Scan up to (but not past) the next semicolon, or until we consume a tokenk that
 	//	we can recover from. Note that if that tokenk is a semicolon then we *do*
@@ -1182,7 +1273,7 @@ bool tryRecoverFromPanic(Parser * pParser, const TOKENK * aTokenkRecover, int cT
 		{
 			if (tryConsumeToken(pParser->pScanner, aTokenkRecover[i], &token))
 			{
-                if (poTokenkMatch) *poTokenkMatch = aTokenkRecover[i];
+				if (poTokenkMatch) *poTokenkMatch = aTokenkRecover[i];
 
 				return true;
 			}
@@ -1303,11 +1394,11 @@ void debugPrintSubAst(const AstNode & node, int level, bool skipAfterArrow, Dyna
 				pMapLevelSkip
 			);
 
-            if (!isLastChild)
-            {
-                printf("\n");
-                printTabs(level, false, false, pMapLevelSkip);
-            }
+			if (!isLastChild)
+			{
+				printf("\n");
+				printTabs(level, false, false, pMapLevelSkip);
+			}
 		}
 	};
 
@@ -1316,14 +1407,73 @@ void debugPrintSubAst(const AstNode & node, int level, bool skipAfterArrow, Dyna
 		printChildren(node.apChildren, level, "child", true, pMapLevelSkip);
 	};
 
-	auto debugPrintParseType = [printTabs](const ParseType & parseType, int level, bool skipAfterArrow, DynamicArray<bool> * pMapLevelSkip)
+	auto debugPrintParseFuncType = [printTabs, setSkip](const ParseFuncType & parseFuncType, int level, bool skipAfterArrow, DynamicArray<bool> * pMapLevelSkip)
 	{
+		if (parseFuncType.apParamVarDecls.cItem == 0)
+		{
+			printf("\n");
+			printTabs(level, true, false, pMapLevelSkip);
+			printf("(no params)");
+		}
+		else
+		{
+			for (uint i = 0; i < parseFuncType.apParamVarDecls.cItem; i++)
+			{
+				printf("\n");
+				printTabs(level, false, false, pMapLevelSkip);
+				printf("(param %d)", i);
+
+				debugPrintSubAst(
+					*parseFuncType.apParamVarDecls[i],
+					level,
+					false,
+					pMapLevelSkip
+				);
+
+                printf("\n");
+                printTabs(level, false, false, pMapLevelSkip);
+			}
+		}
+
+		if (parseFuncType.apReturnVarDecls.cItem == 0)
+		{
+			printf("\n");
+			printTabs(level, true, true, pMapLevelSkip);
+			printf("(no return vals)");
+		}
+		else
+		{
+			for (uint i = 0; i < parseFuncType.apReturnVarDecls.cItem; i++)
+			{
+				bool isLastItem = (i == parseFuncType.apReturnVarDecls.cItem - 1);
+
+				printf("\n");
+				printTabs(level, false, false, pMapLevelSkip);
+				printf("(return val %d)", i);
+
+				debugPrintSubAst(
+					*parseFuncType.apReturnVarDecls[i],
+					level,
+					isLastItem,
+					pMapLevelSkip
+				);
+
+                printf("\n");
+                printTabs(level, false, false, pMapLevelSkip);
+			}
+		}
+	};
+
+	auto debugPrintParseType = [printTabs, debugPrintParseFuncType, setSkip](const ParseType & parseType, int level, bool skipAfterArrow, DynamicArray<bool> * pMapLevelSkip)
+	{
+        setSkip(pMapLevelSkip, level, false);
+
 		int levelNext = level + 1;
 
 		for (uint i = 0; i < parseType.aTypemods.cItem; i++)
 		{
 			printf("\n");
-			printTabs(level, false, skipAfterArrow, pMapLevelSkip);
+			printTabs(level, false, false, pMapLevelSkip);
 
 			ParseTypeModifier ptm = parseType.aTypemods[i];
 
@@ -1340,10 +1490,24 @@ void debugPrintSubAst(const AstNode & node, int level, bool skipAfterArrow, Dyna
 
 		}
 
-		printf("\n");
-		printTabs(level, true, skipAfterArrow, pMapLevelSkip);
-		printf("%s", parseType.pType->lexeme);
-    };
+		if (parseType.isFuncType)
+		{
+            printf("\n");
+            printTabs(level, false, false, pMapLevelSkip);
+            printf("(func)");
+
+            printf("\n");
+            printTabs(level, false, false, pMapLevelSkip);
+
+			debugPrintParseFuncType(*parseType.pParseFuncType, level, skipAfterArrow, pMapLevelSkip);
+		}
+		else
+		{
+			printf("\n");
+			printTabs(level, true, skipAfterArrow, pMapLevelSkip);
+			printf("%s", parseType.pType->lexeme);
+		}
+	};
 
 	static const char * scanErrorString = "[scan error]:";
 	static const char * parseErrorString = "[parse error]:";
@@ -1366,6 +1530,7 @@ void debugPrintSubAst(const AstNode & node, int level, bool skipAfterArrow, Dyna
 		case ASTK_ScanErr:
 		{
 			auto * pErr = DownConst(&node, ScanErr);
+			auto * pErrCasted = UpErrConst(pErr);
 
 			DynamicArray<StringBox<256>> errMsgs;
 			init(&errMsgs);
@@ -1390,64 +1555,102 @@ void debugPrintSubAst(const AstNode & node, int level, bool skipAfterArrow, Dyna
 				}
 			}
 
-			printErrChildren(*DownErrConst(&node), levelNext, pMapLevelSkip);
+			printErrChildren(*pErrCasted, levelNext, pMapLevelSkip);
 		} break;
 
 		case ASTK_BubbleErr:
 		{
 			auto * pErr = DownConst(&node, BubbleErr);
-            auto * pErrCasted = UpErrConst(pErr);
+			auto * pErrCasted = UpErrConst(pErr);
 
 			printf("%s (bubble)", parseErrorString);
 
-            if (pErrCasted->apChildren.cItem > 0)
-            {
-                // Sloppy... printChildren should probably handle the new line spacing so that if you pass
-                //  it an empty array of children it will still just work.
+			if (pErrCasted->apChildren.cItem > 0)
+			{
+				// Sloppy... printChildren should probably handle the new line spacing so that if you pass
+				//	it an empty array of children it will still just work.
 
-                printf("\n");
+				printf("\n");
 
-                printTabs(levelNext, false, false, pMapLevelSkip);
-			    printErrChildren(*UpErrConst(pErr), levelNext, pMapLevelSkip);
-            }
+				printTabs(levelNext, false, false, pMapLevelSkip);
+				printErrChildren(*pErrCasted, levelNext, pMapLevelSkip);
+			}
 		} break;
 
 		case ASTK_UnexpectedTokenkErr:
 		{
 			auto * pErr = DownConst(&node, UnexpectedTokenkErr);
-            auto * pErrCasted = UpErrConst(pErr);
+			auto * pErrCasted = UpErrConst(pErr);
 
 			printf("%s unexpected %s", parseErrorString, g_mpTokenkDisplay[pErr->pErrToken->tokenk]);
 
-            if (pErrCasted->apChildren.cItem > 0)
-            {
-                // Sloppy... printChildren should probably handle the new line spacing so that if you pass
-                //  it an empty array of children it will still just work.
+			if (pErrCasted->apChildren.cItem > 0)
+			{
+				// Sloppy... printChildren should probably handle the new line spacing so that if you pass
+				//	it an empty array of children it will still just work.
 
-                printf("\n");
+				printf("\n");
 
-                printTabs(levelNext, false, false, pMapLevelSkip);
-                printErrChildren(*UpErrConst(pErr), levelNext, pMapLevelSkip);
-            }
+				printTabs(levelNext, false, false, pMapLevelSkip);
+				printErrChildren(*pErrCasted, levelNext, pMapLevelSkip);
+			}
 		} break;
 
 		case ASTK_ExpectedTokenkErr:
 		{
 			auto * pErr = DownConst(&node, ExpectedTokenkErr);
-            auto * pErrCasted = UpErrConst(pErr);
+			auto * pErrCasted = UpErrConst(pErr);
 
 			printf("%s expected %s", parseErrorString, g_mpTokenkDisplay[pErr->tokenk]);
 
-            if (pErrCasted->apChildren.cItem > 0)
-            {
-                // Sloppy... printChildren should probably handle the new line spacing so that if you pass
-                //  it an empty array of children it will still just work.
+			if (pErrCasted->apChildren.cItem > 0)
+			{
+				// Sloppy... printChildren should probably handle the new line spacing so that if you pass
+				//	it an empty array of children it will still just work.
 
-                printf("\n");
+				printf("\n");
 
-                printTabs(levelNext, false, false, pMapLevelSkip);
-                printErrChildren(*UpErrConst(pErr), levelNext, pMapLevelSkip);
-            }
+				printTabs(levelNext, false, false, pMapLevelSkip);
+				printErrChildren(*pErrCasted, levelNext, pMapLevelSkip);
+			}
+		} break;
+
+		case ASTK_InitUnnamedVarErr:
+		{
+			auto * pErr = DownConst(&node, InitUnnamedVarErr);
+			auto * pErrCasted = UpErrConst(pErr);
+
+			printf("%s attempt to assign initial value to unnamed variable", parseErrorString);
+
+			if (pErrCasted->apChildren.cItem > 0)
+			{
+				// Sloppy... printChildren should probably handle the new line spacing so that if you pass
+				//	it an empty array of children it will still just work.
+
+				printf("\n");
+
+				printTabs(levelNext, false, false, pMapLevelSkip);
+				printErrChildren(*pErrCasted, levelNext, pMapLevelSkip);
+			}
+		} break;
+
+		case ASTK_IllegalInitErr:
+		{
+			auto * pErr = DownConst(&node, IllegalInitErr);
+			auto * pErrCasted = UpErrConst(pErr);
+
+			printf("%s variable '%s' is not allowed to be assigned an initial value", parseErrorString, pErr->pVarIdent->lexeme);
+
+			if (pErrCasted->apChildren.cItem > 0)
+			{
+				// Sloppy... printChildren should probably handle the new line spacing so that if you pass
+				//	it an empty array of children it will still just work.
+
+				printf("\n");
+
+				printTabs(levelNext, false, false, pMapLevelSkip);
+				printErrChildren(*pErrCasted, levelNext, pMapLevelSkip);
+			}
 		} break;
 
 
@@ -1459,9 +1662,9 @@ void debugPrintSubAst(const AstNode & node, int level, bool skipAfterArrow, Dyna
 			auto * pExpr = DownConst(&node, BinopExpr);
 
 			printf("%s ", pExpr->pOp->lexeme);
-            printf("\n");
+			printf("\n");
 
-            printTabs(levelNext, false, false, pMapLevelSkip);
+			printTabs(levelNext, false, false, pMapLevelSkip);
 			debugPrintSubAst(*pExpr->pLhsExpr, levelNext, false, pMapLevelSkip);
 			printf("\n");
 
@@ -1474,9 +1677,9 @@ void debugPrintSubAst(const AstNode & node, int level, bool skipAfterArrow, Dyna
 			auto * pExpr = DownConst(&node, GroupExpr);
 
 			printf("()");
-            printf("\n");
+			printf("\n");
 
-            printTabs(levelNext, false, false, pMapLevelSkip);
+			printTabs(levelNext, false, false, pMapLevelSkip);
 			debugPrintSubAst(*pExpr->pExpr, levelNext, true, pMapLevelSkip);
 		} break;
 
@@ -1492,9 +1695,9 @@ void debugPrintSubAst(const AstNode & node, int level, bool skipAfterArrow, Dyna
 			auto * pExpr = DownConst(&node, UnopExpr);
 
 			printf("%s ", pExpr->pOp->lexeme);
-            printf("\n");
+			printf("\n");
 
-            printTabs(levelNext, false, false, pMapLevelSkip);
+			printTabs(levelNext, false, false, pMapLevelSkip);
 			debugPrintSubAst(*pExpr->pExpr, levelNext, true, pMapLevelSkip);
 		} break;
 
@@ -1508,9 +1711,9 @@ void debugPrintSubAst(const AstNode & node, int level, bool skipAfterArrow, Dyna
 				printf("\n");
 
 				printTabs(levelNext, false, false, pMapLevelSkip);
-                printf("\n");
+				printf("\n");
 
-                printTabs(levelNext, false, false, pMapLevelSkip);
+				printTabs(levelNext, false, false, pMapLevelSkip);
 				printf("(owner):");
 				debugPrintSubAst(*pExpr->pOwner, levelNext, true, pMapLevelSkip);
 			}
@@ -1527,9 +1730,9 @@ void debugPrintSubAst(const AstNode & node, int level, bool skipAfterArrow, Dyna
 			printf("\n");
 
 			printTabs(levelNext, false, false, pMapLevelSkip);
-            printf("\n");
+			printf("\n");
 
-            printTabs(levelNext, false, false, pMapLevelSkip);
+			printTabs(levelNext, false, false, pMapLevelSkip);
 			printf("(array):");
 			debugPrintSubAst(*pExpr->pArray, levelNext, false, pMapLevelSkip);
 
@@ -1546,9 +1749,9 @@ void debugPrintSubAst(const AstNode & node, int level, bool skipAfterArrow, Dyna
 			printf("\n");
 
 			printTabs(levelNext, false, false, pMapLevelSkip);
-            printf("\n");
+			printf("\n");
 
-            printTabs(levelNext, false, false, pMapLevelSkip);
+			printTabs(levelNext, false, false, pMapLevelSkip);
 			printf("(func):");
 
 			bool noArgs = pExpr->apArgs.cItem == 0;
@@ -1567,56 +1770,55 @@ void debugPrintSubAst(const AstNode & node, int level, bool skipAfterArrow, Dyna
 			auto * pStmt = DownConst(&node, ExprStmt);
 
 			printf("(expr stmt)");
-            printf("\n");
+			printf("\n");
 
-            printTabs(levelNext, false, false, pMapLevelSkip);
+			printTabs(levelNext, false, false, pMapLevelSkip);
 
 			debugPrintSubAst(*pStmt->pExpr, levelNext, true, pMapLevelSkip);
 		} break;
 
-        case ASTK_VarDeclStmt:
-        {
-            auto * pStmt = DownConst(&node, VarDeclStmt);
+		case ASTK_VarDeclStmt:
+		{
+			auto * pStmt = DownConst(&node, VarDeclStmt);
 
-            printf("(var decl)");
+			printf("(var decl)");
 			printf("\n");
-
-            printTabs(levelNext, false, false, pMapLevelSkip);
-            printf("\n");
 
 			printTabs(levelNext, false, false, pMapLevelSkip);
-			printf("(ident)");
 			printf("\n");
 
-			printTabs(levelNext, true, false, pMapLevelSkip);
-			printf("%s", pStmt->pIdent->lexeme);
-			printf("\n");
+			if (pStmt->pIdent)
+			{
+				printTabs(levelNext, false, false, pMapLevelSkip);
+				printf("(ident)");
+				printf("\n");
 
-            printTabs(levelNext, false, false, pMapLevelSkip);
-            printf("\n");
+				printTabs(levelNext, true, false, pMapLevelSkip);
+				printf("%s", pStmt->pIdent->lexeme);
+				printf("\n");
+
+				printTabs(levelNext, false, false, pMapLevelSkip);
+				printf("\n");
+			}
 
 			printTabs(levelNext, false, false, pMapLevelSkip);
 			printf("(type)");
 
-			debugPrintParseType(*pStmt->pType, levelNext, false, pMapLevelSkip);
+            bool hasInitExpr = (pStmt->pInitExpr != nullptr);
+
+			debugPrintParseType(*pStmt->pType, levelNext, !hasInitExpr, pMapLevelSkip);
 			printf("\n");
 			printTabs(levelNext, false, false, pMapLevelSkip);
 
-			printf("\n");
-			printTabs(levelNext, false, false, pMapLevelSkip);
-			printf("(init)");
 
-			if (pStmt->pInitExpr)
+			if (hasInitExpr)
 			{
+			    printf("\n");
+			    printTabs(levelNext, false, false, pMapLevelSkip);
+			    printf("(init)");
 				debugPrintSubAst(*pStmt->pInitExpr, levelNext, true, pMapLevelSkip);
 			}
-			else
-			{
-				printf("\n");
-				printTabs(levelNext, true, true, pMapLevelSkip);
-				printf("(default)");
-			}
-        } break;
+		} break;
 
 		case ASTK_StructDefnStmt:
 		{
@@ -1624,7 +1826,27 @@ void debugPrintSubAst(const AstNode & node, int level, bool skipAfterArrow, Dyna
 
 			printf("(struct decl)");
 
+            printf("\n");
+            printTabs(levelNext, false, false, pMapLevelSkip);
+
+            printf("\n");
+            printTabs(levelNext, false, false, pMapLevelSkip);
+            printf("(name)");
+
+            printf("\n");
+            printTabs(levelNext, true, false, pMapLevelSkip);
+            printf("%s", pStmt->pIdent->lexeme);
+
+            printf("\n");
+            printTabs(levelNext, false, false, pMapLevelSkip);
+
 			printChildren(pStmt->apVarDeclStmt, levelNext, "vardecl", true, pMapLevelSkip);
+		} break;
+
+		case ASTK_FunDefnStmt:
+		{
+			// TODO
+			AssertInfo(false, "Stop being lazy and implement this already!");
 		} break;
 
 
@@ -1636,9 +1858,9 @@ void debugPrintSubAst(const AstNode & node, int level, bool skipAfterArrow, Dyna
 			auto * pNode = DownConst(&node, Program);
 
 			printf("(program)");
-            printf("\n");
+			printf("\n");
 
-            printTabs(levelNext, false, false, pMapLevelSkip);
+			printTabs(levelNext, false, false, pMapLevelSkip);
 
 			printChildren(pNode->apNodes, levelNext, "stmt", true, pMapLevelSkip);
 		} break;

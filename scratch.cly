@@ -168,3 +168,5 @@ func(
 ->(
 	int
 )
+
+^func(int)->(float)
