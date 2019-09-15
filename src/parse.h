@@ -102,7 +102,7 @@ bool tryRecoverFromPanic(Parser * pParser, const TOKENK * aTokenkRecover, int cT
 // STMT
 
 AstNode * parseStmt(Parser * pParser);
-AstNode * parseExprStmt(Parser * pParser);
+AstNode * parseExprStmtOrAssignStmt(Parser * pParser);
 AstNode * parseStructDefnStmt(Parser * pParser);
 AstNode * parseFuncDefnStmt(Parser * pParser);
 AstNode * parseVarDeclStmt(Parser * pParser, EXPECTK expectkName=EXPECTK_Required, EXPECTK expectkInit=EXPECTK_Optional, EXPECTK expectkSemicolon=EXPECTK_Required);

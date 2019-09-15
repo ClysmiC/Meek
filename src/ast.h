@@ -24,12 +24,17 @@ enum ASTK : u8
 {
 	// ERR
 
+	// TODO: probably factor these into the kinds of errors that we attach extra information e.g. (unexpected tokenk or expected tokenk) to and
+	//	the kinds that we don't. For the kinds that we don't, we could probably just make them all the same error kind and have an enum that
+	//	that corresponds to which one it is?
+
 	ASTK_ScanErr,
 	ASTK_BubbleErr,
 	ASTK_UnexpectedTokenkErr,
 	ASTK_ExpectedTokenkErr,
 	ASTK_InitUnnamedVarErr,
-		ASTK_IllegalInitErr,
+	ASTK_IllegalInitErr,
+	ASTK_ChainedAssignErr,
 
 	ASTK_ErrMax,
 
@@ -125,10 +130,13 @@ struct AstExpectedTokenkErr
 };
 
 struct AstInitUnnamedVarErr {};
+
 struct AstIllegalInitErr
 {
 	Token * pVarIdent;
 };
+
+struct AstChainedAssignErr {};
 
 struct AstErr
 {
@@ -143,6 +151,7 @@ struct AstErr
 		AstExpectedTokenkErr expectedTokenErr;
 		AstInitUnnamedVarErr unnamedVarErr;
 		AstIllegalInitErr illegalInitErr;
+		AstChainedAssignErr chainedAssignErr;
 	};
 
 	// Errors propogate up the AST, but still hang on to their child nodes so that

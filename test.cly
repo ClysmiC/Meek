@@ -10,12 +10,11 @@ func printInDecimal(int i)()
 
 func main()()
 {
-	func(int)() binPrinter = printInBinary;
-	binPrinter(15);	// Prints "1111"
+	int foo;
+	foo = 12 + 15;
 
-	func(int)() decPrinter = printInBinary;
-	decPrinter(15);	// Prints "15"
-
+	int bar = foo = 6;
+	bar = foo = 6;
 }
 
 

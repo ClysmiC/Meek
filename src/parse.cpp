@@ -151,29 +151,81 @@ AstNode * parseStmt(Parser * pParser)
 	}
 
 
-	return parseExprStmt(pParser);
+	return parseExprStmtOrAssignStmt(pParser);
 }
 
-AstNode * parseExprStmt(Parser * pParser)
+AstNode * parseExprStmtOrAssignStmt(Parser * pParser)
 {
-	AstNode * pExpr = parseExpr(pParser);
-	if (isErrorNode(*pExpr))
+	// Parse lhs expression
+
+	AstNode * pLhsExpr = parseExpr(pParser);
+	if (isErrorNode(*pLhsExpr))
 	{
-		return pExpr;
+		return pLhsExpr;
 	}
 
-	if (!tryConsumeToken(pParser->pScanner, TOKENK_Semicolon, ensurePendingToken(pParser)))
-	{
-		Token * pErrToken = ensurePendingToken(pParser);
-		peekToken(pParser->pScanner, pErrToken);
+	// Check if it is an assignment
 
-		auto * pErrNode = AstNewErr1Child(pParser, ExpectedTokenkErr, pErrToken->line, pExpr);
-		pErrNode->tokenk = TOKENK_Semicolon;
+	bool isAssignment = false;
+    AstNode * pRhsExpr = nullptr;
+
+	if (tryConsumeToken(pParser->pScanner, TOKENK_Equal))
+	{
+		isAssignment = true;
+
+		// Parse rhs expression
+
+		pRhsExpr = parseExpr(pParser);
+		if (isErrorNode(*pRhsExpr))
+		{
+			auto * pErr = AstNewErr2Child(pParser, BubbleErr, pRhsExpr->startLine, pLhsExpr, pRhsExpr);
+			return Up(pErr);
+		}
+
+		if (tryConsumeToken(pParser->pScanner, TOKENK_Equal))
+		{
+			// NOTE: This check isn't necessary for correctness, but it gives a better error message for a common case.
+
+			auto * pErr = AstNewErr2Child(pParser, ChainedAssignErr, pRhsExpr->startLine, pLhsExpr, pRhsExpr);
+			return Up(pErr);
+		}
 	}
 
-	auto * pNode = AstNew(pParser, ExprStmt, pExpr->startLine);
-	pNode->pExpr = pExpr;
-	return Up(pNode);
+	// Parse semicolon
+
+	if (!tryConsumeToken(pParser->pScanner, TOKENK_Semicolon))
+	{
+		if (isAssignment)
+		{
+			auto * pErr = AstNewErr2Child(pParser, ExpectedTokenkErr, peekTokenLine(pParser->pScanner), pLhsExpr, pRhsExpr);
+			pErr->tokenk = TOKENK_Semicolon;
+			return Up(pErr);
+		}
+		else
+		{
+			auto * pErr = AstNewErr1Child(pParser, ExpectedTokenkErr, peekTokenLine(pParser->pScanner), pLhsExpr);
+			pErr->tokenk = TOKENK_Semicolon;
+			return Up(pErr);
+		}
+	}
+
+	// Success!
+
+	if (isAssignment)
+	{
+		auto * pNode = AstNew(pParser, AssignStmt, pLhsExpr->startLine);
+		pNode->pLhsExpr = pLhsExpr;
+		pNode->pRhsExpr = pRhsExpr;
+		return Up(pNode);
+	}
+	else
+	{
+		Assert(!pRhsExpr);
+
+		auto * pNode = AstNew(pParser, ExprStmt, pLhsExpr->startLine);
+		pNode->pExpr = pLhsExpr;
+		return Up(pNode);
+	}
 }
 
 AstNode * parseStructDefnStmt(Parser * pParser)
@@ -518,6 +570,14 @@ AstNode * parseVarDeclStmt(Parser * pParser, EXPECTK expectkName, EXPECTK expect
 		if (isErrorNode(*pInitExpr))
 		{
 			auto * pErr = AstNewErrListChildMove(pParser, BubbleErr, pInitExpr->startLine, &apNodeChildren);
+			return Up(pErr);
+		}
+
+		if (tryConsumeToken(pParser->pScanner, TOKENK_Equal))
+		{
+			// NOTE: This check isn't necessary for correctness, but it gives a better error message for a common case.
+
+			auto * pErr = AstNewErrListChildMove(pParser, ChainedAssignErr, pInitExpr->startLine, &apNodeChildren);
 			return Up(pErr);
 		}
 	}
@@ -1621,6 +1681,25 @@ void debugPrintSubAst(const AstNode & node, int level, bool skipAfterArrow, Dyna
 			}
 		} break;
 
+		case ASTK_ChainedAssignErr:
+		{
+			auto * pErr = DownConst(&node, ChainedAssignErr);
+			auto * pErrCasted = UpErrConst(pErr);
+
+			printf("%s chaining assignments is not permitted", parseErrorString);
+
+			if (pErrCasted->apChildren.cItem > 0)
+			{
+				// Sloppy... printChildren should probably handle the new line spacing so that if you pass
+				//	it an empty array of children it will still just work.
+
+				printf("\n");
+
+				printTabs(levelNext, false, false, pMapLevelSkip);
+				printErrChildren(*pErrCasted, levelNext, pMapLevelSkip);
+			}
+		} break;
+
 
 
 		// EXPR
@@ -1745,6 +1824,33 @@ void debugPrintSubAst(const AstNode & node, int level, bool skipAfterArrow, Dyna
 			debugPrintSubAst(*pStmt->pExpr, levelNext, true, pMapLevelSkip);
 		} break;
 
+		case ASTK_AssignStmt:
+		{
+			auto * pStmt = DownConst(&node, AssignStmt);
+
+			printf("=");
+			printf("\n");
+
+			printTabs(levelNext, false, false, pMapLevelSkip);
+			printf("\n");
+
+			printTabs(levelNext, false, false, pMapLevelSkip);
+			printf("(lhs):");
+
+			debugPrintSubAst(*pStmt->pLhsExpr, levelNext, false, pMapLevelSkip);
+			printf("\n");
+
+			printTabs(levelNext, false, false, pMapLevelSkip);
+			printf("\n");
+
+			printTabs(levelNext, false, false, pMapLevelSkip);
+			printf("(rhs):");
+			printf("\n");
+
+            printTabs(levelNext, false, false, pMapLevelSkip);
+			debugPrintSubAst(*pStmt->pRhsExpr, levelNext, true, pMapLevelSkip);
+		} break;
+
 		case ASTK_VarDeclStmt:
 		{
 			auto * pStmt = DownConst(&node, VarDeclStmt);
@@ -1758,7 +1864,7 @@ void debugPrintSubAst(const AstNode & node, int level, bool skipAfterArrow, Dyna
 			if (pStmt->pIdent)
 			{
 				printTabs(levelNext, false, false, pMapLevelSkip);
-				printf("(ident)");
+				printf("(ident):");
 				printf("\n");
 
 				printTabs(levelNext, true, false, pMapLevelSkip);
@@ -1770,7 +1876,7 @@ void debugPrintSubAst(const AstNode & node, int level, bool skipAfterArrow, Dyna
 			}
 
 			printTabs(levelNext, false, false, pMapLevelSkip);
-			printf("(type)");
+			printf("(type):");
 
             bool hasInitExpr = (pStmt->pInitExpr != nullptr);
 
@@ -1783,7 +1889,7 @@ void debugPrintSubAst(const AstNode & node, int level, bool skipAfterArrow, Dyna
 			{
 			    printf("\n");
 			    printTabs(levelNext, false, false, pMapLevelSkip);
-			    printf("(init)");
+			    printf("(init):");
 				debugPrintSubAst(*pStmt->pInitExpr, levelNext, true, pMapLevelSkip);
 			}
 		} break;
@@ -1799,7 +1905,7 @@ void debugPrintSubAst(const AstNode & node, int level, bool skipAfterArrow, Dyna
 
             printf("\n");
             printTabs(levelNext, false, false, pMapLevelSkip);
-            printf("(name)");
+            printf("(name):");
 
             printf("\n");
             printTabs(levelNext, true, false, pMapLevelSkip);
@@ -1823,7 +1929,7 @@ void debugPrintSubAst(const AstNode & node, int level, bool skipAfterArrow, Dyna
 
             printf("\n");
             printTabs(levelNext, false, false, pMapLevelSkip);
-            printf("(name)");
+            printf("(name):");
 
             printf("\n");
             printTabs(levelNext, true, false, pMapLevelSkip);
