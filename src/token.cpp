@@ -28,6 +28,7 @@ int g_cTokenkUnopPre = ArrayLen(g_aTokenkUnopPre);
 
 ReservedWord g_aReservedWord[] = {
 	{ "if",			TOKENK_If },
+    { "else",       TOKENK_Else },
 	{ "for",		TOKENK_For },
 	{ "while",		TOKENK_While },
 	{ "break",		TOKENK_Break },
@@ -103,6 +104,7 @@ const char * g_mpTokenkDisplay[] = {
 	"'<='",					// TOKENK_LesserEqual
 	"'>='",					// TOKENK_GreaterEqual
 	"'if'",					// TOKENK_If
+    "'else'",               // TOKENK_Else
 	"'for'",				// TOKENK_For
 	"'while'",				// TOKENK_While
 	"'break'",				// TOKENK_Break

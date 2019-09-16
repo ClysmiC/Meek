@@ -1,40 +1,27 @@
-func printInBinary(int i)()
+if x do print(x); else do print(y);
+
+if x do print(x); else
 {
-	printInBinaryInternal(i);
+	print(y);
+	print(z);
 }
-
-func printInDecimal(int i)()
-{
-	printInDecimalInternal(i);
-}
-
-func main()()
-{
-	int foo;
-	foo = 12 + 15;
-
-	int bar = foo = 6;
-	bar = foo = 6;
-}
-
-
-
-// TODO: parse assignment!
-// printer = printInDecimal;
-
-
-// One line
-
-if x do printStatement();
-
-if x do
-	printStatement();
-
-// Multiline
 
 if x
 {
-	//
-	//
-	//
+	print(x);
 }
+else if y
+{
+	print(y);
+}
+else
+{
+	print(z);
+}
+
+
+if x do
+	if y do
+		print(y);
+	else do
+		print(x);

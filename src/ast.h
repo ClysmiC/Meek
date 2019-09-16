@@ -35,6 +35,8 @@ enum ASTK : u8
 	ASTK_InitUnnamedVarErr,
 	ASTK_IllegalInitErr,
 	ASTK_ChainedAssignErr,
+    ASTK_VarDeclDoStmtErr,
+    ASTK_BlockDoStmtErr,
 
 	ASTK_ErrMax,
 
@@ -127,8 +129,11 @@ struct AstUnexpectedTokenkErr
 
 struct AstExpectedTokenkErr
 {
+    // TODO: Good motivating case for a FixedArray<T> class that automatically updates the count
+    //  as you append things.
+
 	int cTokenkValid = 0;
-	TOKENK tokenkoValid[8];
+	TOKENK tokenkValid[4];
 };
 
 struct AstInitUnnamedVarErr {};
@@ -139,6 +144,8 @@ struct AstIllegalInitErr
 };
 
 struct AstChainedAssignErr {};
+struct AstVarDeclDoStmtErr {};
+struct AstBlockDoStmtErr{};
 
 struct AstErr
 {
@@ -154,6 +161,8 @@ struct AstErr
 		AstInitUnnamedVarErr unnamedVarErr;
 		AstIllegalInitErr illegalInitErr;
 		AstChainedAssignErr chainedAssignErr;
+        AstVarDeclDoStmtErr varDeclDoStmtErr;
+        AstBlockDoStmtErr blockDoStmtErr;
 	};
 
 	// Errors propogate up the AST, but still hang on to their child nodes so that
@@ -343,8 +352,11 @@ struct AstNode
 	};
 };
 
-StaticAssert(sizeof(AstNode) == 32);		// Goal: Make it so 2 AstNodes fit in a cache line. This might be hard/impossible but it's my goal!
-											//	If 32 bytes is too restrictive, relax this to 64 bytes
+StaticAssert(sizeof(AstNode) <= 64);		// Goal: Make it so each AstNode fits in a cache line
+                                            // TODO: Maybe try to work this down to 32 bytes so 2 fit in a cache line!
+                                            // TODO: Make sure we have an option for our allocator to align these to cache lines!
+                                            //  (have dynamic allocator allocate an extra 64 bytes and point the "actual" buffer to
+                                            //  an aligned spot?
 
 inline ASTCATK category(ASTK astk)
 {
@@ -368,3 +380,10 @@ inline bool isErrorNode(const AstNode & node)
 }
 
 bool containsErrorNode(const DynamicArray<AstNode *> & apNodes);
+
+#if 0
+// Convenient place to hover the mouse and get size info for different kinds of nodes!
+
+constexpr uint convenientSizeDebugger = sizeof(AstErr);
+#endif
+

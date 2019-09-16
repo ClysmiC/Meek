@@ -80,8 +80,8 @@ AstNode * parseProgram(Parser * pParser, bool * poSuccess);
 
 // HMM: Are these really public?
 
-void parseStmts(Parser * pParser, DynamicArray<AstNode *> * poAPNodes);
-AstNode * parseStmt(Parser * pParser);
+void parseStmts(Parser * pParser, DynamicArray<AstNode *> * poAPNodes); // TODO: I think this is only called in one place so just inline it.
+AstNode * parseStmt(Parser * pParser, bool isDoStmt=false);
 AstNode * parseExpr(Parser * pParser);
 
 
@@ -101,7 +101,6 @@ bool tryRecoverFromPanic(Parser * pParser, const TOKENK * aTokenkRecover, int cT
 
 // STMT
 
-AstNode * parseStmt(Parser * pParser, bool isDoStmt=false);
 AstNode * parseExprStmtOrAssignStmt(Parser * pParser);
 AstNode * parseStructDefnStmt(Parser * pParser);
 AstNode * parseFuncDefnStmt(Parser * pParser);
@@ -114,7 +113,6 @@ AstNode * parseBlockStmt(Parser * pParser);
 // EXPR
 
 AstNode * parseExpr(Parser * pParser);
-AstNode * parseAssignStmt(Parser * pParser); // TODO: roll this into parse op?
 AstNode * parseBinop(Parser * pParser, const BinopInfo & op);
 AstNode * parseUnopPre(Parser * pParser);
 AstNode * parsePrimary(Parser * pParser);

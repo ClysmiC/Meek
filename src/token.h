@@ -65,6 +65,7 @@ enum TOKENK
 	// Reserved words (control flow)
 
 	TOKENK_If,
+    TOKENK_Else,
 	TOKENK_For,
 	TOKENK_While,
 	TOKENK_Break,		// IDEA: a way to specify the "number" of loops we are breaking out of? break(2) for example? Not very friendly for refactoring though... but I also don't really like labels
