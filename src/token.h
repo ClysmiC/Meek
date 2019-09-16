@@ -57,6 +57,7 @@ enum TOKENK
 	TOKENK_StarEqual,
 	TOKENK_SlashEqual,
 	TOKENK_PercentEqual,
+
 	TOKENK_EqualEqual,
 	TOKENK_BangEqual,
 	TOKENK_LesserEqual,

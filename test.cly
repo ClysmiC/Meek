@@ -16,7 +16,8 @@ else if y
 }
 else
 {
-	print(z);
+	z += 3;
+	j -= 5 + 2;
 }
 
 

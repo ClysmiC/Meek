@@ -192,9 +192,22 @@ AstNode * parseExprStmtOrAssignStmt(Parser * pParser)
 	bool isAssignment = false;
     AstNode * pRhsExpr = nullptr;
 
-	if (tryConsumeToken(pParser->pScanner, TOKENK_Equal))
+	const static TOKENK s_aTokenkAssign[] = {
+		TOKENK_PlusEqual,
+		TOKENK_MinusEqual,
+		TOKENK_StarEqual,
+		TOKENK_SlashEqual,
+		TOKENK_PercentEqual
+	};
+
+	const static int s_cTokenkAssign = ArrayLen(s_aTokenkAssign);
+
+
+	Token * pAssignToken = nullptr;
+	if (tryConsumeToken(pParser->pScanner, s_aTokenkAssign, s_cTokenkAssign, ensurePendingToken(pParser)))
 	{
 		isAssignment = true;
+		pAssignToken = claimPendingToken(pParser);
 
 		// Parse rhs expression
 
@@ -239,6 +252,8 @@ AstNode * parseExprStmtOrAssignStmt(Parser * pParser)
 	if (isAssignment)
 	{
 		auto * pNode = AstNew(pParser, AssignStmt, pLhsExpr->startLine);
+
+		pNode->pAssignToken = pAssignToken;
 		pNode->pLhsExpr = pLhsExpr;
 		pNode->pRhsExpr = pRhsExpr;
 		return Up(pNode);
@@ -246,6 +261,7 @@ AstNode * parseExprStmtOrAssignStmt(Parser * pParser)
 	else
 	{
 		Assert(!pRhsExpr);
+		Assert(!pAssignToken);
 
 		auto * pNode = AstNew(pParser, ExprStmt, pLhsExpr->startLine);
 		pNode->pExpr = pLhsExpr;
@@ -2092,7 +2108,7 @@ void debugPrintSubAst(const AstNode & node, int level, bool skipAfterArrow, Dyna
 		{
 			auto * pStmt = DownConst(&node, AssignStmt);
 
-			printf("=");
+			printf("%s", pStmt->pAssignToken->lexeme);
 			printf("\n");
 
 			printTabs(levelNext, false, false, pMapLevelSkip);

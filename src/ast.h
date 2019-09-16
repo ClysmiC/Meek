@@ -233,6 +233,7 @@ struct AstExprStmt
 
 struct AstAssignStmt
 {
+	Token * pAssignToken;	// Distinguish between =, +=, -=, etc.
 	AstNode * pLhsExpr;
 	AstNode * pRhsExpr;
 };
@@ -386,4 +387,3 @@ bool containsErrorNode(const DynamicArray<AstNode *> & apNodes);
 
 constexpr uint convenientSizeDebugger = sizeof(AstErr);
 #endif
-
