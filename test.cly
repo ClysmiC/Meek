@@ -1,28 +1,20 @@
-if x do print(x); else do print(y);
+// var printStuff = func(int x)() do print(x);
 
-if x do print(x); else
-{
-	print(y);
-	print(z);
-}
+var computeFunc =
+	func(int x)(float)
+	{
+		while true
+		{
+			x = x + 5;
 
-if x
-{
-	print(x);
-}
-else if y
-{
-	print(y);
-}
-else
-{
-	z += 3;
-	j -= 5 + 2;
-}
+			if x == 10 || x == 15 do
+				continue;
 
+			if x > 30 do
+				break;
+		}
 
-if x do
-	if y do
-		print(y);
-	else do
-		print(x);
+		return sqrt(12 * x);
+	};
+
+float x = computeFunc(5);

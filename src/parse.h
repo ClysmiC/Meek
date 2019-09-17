@@ -103,12 +103,15 @@ bool tryRecoverFromPanic(Parser * pParser, const TOKENK * aTokenkRecover, int cT
 
 AstNode * parseExprStmtOrAssignStmt(Parser * pParser);
 AstNode * parseStructDefnStmt(Parser * pParser);
-AstNode * parseFuncDefnStmt(Parser * pParser);
+AstNode * parseFuncDefnStmtOrLiteral(Parser * pParser, bool isLiteral);
 AstNode * parseVarDeclStmt(Parser * pParser, EXPECTK expectkName=EXPECTK_Required, EXPECTK expectkInit=EXPECTK_Optional, EXPECTK expectkSemicolon=EXPECTK_Required);
 AstNode * parseIfStmt(Parser * pParser);
 AstNode * parseWhileStmt(Parser * pParser);
 AstNode * parseDoStmtOrBlockStmt(Parser * pParser);
 AstNode * parseBlockStmt(Parser * pParser);
+AstNode * parseReturnStmt(Parser * pParser);
+AstNode * parseBreakStmt(Parser * pParser);
+AstNode * parseContinueStmt(Parser * pParser);
 
 // EXPR
 
@@ -117,7 +120,7 @@ AstNode * parseBinop(Parser * pParser, const BinopInfo & op);
 AstNode * parseUnopPre(Parser * pParser);
 AstNode * parsePrimary(Parser * pParser);
 
-// bool tryParseType(Parser * pParser, ParseType * pParseType); // TODO
+bool tryParseFuncDefnStmtOrLiteralExpr(Parser * pParser, FUNCHEADERK funcheaderk, AstNode ** ppoNode);
 bool tryParseFuncHeader(Parser * pParser, FUNCHEADERK funcheaderk, ParseFuncType ** ppoFuncType, AstNode ** ppoErrNode, Token ** ppoDefnIdent=nullptr);
 bool tryParseFuncHeaderParamList(Parser * pParser, FUNCHEADERK funcheaderk, DynamicArray<AstNode *> * papParamVarDecls);
 AstNode * finishParsePrimary(Parser * pParser, AstNode * pLhsExpr);

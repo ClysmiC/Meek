@@ -28,6 +28,7 @@ enum ASTK : u8
 	//	the kinds that we don't. For the kinds that we don't, we could probably just make them all the same error kind and have an enum that
 	//	that corresponds to which one it is?
 
+	ASTK_InternalCompilerErr,	// TODO: add error codes!
 	ASTK_ScanErr,
 	ASTK_BubbleErr,
 	ASTK_UnexpectedTokenkErr,
@@ -35,10 +36,12 @@ enum ASTK : u8
 	ASTK_InitUnnamedVarErr,
 	ASTK_IllegalInitErr,
 	ASTK_ChainedAssignErr,
-    ASTK_VarDeclDoStmtErr,
-    ASTK_BlockDoStmtErr,
+	ASTK_IllegalDoStmtErr,
+	ASTK_InvokeFuncLiteralErr,
 
 	ASTK_ErrMax,
+
+
 
 	// EXPR
 
@@ -49,12 +52,11 @@ enum ASTK : u8
 	ASTK_VarExpr,
 	ASTK_ArrayAccessExpr,
 	ASTK_FuncCallExpr,
-		// TODO
-		//	ASTK_FuncLiteralExpr,
-
-
+	ASTK_FuncLiteralExpr,
 
 	ASTK_ExprMax,		// Illegal value, used to determine ASTCATK
+
+
 
 	// STMT
 
@@ -65,8 +67,11 @@ enum ASTK : u8
 	ASTK_StructDefnStmt,
 	ASTK_IfStmt,
 	ASTK_WhileStmt,
-	ASTK_BlockStmt,
 	// TODO: for statement... once I figure out what I want it to look like
+	ASTK_BlockStmt,
+	ASTK_ReturnStmt,
+	ASTK_BreakStmt,
+	ASTK_ContinueStmt,
 
 	ASTK_StmtMax,		// Illegal value, used to determine ASTCATK
 
@@ -109,6 +114,10 @@ enum ASTK : u8
 
 // Errors
 
+struct AstInternalCompilerErr
+{
+};
+
 struct AstScanErr
 {
 	Token * pErrToken;
@@ -133,7 +142,7 @@ struct AstExpectedTokenkErr
     //  as you append things.
 
 	int cTokenkValid = 0;
-	TOKENK tokenkValid[4];
+	TOKENK aTokenkValid[4];
 };
 
 struct AstInitUnnamedVarErr {};
@@ -144,8 +153,13 @@ struct AstIllegalInitErr
 };
 
 struct AstChainedAssignErr {};
-struct AstVarDeclDoStmtErr {};
-struct AstBlockDoStmtErr{};
+
+struct AstIllegalDoStmtErr
+{
+	ASTK astkStmt;
+};
+
+struct AstInvokeFuncLiteralErr {};
 
 struct AstErr
 {
@@ -154,6 +168,7 @@ struct AstErr
 
 	union
 	{
+		AstInternalCompilerErr internalCompilerErr;
 		AstScanErr scanErr;
 		AstBubbleErr bubbleErr;
 		AstUnexpectedTokenkErr unexpectedTokenErr;
@@ -161,8 +176,8 @@ struct AstErr
 		AstInitUnnamedVarErr unnamedVarErr;
 		AstIllegalInitErr illegalInitErr;
 		AstChainedAssignErr chainedAssignErr;
-        AstVarDeclDoStmtErr varDeclDoStmtErr;
-        AstBlockDoStmtErr blockDoStmtErr;
+        AstIllegalDoStmtErr illegalDoStmtErr;
+		AstInvokeFuncLiteralErr invokeFuncLiteralErr;
 	};
 
 	// Errors propogate up the AST, but still hang on to their child nodes so that
@@ -220,6 +235,12 @@ struct AstFuncCallExpr
 {
 	AstNode * pFunc;
 	DynamicArray<AstNode *> apArgs;		// Args are EXPR
+};
+
+struct AstFuncLiteralExpr
+{
+	ParseFuncType * pFuncType;
+	AstNode * pBodyStmt;
 };
 
 
@@ -280,6 +301,14 @@ struct AstBlockStmt
 	DynamicArray<AstNode *> apStmts;
 };
 
+struct AstReturnStmt
+{
+	AstNode * pExpr;
+};
+
+struct AstBreakStmt {};
+struct AstContinueStmt {};
+
 
 
 // Program
@@ -335,6 +364,9 @@ struct AstNode
 				AstIfStmt			ifStmt;
 				AstWhileStmt		whileStmt;
 				AstBlockStmt		blockStmt;
+				AstReturnStmt		returnStmt;
+				AstBreakStmt		breakStmt;
+				AstContinueStmt		continueStmt;
 
 				// PROGRAM
 
@@ -381,6 +413,8 @@ inline bool isErrorNode(const AstNode & node)
 }
 
 bool containsErrorNode(const DynamicArray<AstNode *> & apNodes);
+
+const char * displayString(ASTK astk);
 
 #if 0
 // Convenient place to hover the mouse and get size info for different kinds of nodes!
