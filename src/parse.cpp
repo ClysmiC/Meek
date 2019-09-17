@@ -266,15 +266,13 @@ AstNode * parseExprStmtOrAssignStmt(Parser * pParser)
 		if (isAssignment)
 		{
 			auto * pErr = AstNewErr2Child(pParser, ExpectedTokenkErr, peekTokenLine(pParser->pScanner), pLhsExpr, pRhsExpr);
-			pErr->aTokenkValid[0] = TOKENK_Semicolon;
-            pErr->cTokenkValid = 1;
+			append(&pErr->aTokenkValid, TOKENK_Semicolon);
 			return Up(pErr);
 		}
 		else
 		{
 			auto * pErr = AstNewErr1Child(pParser, ExpectedTokenkErr, peekTokenLine(pParser->pScanner), pLhsExpr);
-			pErr->aTokenkValid[0] = TOKENK_Semicolon;
-            pErr->cTokenkValid = 1;
+			append(&pErr->aTokenkValid, TOKENK_Semicolon);
 			return Up(pErr);
 		}
 	}
@@ -312,8 +310,7 @@ AstNode * parseStructDefnStmt(Parser * pParser)
 		peekToken(pParser->pScanner, &errToken);
 
 		auto * pErr = AstNewErr0Child(pParser, ExpectedTokenkErr, errToken.line);
-		pErr->aTokenkValid[0] = TOKENK_Struct;
-        pErr->cTokenkValid = 1;
+		append(&pErr->aTokenkValid, TOKENK_Struct);
 		return Up(pErr);
 	}
 
@@ -323,8 +320,7 @@ AstNode * parseStructDefnStmt(Parser * pParser)
 		peekToken(pParser->pScanner, &errToken);
 
 		auto * pErr = AstNewErr0Child(pParser, ExpectedTokenkErr, errToken.line);
-		pErr->aTokenkValid[0] = TOKENK_Identifier;
-        pErr->cTokenkValid = 1;
+		append(&pErr->aTokenkValid, TOKENK_Identifier);
 		return Up(pErr);
 	}
 
@@ -334,8 +330,7 @@ AstNode * parseStructDefnStmt(Parser * pParser)
 	if (!tryConsumeToken(pParser->pScanner, TOKENK_OpenBrace))
 	{
 		auto * pErr = AstNewErr0Child(pParser, ExpectedTokenkErr, pIdent->line);
-		pErr->aTokenkValid[0] = TOKENK_OpenBrace;
-        pErr->cTokenkValid = 1;
+		append(&pErr->aTokenkValid, TOKENK_OpenBrace);
 		return Up(pErr);
 	}
 
@@ -540,8 +535,7 @@ AstNode * parseVarDeclStmt(Parser * pParser, EXPECTK expectkName, EXPECTK expect
 			if (!tryConsumeToken(pParser->pScanner, TOKENK_CloseBracket, ensurePendingToken(pParser)))
 			{
 				auto * pErr = AstNewErrListChildMove(pParser, ExpectedTokenkErr, pSubscriptExpr->startLine, &apNodeChildren);
-				pErr->aTokenkValid[0] = TOKENK_CloseBracket;
-                pErr->cTokenkValid = 1;
+				append(&pErr->aTokenkValid, TOKENK_CloseBracket);
 				return Up(pErr);
 			}
 
@@ -629,8 +623,7 @@ AstNode * parseVarDeclStmt(Parser * pParser, EXPECTK expectkName, EXPECTK expect
 		{
             int line = peekTokenLine(pParser->pScanner);
 			auto * pErr = AstNewErrListChildMove(pParser, ExpectedTokenkErr, line, &apNodeChildren);
-			pErr->aTokenkValid[0] = TOKENK_Identifier;
-            pErr->cTokenkValid = 1;
+			append(&pErr->aTokenkValid, TOKENK_Identifier);
 			return Up(pErr);
 		}
 	}
@@ -692,8 +685,7 @@ AstNode * parseVarDeclStmt(Parser * pParser, EXPECTK expectkName, EXPECTK expect
 			peekToken(pParser->pScanner, pErrToken);
 
 			auto * pErr = AstNewErrListChildMove(pParser, ExpectedTokenkErr, pErrToken->line, &apNodeChildren);
-			pErr->aTokenkValid[0] = TOKENK_Semicolon;
-            pErr->cTokenkValid = 1;
+			append(&pErr->aTokenkValid, TOKENK_Semicolon);
 			return Up(pErr);
 		}
 	}
@@ -734,8 +726,7 @@ AstNode * parseIfStmt(Parser * pParser)
 	if (!tryConsumeToken(pParser->pScanner, TOKENK_If))
 	{
 		auto * pErr = AstNewErr0Child(pParser, ExpectedTokenkErr, peekTokenLine(pParser->pScanner));
-		pErr->aTokenkValid[0] = TOKENK_If;
-        pErr->cTokenkValid = 1;
+		append(&pErr->aTokenkValid, TOKENK_If);
 		return Up(pErr);
 	}
 
@@ -793,8 +784,7 @@ AstNode * parseWhileStmt(Parser * pParser)
 	if (!tryConsumeToken(pParser->pScanner, TOKENK_While))
 	{
 		auto * pErr = AstNewErr0Child(pParser, ExpectedTokenkErr, peekTokenLine(pParser->pScanner));
-		pErr->aTokenkValid[0] = TOKENK_While;
-        pErr->cTokenkValid = 1;
+		append(&pErr->aTokenkValid, TOKENK_While);
 		return Up(pErr);
 	}
 
@@ -832,9 +822,8 @@ AstNode * parseDoStmtOrBlockStmt(Parser * pParser)
 		tokenk != TOKENK_Do)
 	{
 		auto * pErr = AstNewErr0Child(pParser, ExpectedTokenkErr, peekTokenLine(pParser->pScanner));
-		pErr->aTokenkValid[0] = TOKENK_OpenBrace;
-		pErr->aTokenkValid[1] = TOKENK_Do;
-		pErr->cTokenkValid = 2;
+		append(&pErr->aTokenkValid, TOKENK_OpenBrace);
+		append(&pErr->aTokenkValid, TOKENK_Do);
 		return Up(pErr);
 	}
 
@@ -877,8 +866,7 @@ AstNode * parseBlockStmt(Parser * pParser)
 	if (!tryConsumeToken(pParser->pScanner, TOKENK_OpenBrace))
 	{
 		auto * pErr = AstNewErr0Child(pParser, ExpectedTokenkErr, peekTokenLine(pParser->pScanner));
-		pErr->aTokenkValid[0] = TOKENK_OpenBrace;
-		pErr->cTokenkValid = 1;
+		append(&pErr->aTokenkValid, TOKENK_OpenBrace);
 		return Up(pErr);
 	}
 
@@ -919,8 +907,7 @@ AstNode * parseReturnStmt(Parser * pParser)
 	if (!tryConsumeToken(pParser->pScanner, TOKENK_Return))
 	{
 		auto * pErr = AstNewErr0Child(pParser, ExpectedTokenkErr, peekTokenLine(pParser->pScanner));
-		pErr->aTokenkValid[0] = TOKENK_Return;
-		pErr->cTokenkValid = 1;
+		append(&pErr->aTokenkValid, TOKENK_Return);
 		return Up(pErr);
 	}
 
@@ -952,8 +939,7 @@ AstNode * parseReturnStmt(Parser * pParser)
 			pErr = AstNewErr0Child(pParser, ExpectedTokenkErr, peekTokenLine(pParser->pScanner));
 		}
 
-		pErr->aTokenkValid[0] = TOKENK_Semicolon;
-		pErr->cTokenkValid = 1;
+		append(&pErr->aTokenkValid, TOKENK_Semicolon);
 		return Up(pErr);
 	}
 
@@ -969,16 +955,14 @@ AstNode * parseBreakStmt(Parser * pParser)
 	if (!tryConsumeToken(pParser->pScanner, TOKENK_Break))
 	{
 		auto * pErr = AstNewErr0Child(pParser, ExpectedTokenkErr, peekTokenLine(pParser->pScanner));
-		pErr->aTokenkValid[0] = TOKENK_Break;
-		pErr->cTokenkValid = 1;
+		append(&pErr->aTokenkValid, TOKENK_Break);
 		return Up(pErr);
 	}
 
 	if (!tryConsumeToken(pParser->pScanner, TOKENK_Semicolon))
 	{
 		auto * pErr = AstNewErr0Child(pParser, ExpectedTokenkErr, peekTokenLine(pParser->pScanner));
-		pErr->aTokenkValid[0] = TOKENK_Semicolon;
-		pErr->cTokenkValid = 1;
+		append(&pErr->aTokenkValid, TOKENK_Semicolon);
 		return Up(pErr);
 	}
 
@@ -995,16 +979,14 @@ AstNode * parseContinueStmt(Parser * pParser)
 	if (!tryConsumeToken(pParser->pScanner, TOKENK_Continue))
 	{
 		auto * pErr = AstNewErr0Child(pParser, ExpectedTokenkErr, peekTokenLine(pParser->pScanner));
-		pErr->aTokenkValid[0] = TOKENK_Continue;
-		pErr->cTokenkValid = 1;
+		append(&pErr->aTokenkValid, TOKENK_Continue);
 		return Up(pErr);
 	}
 
 	if (!tryConsumeToken(pParser->pScanner, TOKENK_Semicolon))
 	{
 		auto * pErr = AstNewErr0Child(pParser, ExpectedTokenkErr, peekTokenLine(pParser->pScanner));
-		pErr->aTokenkValid[0] = TOKENK_Semicolon;
-		pErr->cTokenkValid = 1;
+		append(&pErr->aTokenkValid, TOKENK_Semicolon);
 		return Up(pErr);
 	}
 
@@ -1119,8 +1101,7 @@ AstNode * parsePrimary(Parser * pParser)
 				//	We could easily cache that when constructing an AST node...
 
 				auto * pErr = AstNewErr1Child(pParser, ExpectedTokenkErr, pExpr->startLine, pExpr);
-				pErr->aTokenkValid[0] = TOKENK_CloseParen;
-                pErr->cTokenkValid = 1;
+				append(&pErr->aTokenkValid, TOKENK_CloseParen);
 				return Up(pErr);
 			}
 		}
@@ -1215,8 +1196,7 @@ bool tryParseFuncHeader(
 		int line = peekTokenLine(pParser->pScanner);
 
 		auto * pErr = AstNewErr0Child(pParser, ExpectedTokenkErr, line);
-		pErr->aTokenkValid[0] = TOKENK_Func;
-        pErr->cTokenkValid = 1;
+		append(&pErr->aTokenkValid, TOKENK_Func);
 		*ppoErrNode = Up(pErr);
 		return false;
 	}
@@ -1230,8 +1210,7 @@ bool tryParseFuncHeader(
 			int line = peekTokenLine(pParser->pScanner);
 
 			auto * pErr = AstNewErr0Child(pParser, ExpectedTokenkErr, line);
-			pErr->aTokenkValid[0] = TOKENK_Identifier;
-            pErr->cTokenkValid = 1;
+			append(&pErr->aTokenkValid, TOKENK_Identifier);
 			*ppoErrNode = Up(pErr);
 			return false;
 		}
@@ -1321,8 +1300,7 @@ bool tryParseFuncHeaderParamList(Parser * pParser, FUNCHEADERK funcheaderk, Dyna
 		int line = peekTokenLine(pParser->pScanner);
 
 		auto * pErr = AstNewErr0Child(pParser, ExpectedTokenkErr, line);
-		pErr->aTokenkValid[0] = TOKENK_OpenParen;
-        pErr->cTokenkValid = 1;
+		append(&pErr->aTokenkValid, TOKENK_OpenParen);
 		append(papParamVarDecls, Up(pErr));
 		return false;
 	}
@@ -1336,8 +1314,7 @@ bool tryParseFuncHeaderParamList(Parser * pParser, FUNCHEADERK funcheaderk, Dyna
 			int line = peekTokenLine(pParser->pScanner);
 
 			auto * pErr = AstNewErrListChildMove(pParser, ExpectedTokenkErr, line, papParamVarDecls);
-			pErr->aTokenkValid[0] = TOKENK_Comma;
-            pErr->cTokenkValid = 1;
+			append(&pErr->aTokenkValid, TOKENK_Comma);
 			append(papParamVarDecls, Up(pErr));
 			return false;
 		}
@@ -1386,8 +1363,7 @@ AstNode * finishParsePrimary(Parser * pParser, AstNode * pExpr)
 		if (!tryConsumeToken(pParser->pScanner, TOKENK_Identifier, ensurePendingToken(pParser)))
 		{
 			auto * pErr = AstNewErr1Child(pParser, ExpectedTokenkErr, peekTokenLine(pParser->pScanner), pExpr);
-			pErr->aTokenkValid[0] = TOKENK_Identifier;
-            pErr->cTokenkValid = 1;
+			append(&pErr->aTokenkValid, TOKENK_Identifier);
 
 			return Up(pErr);
 		}
@@ -1424,8 +1400,7 @@ AstNode * finishParsePrimary(Parser * pParser, AstNode * pExpr)
 		else if (!tryConsumeToken(pParser->pScanner, TOKENK_CloseBracket, ensurePendingToken(pParser)))
 		{
 			auto * pErr = AstNewErr2Child(pParser, ExpectedTokenkErr, peekTokenLine(pParser->pScanner), pExpr, pSubscriptExpr);
-			pErr->aTokenkValid[0] = TOKENK_CloseBracket;
-            pErr->cTokenkValid = 1;
+			append(&pErr->aTokenkValid, TOKENK_CloseBracket);
 
 			return Up(pErr);
 		}
@@ -1466,8 +1441,7 @@ AstNode * finishParsePrimary(Parser * pParser, AstNode * pExpr)
 				if (recovered)
 				{
 					auto * pErr = AstNewErr0Child(pParser, ExpectedTokenkErr, line);
-					pErr->aTokenkValid[0] = TOKENK_Comma;
-                    pErr->cTokenkValid = 1;
+					append(&pErr->aTokenkValid, TOKENK_Comma);
 
 					append(&apArgs, Up(pErr));
 
@@ -1485,8 +1459,7 @@ AstNode * finishParsePrimary(Parser * pParser, AstNode * pExpr)
 					prepend(&apArgs, pExpr);
 
 					auto * pErr = AstNewErrListChildMove(pParser, ExpectedTokenkErr, line, &apArgs);
-					pErr->aTokenkValid[0] = TOKENK_Comma;
-                    pErr->cTokenkValid = 1;
+					append(&pErr->aTokenkValid, TOKENK_Comma);
 
 					return Up(pErr);
 				}
@@ -2012,23 +1985,23 @@ void debugPrintSubAst(const AstNode & node, int level, bool skipAfterArrow, Dyna
 			auto * pErr = DownConst(&node, ExpectedTokenkErr);
 			auto * pErrCasted = UpErrConst(pErr);
 
-            if (pErr->cTokenkValid == 1)
+            if (pErr->aTokenkValid.cItem == 1)
             {
 			    printf("%s expected %s", parseErrorString, g_mpTokenkDisplay[pErr->aTokenkValid[0]]);
             }
-            else if (pErr->cTokenkValid == 2)
+            else if (pErr->aTokenkValid.cItem == 2)
             {
                 printf("%s expected %s or %s", parseErrorString, g_mpTokenkDisplay[pErr->aTokenkValid[0]], g_mpTokenkDisplay[pErr->aTokenkValid[1]]);
             }
             else
             {
-                Assert(pErr->cTokenkValid > 2);
+                Assert(pErr->aTokenkValid.cItem > 2);
 
                 printf("%s expected %s", parseErrorString, g_mpTokenkDisplay[pErr->aTokenkValid[0]]);
 
-                for (int i = 1; i < pErr->cTokenkValid; i++)
+                for (uint i = 1; i < pErr->aTokenkValid.cItem; i++)
                 {
-                    bool isLast = (i == pErr->cTokenkValid - 1);
+                    bool isLast = (i == pErr->aTokenkValid.cItem - 1);
 
                     printf(", ");
                     if (isLast) printf("or ");

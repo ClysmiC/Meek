@@ -99,6 +99,14 @@ T * allocate(FixedPoolAllocator<T, Capacity> * pAlloc)
 
         result = reinterpret_cast<T *>(pAlloc->pFree);
 
+        // Zero initialize result
+        // NOTE: It kinda sucks that this is required for the way that I am using this allocator in
+        //  my compiler. Since it is allocating a struct with union members there is no real good
+        //  way to initialize the one that I care about. So as a rule of thumb I will make it that
+        //  anything that doesn't work when zero-initialized should require an init(..) function.
+
+        memset(result, 0, sizeof(T));
+
         // Advance the free-list
 
         pAlloc->pFree = pAlloc->pFree->pNext;

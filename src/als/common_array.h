@@ -289,3 +289,35 @@ void remove(DynamicArray<T> * pArray, int iItem)
 
 	pArray->cItem--;
 }
+
+
+// Fixed array (not thread safe)
+
+template <typename T, int CAPACITY>
+struct FixedArray
+{
+    T aBuffer[CAPACITY] = { 0 };
+	unsigned int cItem = 0;
+
+	static constexpr int s_capacity = CAPACITY;
+
+	const T& operator[] (unsigned int i) const
+	{
+		ALS_COMMON_ARRAY_Assert(i < this->cItem);
+		return this->aBuffer[i];
+	}
+
+	T& operator[] (unsigned int i)
+	{
+		ALS_COMMON_ARRAY_Assert(i < this->cItem);
+		return this->aBuffer[i];
+	}
+};
+
+template <typename T, int CAPACITY>
+void append(FixedArray<T, CAPACITY> * pArray, const T & item)
+{
+	ALS_COMMON_ARRAY_Assert(pArray->cItem < pArray->s_capacity);
+	pArray->aBuffer[pArray->cItem] = item;
+	pArray->cItem++;
+}

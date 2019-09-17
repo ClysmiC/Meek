@@ -16,7 +16,6 @@ enum ASTCATK
 	ASTCATK_Error,
 	ASTCATK_Expr,
 	ASTCATK_Stmt,
-	ASTCATK_Info,
 	ASTCATK_Program
 };
 
@@ -75,32 +74,13 @@ enum ASTK : u8
 
 	ASTK_StmtMax,		// Illegal value, used to determine ASTCATK
 
-	// INFO
 
-	// ASTK_ParamInfo,
-
-	ASTK_InfoMax,
 
     ASTK_Program,
 
 	// NOTE: If you add more misc ASTK's down here (i.e., not Stmt, Expr, Err), make sure to update
 	//	the ASTCATK functions
 };
-
-// enum ASTERRK : u16
-// {
-// 	ASTERRK_Bubble,
-
-
-// 	ASTERRK_UnexpectedTokenk,
-
-// 	// Expected token kind
-
-// 	ASTERRK_ExpectedExpr,
-// 	ASTERRK_ExpectedCloseParen,
-// 	ASTERRK_ExpectedCloseBracket,
-// 	ASTERRK_ExpectedIdentifier,
-// };
 
 
 
@@ -138,11 +118,7 @@ struct AstUnexpectedTokenkErr
 
 struct AstExpectedTokenkErr
 {
-    // TODO: Good motivating case for a FixedArray<T> class that automatically updates the count
-    //  as you append things.
-
-	int cTokenkValid = 0;
-	TOKENK aTokenkValid[4];
+	FixedArray<TOKENK, 4> aTokenkValid;
 };
 
 struct AstInitUnnamedVarErr {};
@@ -396,7 +372,6 @@ inline ASTCATK category(ASTK astk)
 	if (astk < ASTK_ErrMax) return ASTCATK_Error;
 	if (astk < ASTK_ExprMax) return ASTCATK_Expr;
 	if (astk < ASTK_StmtMax) return ASTCATK_Stmt;
-	if (astk < ASTK_InfoMax) return ASTCATK_Info;
 
 	Assert(astk == ASTK_Program);
 	return ASTCATK_Program;

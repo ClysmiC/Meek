@@ -1,20 +1,6 @@
 // var printStuff = func(int x)() do print(x);
 
-var computeFunc =
-	func(int x)(float)
-	{
-		while true
-		{
-			x = x + 5;
+// TODO: Make it so I don't have to do this!!!! (two semicolons...)
+// var square = func(float f)(float) do return f * f;;
 
-			if x == 10 || x == 15 do
-				continue;
-
-			if x > 30 do
-				break;
-		}
-
-		return sqrt(12 * x);
-	};
-
-float x = computeFunc(5);
+float x = square(5);
