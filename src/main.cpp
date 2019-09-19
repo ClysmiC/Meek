@@ -6,9 +6,89 @@
 
 #include <stdio.h>
 
+uint hashFn(const uint & i)
+{
+    uint result = i;
+    result = ((result >> 16) ^ result) * 0x45d9f3b;
+    result = ((result >> 16) ^ result) * 0x45d9f3b;
+    result = (result >> 16) ^ result;
+    return result;
+}
+
+bool equalFn(const uint & i0, const uint & i1)
+{
+    return i0 == i1;
+}
+
 int main()
 {
     // printf("Size of AstNode %d", sizeof(AstNode));
+
+#if 1
+    {
+        HashMap<uint, uint> map;
+        init(&map, hashFn, equalFn, 47);
+
+        Assert(map.cCapacity == 64);
+        
+        uint cItemsTest = 100'000;   // TODO: test with 1,000,000 ... it seems to break there
+        for (uint i = 0; i < cItemsTest; i++)
+        {
+            if (i == 257)
+            {
+                int x = 0;
+            }
+
+            insert(&map, i, i + 5);
+        }
+
+        for (uint i = 0; i < cItemsTest; i++)
+        {
+            if (i == 257)
+            {
+                int x = 0;
+            }
+
+            uint value;
+            Verify(lookup(&map, i, &value));
+            Assert(value == i + 5);
+        }
+
+        for (uint i = 0; i < cItemsTest; i += 2)
+        {
+            uint newValue = i + 10;
+            update(&map, i, newValue);
+        }
+
+        for (uint i = 0; i < cItemsTest; i ++)
+        {
+            uint value;
+            Verify(lookup(&map, i, &value));
+            Assert(value == (i % 2) ? i + 5 : i + 10);
+        }
+
+        for (uint i = 1; i < cItemsTest; i += 2)
+        {
+            Verify(remove(&map, i));
+        }
+
+        for (uint i = 0; i < cItemsTest; i++)
+        {
+            uint value;
+            bool found = lookup(&map, i, &value);
+
+            if (i % 2)
+            {
+                Assert(!found);
+            }
+            else
+            {
+                Assert(found);
+                Assert(value == i + 10);
+            }
+        }
+    }
+#endif
 
 	char * filename = "C:/Users/Andrew/Desktop/lang/lang/test.cly";		// TODO: Read this in from command line
 	int bufferSize = 1024 * 1024;										// TODO: Support files bigger than 1 mb. Maybe have scanner return a special value when its buffer is full and it will ask you to pass it a new one
