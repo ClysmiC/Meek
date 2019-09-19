@@ -62,6 +62,9 @@
     <ClInclude Include="src\type.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="src\als\common_hash.h">
+      <Filter>Header Files\als</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\ast.cpp">

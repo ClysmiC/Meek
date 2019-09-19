@@ -8,7 +8,7 @@
 
 int main()
 {
-    printf("Size of AstNode %d", sizeof(AstNode));
+    // printf("Size of AstNode %d", sizeof(AstNode));
 
 	char * filename = "C:/Users/Andrew/Desktop/lang/lang/test.cly";		// TODO: Read this in from command line
 	int bufferSize = 1024 * 1024;										// TODO: Support files bigger than 1 mb. Maybe have scanner return a special value when its buffer is full and it will ask you to pass it a new one
@@ -89,4 +89,3 @@ int main()
 
 	getchar();
 }
-

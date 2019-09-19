@@ -146,6 +146,7 @@ struct Token
     //  I can always just strlen them but that is pretty lame.
 
 	char *		lexeme = nullptr;
+	// uint32		hash=0;		// NOTE: Hash is only computed for tokens that get put in the symbol table (identifiers)
 
 	// NOTE: Literal values do not get set until semantic analysis since there are classes of
 	//	semantic errors that can happen at that time (e.g., int literals that exceed max value)
