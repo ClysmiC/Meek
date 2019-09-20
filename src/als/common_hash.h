@@ -88,7 +88,7 @@ void insert(
 {
 	typedef HashMap<K, V> hm;
 
-    if (key == 257)
+    if (key == 916578)
     {
         int brk = 0;
     }
@@ -187,7 +187,7 @@ void insert(
 			return;
 		}
 
-        if (pBucketSwappable->key == 257)
+        if (pBucketSwappable->key == 916578)
         {
             int brk = 0;
         }
@@ -256,7 +256,7 @@ inline bool _alsHashWorker(
 
 	for (uint32_t iCandidate = i; iCandidate < i + H; iCandidate++)
 	{
-		hm::Bucket * pBucketCandidate = pHashmap->pBuffer + iCandidate;
+		hm::Bucket * pBucketCandidate = pHashmap->pBuffer + (iCandidate % pHashmap->cCapacity);
 
 		// Check if candidate is occupied
 
@@ -327,6 +327,11 @@ bool lookup(
 	const K & key,
 	V * poValue=nullptr)
 {
+	if (key == 916578)
+	{
+		int brk = 0;
+	}
+
 	return _alsHashWorker(
 		pHashmap,
 		key,
@@ -438,6 +443,13 @@ void init(
 	pHashmap->equalFn = equalFn;
 
 	growHashmap(pHashmap, startingCapacity);
+}
+
+template <typename K, typename V>
+void destroy(HashMap<K, V> * pHashmap)
+{
+	if (pHashmap->pBuffer) free(pHashmap->pBuffer);
+	pHashmap->pBuffer = nullptr;
 }
 
 #undef ALS_COMMON_HASH_StaticAssert

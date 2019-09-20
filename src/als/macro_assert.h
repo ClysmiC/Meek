@@ -11,7 +11,7 @@
 #else
 
 #define Assert(x)
-#define AssertPrint(x)
+#define AssertInfo(x)
 #define Verify(x) x
 
 #endif
