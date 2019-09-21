@@ -4,3 +4,40 @@
 // var square = func(float f)(float) do return f * f;;
 
 float x = square(5);
+
+
+func hof (func (int i)(Foober k) inputFunc=somefunc)(float j = 3)
+{
+
+}
+
+// var hofVar =
+// 	func (func (int i)(Foober k=2))(float j = 3)
+// 	{
+// 	}
+
+// struct Foober
+// {
+// 	int booper;
+// }
+
+// Function types are *not* in the symbol table
+// All other tyes *are* in the symbol table
+
+// SYMBOL-TABLE:
+// 	Foober
+// 		booper
+// 			int
+// 	hof
+// 		SYMBOLK_Func
+// 		(func)
+// 			int
+// 			Foober
+// 		float
+
+// 	hofVar
+// 		SYMBOLK_Var
+// 				(func)
+// 					int
+// 					Foober
+// 				float

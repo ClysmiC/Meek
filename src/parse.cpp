@@ -55,8 +55,10 @@ bool init(Parser * pParser, Scanner * pScanner)
 	init(&pParser->tokenAlloc);
 	init(&pParser->parseTypeAlloc);
 	init(&pParser->parseFuncTypeAlloc);
+	init(&pParser->symbolInfoAlloc);
 	init(&pParser->astNodes);
 	init(&pParser->scopeStack);
+	init(&pParser->symbolTable, identHashPrecomputed, identEq);
 
 	return true;
 }
@@ -466,6 +468,53 @@ bool tryParseFuncDefnStmtOrLiteralExpr(Parser * pParser, FUNCHEADERK funcheaderk
 		pNode->pFuncType = pPft;
 		pNode->pBodyStmt = pBody;
 		*ppoNode = Up(pNode);
+
+		// Add to symbol table
+		if (lookup(&pParser->symbolTable, pNode->ident))
+		{
+			AssertInfo(false, "TODO: symbol redefinition error");
+		}
+		else
+		{
+			SymbolInfo * pSymbInfo = newSymbolInfo(pParser);
+			init(pSymbInfo, SYMBOLK_Func, &pNode->ident);
+
+			FuncInfo * pFuncInfo = &pSymbInfo->funcInfo;
+			for (uint i = 0; i < pPft->apParamVarDecls.cItem; i++)
+			{
+				AstVarDeclStmt * pParamVarDecl = Down(pPft->apParamVarDecls[i], VarDeclStmt);
+
+				SymbolInfo * pParamSymbInfo = nullptr;
+				bool found = lookup(&pParser->symbolTable, pParamVarDecl->pType->ident, &pParamSymbInfo);
+
+				// null symbol info means that we will need to check for this in the
+				//	type resolution pass
+
+				Assert(Implies(found, pParamSymbInfo));
+				Assert(Implies(!found, !pParamSymbInfo));
+				
+				append(&pFuncInfo->aParamsIn, pParamSymbInfo);
+			}
+
+			for (uint i = 0; i < pPft->apReturnVarDecls.cItem; i++)
+			{
+				AstVarDeclStmt * pReturnVarDecl = Down(pPft->apReturnVarDecls[i], VarDeclStmt);
+
+				SymbolInfo * pParamSymbInfo = nullptr;
+				bool found = lookup(&pParser->symbolTable, pReturnVarDecl->pType->ident, &pParamSymbInfo);
+
+				// null symbol info means that we will need to check for this in the
+				//	type resolution pass
+
+				Assert(Implies(found, pParamSymbInfo));
+				Assert(Implies(!found, !pParamSymbInfo));
+
+				append(&pFuncInfo->aParamsIn, pParamSymbInfo);
+			}
+
+			insert(&pParser->symbolTable, pNode->ident, pSymbInfo);
+		}
+
 		return true;
 	}
 	else
@@ -708,9 +757,12 @@ AstNode * parseVarDeclStmt(Parser * pParser, EXPECTK expectkName, EXPECTK expect
 	}
 	else
 	{
+		Identifier identType;
+		setIdentUnresolved(&identType, pTypeIdent);
+
 		Assert(pTypeIdent->tokenk == TOKENK_Identifier);
 		pParseType->isFuncType = false;
-		pParseType->pType = pTypeIdent;
+		pParseType->ident = identType;
 	}
 
 	initMove(&pParseType->aTypemods, &aModifiers);
@@ -1131,17 +1183,12 @@ AstNode * parsePrimary(Parser * pParser)
 		pNode->pToken = pLiteralToken;
 		return Up(pNode);
 	}
-	else if (tryConsumeToken(pParser->pScanner, TOKENK_Identifier, ensurePendingToken(pParser)))
+	else if (peekToken(pParser->pScanner) == TOKENK_Identifier)
 	{
 		// Identifier
 
-		Token * pIdent = claimPendingToken(pParser);
-
-		auto * pNode = AstNew(pParser, VarExpr, pIdent->line);
-		pNode->pOwner = nullptr;
-		setIdentUnresolved(&pNode->ident, pIdent);
-
-		return finishParsePrimary(pParser, Up(pNode));
+		AstNode * pVarOwner = nullptr;
+		return parseVarExpr(pParser, pVarOwner);
 	}
 	else if (peekToken(pParser->pScanner) == TOKENK_Func)
 	{
@@ -1178,6 +1225,49 @@ AstNode * parsePrimary(Parser * pParser)
 	{
 		return handleScanOrUnexpectedTokenkErr(pParser);
 	}
+}
+
+AstNode * parseVarExpr(Parser * pParser, AstNode * pOwnerExpr)
+{
+	if (!tryConsumeToken(pParser->pScanner, TOKENK_Identifier, ensurePendingToken(pParser)))
+	{
+		AstExpectedTokenkErr * pErr;
+		if (pOwnerExpr)
+		{
+			pErr = AstNewErr1Child(pParser, ExpectedTokenkErr, peekTokenLine(pParser->pScanner), pOwnerExpr);
+		}
+		else
+		{
+			pErr = AstNewErr0Child(pParser, ExpectedTokenkErr, peekTokenLine(pParser->pScanner));
+		}
+
+		append(&pErr->aTokenkValid, TOKENK_Identifier);
+		return Up(pErr);
+	}
+
+	Token * pIdent = claimPendingToken(pParser);
+	Assert(pIdent->tokenk == TOKENK_Identifier);
+
+	auto * pNode = AstNew(pParser, VarExpr, pIdent->line);
+	pNode->pOwner = pOwnerExpr;
+
+	// Check all of our scopes for a correpsonding definition. If we find it, this
+	//	variable use is "resolved" to that definition. If we *don't* find it, set it
+	//	as unresolved. We may still resolve it in the future if it is using a variable
+	//	that is defined later (and is permitted to be used before defined, such as struct
+	//	or func defns.
+
+	Stack<scopeid> & scopes = pParser->scopeStack;
+	for (int i = scopes.a.cItem - 1; i >= 0; i--)
+	{
+		Identifier symbolDefnCandidate;
+		setIdent(&symbolDefnCandidate, pIdent, scopes.a[i]);
+		// TODO
+		// lookup(&parser->symbolTable, symbolDefnCandidate)
+	}
+	setIdentUnresolved(&pNode->ident, pIdent);
+
+	return finishParsePrimary(pParser, Up(pNode));
 }
 
 bool tryParseFuncHeader(
@@ -1305,6 +1395,7 @@ bool tryParseFuncHeader(
 	initMove(&pft->apParamVarDecls, &apInParamVarDecls);
 	initMove(&pft->apReturnVarDecls, &apOutParamVarDecls);
     *ppoFuncType = pft;
+
 	return true;
 }
 
@@ -1375,24 +1466,7 @@ AstNode * finishParsePrimary(Parser * pParser, AstNode * pExpr)
 	{
 		// Member access
 
-		if (!tryConsumeToken(pParser->pScanner, TOKENK_Identifier, ensurePendingToken(pParser)))
-		{
-			auto * pErr = AstNewErr1Child(pParser, ExpectedTokenkErr, peekTokenLine(pParser->pScanner), pExpr);
-			append(&pErr->aTokenkValid, TOKENK_Identifier);
-
-			return Up(pErr);
-		}
-
-		// COPYPASTE: from parsePrimary
-
-		Token * pIdent = claimPendingToken(pParser);
-		Assert(pIdent->tokenk == TOKENK_Identifier);
-
-		auto * pNode = AstNew(pParser, VarExpr, pIdent->line);
-		pNode->pOwner = pExpr;
-		setIdentUnresolved(&pNode->ident, pIdent);
-
-		return finishParsePrimary(pParser, Up(pNode));
+		return parseVarExpr(pParser, pExpr);
 	}
 	else if (tryConsumeToken(pParser->pScanner, TOKENK_OpenBracket, ensurePendingToken(pParser)))
 	{
@@ -1915,7 +1989,7 @@ void debugPrintSubAst(const AstNode & node, int level, bool skipAfterArrow, Dyna
 		{
 			printf("\n");
 			printTabs(level, true, skipAfterArrow, pMapLevelSkip);
-			printf("%s", parseType.pType->lexeme);
+			printf("%s", parseType.ident.pToken->lexeme);
 		}
 	};
 

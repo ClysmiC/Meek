@@ -4,7 +4,7 @@
 
 bool isTypeInferred(const ParseType & parseType)
 {
-	bool result = (strcmp(parseType.pType->lexeme, "var") == 0);
+	bool result = (strcmp(parseType.ident.pToken->lexeme, "var") == 0);
     return result;
 }
 

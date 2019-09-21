@@ -2,6 +2,7 @@
 
 #include "als.h"
 #include "token.h"
+#include "symbol.h"
 
 // Forward declarations
 

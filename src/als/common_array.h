@@ -131,9 +131,9 @@ unsigned int count(const RingBuffer<T, Capacity> & pRbuf)
 template <typename T>
 struct DynamicArray
 {
-	T * pBuffer = nullptr;
-	unsigned int cItem = 0;
-	unsigned int capacity = 0;
+	T * pBuffer;
+	unsigned int cItem;
+	unsigned int capacity;
 
 	static constexpr float s_growthFactor = 1.5f;
 

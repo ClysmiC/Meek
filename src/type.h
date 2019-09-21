@@ -1,7 +1,7 @@
 #pragma once
 
 #include "als.h"
-
+#include "symbol.h"
 #include "token.h"
 
 // Forward declarations
@@ -26,9 +26,9 @@ struct ParseType
 {
 	union
 	{
-		Token * pType;					// Name of unnmodified type. Valid if !isFuncType
+		Identifier ident;		// Name of unnmodified type. Valid if !isFuncType
 
-        // HMM: Do I need this level of indirection or can I just ember the
+        // HMM: Do I need this level of indirection or can I just embed the
         //  ParseFuncType here?
 
 		ParseFuncType * pParseFuncType;	// Valid if isFuncType

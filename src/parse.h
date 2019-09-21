@@ -30,11 +30,16 @@ struct Parser
 	DynamicPoolAllocator<Token> tokenAlloc;
 	DynamicPoolAllocator<ParseType> parseTypeAlloc;
 	DynamicPoolAllocator<ParseFuncType> parseFuncTypeAlloc;
+	DynamicPoolAllocator<SymbolInfo> symbolInfoAlloc;
 
 	uint iNode = 0;				// Becomes node's id
 
 	scopeid scopeidNext = 0;
 	Stack<scopeid> scopeStack;
+
+	// TODO: probably move this out of the parser and into a more "global" data structure?
+
+	HashMap<Identifier, SymbolInfo*> symbolTable;
 
 	Token * pPendingToken = nullptr;
 
@@ -126,6 +131,7 @@ AstNode * parseExpr(Parser * pParser);
 AstNode * parseBinop(Parser * pParser, const BinopInfo & op);
 AstNode * parseUnopPre(Parser * pParser);
 AstNode * parsePrimary(Parser * pParser);
+AstNode * parseVarExpr(Parser * pParser, AstNode * pOwnerExpr);
 
 bool tryParseFuncDefnStmtOrLiteralExpr(Parser * pParser, FUNCHEADERK funcheaderk, AstNode ** ppoNode);
 bool tryParseFuncHeader(Parser * pParser, FUNCHEADERK funcheaderk, ParseFuncType ** ppoFuncType, AstNode ** ppoErrNode, Identifier * poDefnIdent=nullptr);
@@ -166,6 +172,16 @@ inline void releaseParseFuncType(Parser * pParser, ParseFuncType * pParseFuncTyp
 inline void releaseToken(Parser * pParser, Token * pToken)
 {
 	release(&pParser->tokenAlloc, pToken);
+}
+
+inline SymbolInfo * newSymbolInfo(Parser * pParser)
+{
+	return allocate(&pParser->symbolInfoAlloc);
+}
+
+inline void releaseSymbolInfo(Parser * pParser, SymbolInfo * pSymbolInfo)
+{
+	release(&pParser->symbolInfoAlloc, pSymbolInfo);
 }
 
 

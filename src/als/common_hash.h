@@ -72,9 +72,9 @@ struct HashMap
 		uint8_t infoBits;
 	};
 
-	Bucket * pBuffer = nullptr;
-	uint32_t cCapacity = 0;
-	uint32_t cItem = 0;
+	Bucket * pBuffer;
+	uint32_t cCapacity;
+	uint32_t cItem;
 
 	uint32_t (*hashFn)(const K & key);
 	bool (*equalFn)(const K & key0, const K & key1);
@@ -87,11 +87,6 @@ void insert(
 	const V & value)
 {
 	typedef HashMap<K, V> hm;
-
-    if (key == 916578)
-    {
-        int brk = 0;
-    }
 
 	ALS_COMMON_HASH_Assert(pHashmap->pBuffer);
 
@@ -186,11 +181,6 @@ void insert(
 			insert(pHashmap, key, value);
 			return;
 		}
-
-        if (pBucketSwappable->key == 916578)
-        {
-            int brk = 0;
-        }
 
 		// Copy swappable bucket into the empty bucket and update the offset
 
@@ -327,11 +317,6 @@ bool lookup(
 	const K & key,
 	V * poValue=nullptr)
 {
-	if (key == 916578)
-	{
-		int brk = 0;
-	}
-
 	return _alsHashWorker(
 		pHashmap,
 		key,
@@ -437,6 +422,7 @@ void init(
 
 	startingCapacity = power;
 
+	pHashmap->pBuffer = nullptr;
 	pHashmap->cItem = 0;
 	pHashmap->cCapacity = 0;
 	pHashmap->hashFn = hashFn;

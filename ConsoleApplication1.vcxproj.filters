@@ -65,6 +65,9 @@
     <ClInclude Include="src\als\common_hash.h">
       <Filter>Header Files\als</Filter>
     </ClInclude>
+    <ClInclude Include="src\symbol.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\ast.cpp">
@@ -83,6 +86,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="src\type.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\symbol.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
