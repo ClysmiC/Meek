@@ -192,13 +192,11 @@ struct AstGroupExpr
 
 struct AstVarExpr
 {
-	// Better way to store identifier here? Should we store resolve info?
-
 	// NOTE: pOwner is the left hand side of the '.' -- null means that it is
 	//	just a plain old variable without a dot.
 
 	AstNode * pOwner;
-	Token * pIdent;
+	Identifier ident;
 };
 
 struct AstArrayAccessExpr
@@ -237,9 +235,11 @@ struct AstAssignStmt
 
 struct AstVarDeclStmt
 {
-	Token * pIdent;			// null means name is omitted (allowed in function in/out param types)
+	Identifier ident;
+
 	ParseType * pType;		// null means inferred type while parsing
 	AstNode * pInitExpr;	// null means default init
+
 
 	// TODO: I want different values here when parsing and after typechecking.
 	//	Namely, while parsing I want to store the expressions inside subscripts,
@@ -248,7 +248,7 @@ struct AstVarDeclStmt
 
 struct AstStructDefnStmt
 {
-	Token * pIdent;
+	Identifier ident;
 	DynamicArray<AstNode *> apVarDeclStmt;
 };
 
@@ -267,7 +267,7 @@ struct AstWhileStmt
 
 struct AstFuncDefnStmt
 {
-    Token * pIdent;
+	Identifier ident;
 	ParseFuncType * pFuncType;
 	AstNode * pBodyStmt;
 };

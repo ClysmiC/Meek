@@ -31,7 +31,10 @@ struct Parser
 	DynamicPoolAllocator<ParseType> parseTypeAlloc;
 	DynamicPoolAllocator<ParseFuncType> parseFuncTypeAlloc;
 
-	uint iNode = 0;		// Becomes node's id
+	uint iNode = 0;				// Becomes node's id
+
+	scopeid scopeidNext = 0;
+	Stack<scopeid> scopeStack;
 
 	Token * pPendingToken = nullptr;
 
@@ -87,6 +90,11 @@ AstNode * parseExpr(Parser * pParser);
 
 // Internal
 
+// Scope management
+
+void pushScope(Parser * pParser);
+void popScope(Parser * pParser);
+
 // Node allocation
 
 AstNode * astNew(Parser * pParser, ASTK astk, int line);
@@ -103,7 +111,6 @@ bool tryRecoverFromPanic(Parser * pParser, const TOKENK * aTokenkRecover, int cT
 
 AstNode * parseExprStmtOrAssignStmt(Parser * pParser);
 AstNode * parseStructDefnStmt(Parser * pParser);
-AstNode * parseFuncDefnStmtOrLiteral(Parser * pParser, bool isLiteral);
 AstNode * parseVarDeclStmt(Parser * pParser, EXPECTK expectkName=EXPECTK_Required, EXPECTK expectkInit=EXPECTK_Optional, EXPECTK expectkSemicolon=EXPECTK_Required);
 AstNode * parseIfStmt(Parser * pParser);
 AstNode * parseWhileStmt(Parser * pParser);
@@ -121,7 +128,7 @@ AstNode * parseUnopPre(Parser * pParser);
 AstNode * parsePrimary(Parser * pParser);
 
 bool tryParseFuncDefnStmtOrLiteralExpr(Parser * pParser, FUNCHEADERK funcheaderk, AstNode ** ppoNode);
-bool tryParseFuncHeader(Parser * pParser, FUNCHEADERK funcheaderk, ParseFuncType ** ppoFuncType, AstNode ** ppoErrNode, Token ** ppoDefnIdent=nullptr);
+bool tryParseFuncHeader(Parser * pParser, FUNCHEADERK funcheaderk, ParseFuncType ** ppoFuncType, AstNode ** ppoErrNode, Identifier * poDefnIdent=nullptr);
 bool tryParseFuncHeaderParamList(Parser * pParser, FUNCHEADERK funcheaderk, DynamicArray<AstNode *> * papParamVarDecls);
 AstNode * finishParsePrimary(Parser * pParser, AstNode * pLhsExpr);
 

@@ -146,7 +146,6 @@ struct Token
     //  I can always just strlen them but that is pretty lame.
 
 	char *		lexeme = nullptr;
-	// uint32		hash=0;		// NOTE: Hash is only computed for tokens that get put in the symbol table (identifiers)
 
 	// NOTE: Literal values do not get set until semantic analysis since there are classes of
 	//	semantic errors that can happen at that time (e.g., int literals that exceed max value)
@@ -175,6 +174,19 @@ struct ReservedWord
 	ReservedWord(char * lexeme, TOKENK tokenk) : lexeme(lexeme), tokenk(tokenk) { ; }
 };
 
+typedef s32 scopeid;
+extern const scopeid gc_unresolvedScopeid;
+
+struct Identifier
+{
+	Token * pToken;
+	scopeid declScopeid;		// -1 means unresolved
+
+	// Cached
+
+	u32 hash;
+};
+
 inline bool isLiteral(TOKENK tokenk)
 {
 	return tokenk >= TOKENK_LiteralMin && tokenk < TOKENK_LiteralMax;
@@ -185,6 +197,13 @@ inline void nillify(Token * poToken)
 	poToken->id = 0;
 	poToken->tokenk = TOKENK_Nil;
 }
+
+void setIdent(Identifier * pIdentifier, Token * pToken, scopeid declScopeid);
+void setIdentUnresolved(Identifier * pIdentifier, Token * pToken);
+
+u32 identHash(const Identifier & ident);
+u32 identHashPrecomputed(const Identifier & i);
+bool identEq(const Identifier & i0, const Identifier & i1);
 
 // TODO: use a dict or trie for reserved words
 // TODO: Probably worth making these const correct.
@@ -199,5 +218,3 @@ extern TOKENK g_aTokenkUnopPre[];
 extern int g_cTokenkUnopPre;
 
 extern const char * g_mpTokenkDisplay[];
-
-bool isReservedWordBuiltInType(TOKENK tokenk);

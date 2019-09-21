@@ -321,3 +321,56 @@ void append(FixedArray<T, CAPACITY> * pArray, const T & item)
 	pArray->aBuffer[pArray->cItem] = item;
 	pArray->cItem++;
 }
+
+
+
+// Dynamic stack, wrapper around DynamicArray (not thread safe)
+
+template <typename T>
+struct Stack
+{
+	DynamicArray<T> a;
+};
+
+template<typename T>
+void init(Stack<T> * pStack)
+{
+	init(&pStack->a);
+}
+
+template<typename T>
+void destroy(Stack<T> * pStack)
+{
+	destroy(&pStack->a);
+}
+
+template<typename T>
+void push(Stack<T> * pStack, const T & item)
+{
+	append(&pStack->a, item);
+}
+
+template<typename T>
+bool isEmpty(Stack<T> * pStack)
+{
+	return pStack->a.cItem == 0;
+}
+
+template<typename T>
+bool peek(Stack<T> * pStack, T * poItem)
+{
+	if (isEmpty(pStack)) return false;
+
+	*poItem = pStack->a[pStack->a.cItem - 1];
+	return true;
+}
+
+template<typename T>
+bool pop(Stack<T> * pStack, T * poItem)
+{
+	if (isEmpty(pStack)) return false;
+
+	*poItem = pStack->a[pStack->a.cItem - 1];
+	pStack->a.cItem--;
+	return true;
+}

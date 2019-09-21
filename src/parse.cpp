@@ -56,6 +56,7 @@ bool init(Parser * pParser, Scanner * pScanner)
 	init(&pParser->parseTypeAlloc);
 	init(&pParser->parseFuncTypeAlloc);
 	init(&pParser->astNodes);
+	init(&pParser->scopeStack);
 
 	return true;
 }
@@ -64,6 +65,12 @@ AstNode * parseProgram(Parser * pParser, bool * poSuccess)
 {
 	// NOTE: Empty program is valid to parse, but I may still decide that
 	//	that is a semantic error.
+
+	pushScope(pParser);
+
+	// TODO: Put all of the built-in identifiers into the symbol table
+
+	pushScope(pParser);
 
 	auto * pNode = AstNew(pParser, Program, 0);
 	init(&pNode->apNodes);
@@ -301,6 +308,11 @@ AstNode * parseExprStmtOrAssignStmt(Parser * pParser)
 
 AstNode * parseStructDefnStmt(Parser * pParser)
 {
+	scopeid declScope;
+	Verify(peek(&pParser->scopeStack, &declScope));
+
+	// Parse 'struct'
+
 	if (!tryConsumeToken(pParser->pScanner, TOKENK_Struct))
 	{
 		// TODO: Add a peekTokenLine(..) function because I am doing this a lot just to get
@@ -313,6 +325,8 @@ AstNode * parseStructDefnStmt(Parser * pParser)
 		append(&pErr->aTokenkValid, TOKENK_Struct);
 		return Up(pErr);
 	}
+
+	// Parse identifier
 
 	if (!tryConsumeToken(pParser->pScanner, TOKENK_Identifier, ensurePendingToken(pParser)))
 	{
@@ -327,6 +341,8 @@ AstNode * parseStructDefnStmt(Parser * pParser)
 	Token * pIdent = claimPendingToken(pParser);
 	Assert(pIdent->tokenk == TOKENK_Identifier);
 
+	// Parse '{'
+
 	if (!tryConsumeToken(pParser->pScanner, TOKENK_OpenBrace))
 	{
 		auto * pErr = AstNewErr0Child(pParser, ExpectedTokenkErr, pIdent->line);
@@ -334,24 +350,14 @@ AstNode * parseStructDefnStmt(Parser * pParser)
 		return Up(pErr);
 	}
 
+	// Parse vardeclstmt list, then '}'
+
 	DynamicArray<AstNode *> apVarDeclStmt;
 	init(&apVarDeclStmt);
 	Defer(Assert(apVarDeclStmt.pBuffer == nullptr));
 
 	while (!tryConsumeToken(pParser->pScanner, TOKENK_CloseBrace))
 	{
-		// TODO: Do I need this? What does the error message look like without it and
-		//	would this be a better error message??
-
-		// if (peekToken(pParser->pScanner) == TOKENK_Eof)
-		// {
-		//	   Token * pEof = ensureAndClaimPendingToken(pParser);
-		//	   consumeToken(pParser->pScanner, pEof);
-		//	   auto * pErr = AstNewErrListChildMove(pParser, UnexpectedTokenkErr, pEof->line, &apVarDeclStmt);
-		//	   pErr->pErrToken = pEof;
-		//	   return Up(pErr);
-		// }
-
 		// Parse member var decls
 
 		AstNode * pVarDeclStmt = parseVarDeclStmt(pParser);
@@ -386,8 +392,9 @@ AstNode * parseStructDefnStmt(Parser * pParser)
 	}
 
 finishStruct:
+
 	auto * pNode = AstNew(pParser, StructDefnStmt, pIdent->line);
-	pNode->pIdent = pIdent;
+	setIdent(&pNode->ident, pIdent, declScope);
 	initMove(&pNode->apVarDeclStmt, &apVarDeclStmt);
 
 	return Up(pNode);
@@ -409,21 +416,20 @@ bool tryParseFuncDefnStmtOrLiteralExpr(Parser * pParser, FUNCHEADERK funcheaderk
 	bool addedIntermediatesToAst = false;
 
 	ParseFuncType * pPft = nullptr;
-	Token * pIdent = nullptr;
 	Defer(
 		if (!addedIntermediatesToAst)
 		{
 			if (pPft)		releaseParseFuncType(pParser, pPft);
-			if (pIdent)		releaseToken(pParser, pIdent);
 		}
 	);
 
 	// Parse header
 
+	Identifier defnIdent;	// Only valid if isDefn
 	{
 		AstNode * pErrFuncHeader = nullptr;
-        Token ** ppIdent = (isDefn) ? &pIdent : nullptr;
-		if (!tryParseFuncHeader(pParser, funcheaderk, &pPft, &pErrFuncHeader, ppIdent))
+        Identifier * pDefnIdent = (isDefn) ? &defnIdent : nullptr;
+		if (!tryParseFuncHeader(pParser, funcheaderk, &pPft, &pErrFuncHeader, pDefnIdent))
 		{
 			Assert(pErrFuncHeader);
 			Assert(!pPft);
@@ -431,9 +437,6 @@ bool tryParseFuncDefnStmtOrLiteralExpr(Parser * pParser, FUNCHEADERK funcheaderk
 			*ppoNode = pErrFuncHeader;
 			return false;
 		}
-
-		Assert(Implies(pIdent, isDefn));
-		Assert(Implies(!pIdent, !isDefn));
 
 		Assert(pPft);
 		Assert (!pErrFuncHeader);
@@ -455,8 +458,11 @@ bool tryParseFuncDefnStmtOrLiteralExpr(Parser * pParser, FUNCHEADERK funcheaderk
 
 	if (isDefn)
 	{
+		scopeid declScope;
+		Verify(peek(&pParser->scopeStack, &declScope));
+
 		auto * pNode = AstNew(pParser, FuncDefnStmt, startingLine);
-		pNode->pIdent = pIdent;
+		pNode->ident = defnIdent;
 		pNode->pFuncType = pPft;
 		pNode->pBodyStmt = pBody;
 		*ppoNode = Up(pNode);
@@ -709,8 +715,11 @@ AstNode * parseVarDeclStmt(Parser * pParser, EXPECTK expectkName, EXPECTK expect
 
 	initMove(&pParseType->aTypemods, &aModifiers);
 
+	scopeid declScope;
+	Verify(peek(&pParser->scopeStack, &declScope));
+
 	auto * pNode = AstNew(pParser, VarDeclStmt, line);
-	pNode->pIdent = pVarIdent;
+	setIdent(&pNode->ident, pVarIdent, declScope);
 	pNode->pType = pParseType;
 	pNode->pInitExpr = pInitExpr;
 
@@ -1130,7 +1139,7 @@ AstNode * parsePrimary(Parser * pParser)
 
 		auto * pNode = AstNew(pParser, VarExpr, pIdent->line);
 		pNode->pOwner = nullptr;
-		pNode->pIdent = pIdent;
+		setIdentUnresolved(&pNode->ident, pIdent);
 
 		return finishParsePrimary(pParser, Up(pNode));
 	}
@@ -1176,12 +1185,12 @@ bool tryParseFuncHeader(
 	FUNCHEADERK funcheaderk,
 	ParseFuncType ** ppoFuncType,
 	AstNode ** ppoErrNode,
-	Token ** ppoDefnIdent)
+	Identifier * poDefnIdent)
 {
 	EXPECTK expectkName = (funcheaderk == FUNCHEADERK_Defn) ? EXPECTK_Required : EXPECTK_Forbidden;
 
-	AssertInfo(Implies(expectkName == EXPECTK_Forbidden, !ppoDefnIdent), "Don't provide an ident pointer in a context where a name is illegal!");
-	AssertInfo(Implies(expectkName != EXPECTK_Forbidden, ppoDefnIdent), "Should provide an ident pointer in a context where a name is legal!");
+	AssertInfo(Implies(expectkName == EXPECTK_Forbidden, !poDefnIdent), "Don't provide an ident pointer in a context where a name is illegal!");
+	AssertInfo(Implies(expectkName != EXPECTK_Forbidden, poDefnIdent), "Should provide an ident pointer in a context where a name is legal!");
 
 	// NOTE: If function succeeds, we assign ppoFuncType to the resulting func type that we create
 	//	If it fails, we assign ppoErrorNode to the resulting error node that we generate
@@ -1205,6 +1214,8 @@ bool tryParseFuncHeader(
 
 	if (expectkName == EXPECTK_Required)
 	{
+		Assert(poDefnIdent);
+
 		if (!tryConsumeToken(pParser->pScanner, TOKENK_Identifier, ensurePendingToken(pParser)))
 		{
 			int line = peekTokenLine(pParser->pScanner);
@@ -1215,7 +1226,11 @@ bool tryParseFuncHeader(
 			return false;
 		}
 
-		*ppoDefnIdent = claimPendingToken(pParser);
+		Token * pIdent = claimPendingToken(pParser);
+
+		scopeid declScope;
+		Verify(peek(&pParser->scopeStack, &declScope));
+		setIdent(poDefnIdent, pIdent, declScope);
 	}
 	else
 	{
@@ -1349,7 +1364,7 @@ AstNode * finishParsePrimary(Parser * pParser, AstNode * pExpr)
 
 		case ASTK_VarExpr:
 		{
-			Assert(Down(pExpr, VarExpr)->pIdent->tokenk == TOKENK_Identifier);
+			Assert(Down(pExpr, VarExpr)->ident.pToken->tokenk == TOKENK_Identifier);
 		} break;
 
 		default:
@@ -1375,7 +1390,7 @@ AstNode * finishParsePrimary(Parser * pParser, AstNode * pExpr)
 
 		auto * pNode = AstNew(pParser, VarExpr, pIdent->line);
 		pNode->pOwner = pExpr;
-		pNode->pIdent = pIdent;
+		setIdentUnresolved(&pNode->ident, pIdent);
 
 		return finishParsePrimary(pParser, Up(pNode));
 	}
@@ -1553,6 +1568,17 @@ AstNode * handleScanOrUnexpectedTokenkErr(Parser * pParser, DynamicArray<AstNode
 			return Up(pErr);
 		}
 	}
+}
+
+void pushScope(Parser * pParser)
+{
+	push(&pParser->scopeStack, pParser->scopeidNext);
+	pParser->scopeidNext++;
+}
+
+void popScope(Parser * pParser)
+{
+	AssertInfo(false, "TODO");
 }
 
 AstNode * astNew(Parser * pParser, ASTK astk, int line)
@@ -2170,7 +2196,7 @@ void debugPrintSubAst(const AstNode & node, int level, bool skipAfterArrow, Dyna
 
 			if (pExpr->pOwner)
 			{
-				printf(". %s", pExpr->pIdent->lexeme);
+				printf(". %s", pExpr->ident.pToken->lexeme);
 				printf("\n");
 
 				printTabs(levelNext, false, false, pMapLevelSkip);
@@ -2182,7 +2208,7 @@ void debugPrintSubAst(const AstNode & node, int level, bool skipAfterArrow, Dyna
 			}
 			else
 			{
-				printf("%s", pExpr->pIdent->lexeme);
+				printf("%s", pExpr->ident.pToken->lexeme);
 			}
 		} break;
 
@@ -2291,14 +2317,14 @@ void debugPrintSubAst(const AstNode & node, int level, bool skipAfterArrow, Dyna
 			printTabs(levelNext, false, false, pMapLevelSkip);
 			printf("\n");
 
-			if (pStmt->pIdent)
+			if (pStmt->ident.pToken)
 			{
 				printTabs(levelNext, false, false, pMapLevelSkip);
 				printf("(ident):");
 				printf("\n");
 
 				printTabs(levelNext, true, false, pMapLevelSkip);
-				printf("%s", pStmt->pIdent->lexeme);
+				printf("%s", pStmt->ident.pToken->lexeme);
 				printf("\n");
 
 				printTabs(levelNext, false, false, pMapLevelSkip);
@@ -2339,7 +2365,7 @@ void debugPrintSubAst(const AstNode & node, int level, bool skipAfterArrow, Dyna
 
             printf("\n");
             printTabs(levelNext, true, false, pMapLevelSkip);
-            printf("%s", pStmt->pIdent->lexeme);
+            printf("%s", pStmt->ident.pToken->lexeme);
 
             printf("\n");
             printTabs(levelNext, false, false, pMapLevelSkip);
@@ -2362,7 +2388,7 @@ void debugPrintSubAst(const AstNode & node, int level, bool skipAfterArrow, Dyna
 
             printf("\n");
             printTabs(levelNext, true, false, pMapLevelSkip);
-            printf("%s", pStmt->pIdent->lexeme);
+            printf("%s", pStmt->ident.pToken->lexeme);
 
 			printf("\n");
             printTabs(levelNext, false, false, pMapLevelSkip);
