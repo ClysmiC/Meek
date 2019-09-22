@@ -2,17 +2,20 @@
 
 #include "als.h"
 
-struct ParseFuncType;
-struct ParseType;
+struct AstNode;
+struct AstVarDeclStmt;
+struct AstFuncDefnStmt;
+struct AstStructDefnStmt;
 struct Token;
 
 typedef s32 scopeid;
 extern const scopeid gc_unresolvedScopeid;
+extern const scopeid gc_globalAndBuiltinScopeid;
 
-struct Identifier
+struct ResolvedIdentifier
 {
 	Token * pToken;
-	scopeid declScopeid;		// -1 means unresolved
+	scopeid declScopeid;
 
 	// Cached
 
@@ -26,45 +29,9 @@ enum SYMBOLK
 	SYMBOLK_Struct,
 };
 
-enum VARK
-{
-	VARK_StructOrBuiltin,
-	VARK_Func
-};
-
-struct SymbolInfo;
-
-struct VarInfo
-{
-	SymbolInfo * pInfo;
-
-	VARK vark;
-
-	union
-	{
-		// TODO: These probably need to get replaced with more "solid" resolved types
-
-		ParseType * pParseType;				// VARK_StructOrBuiltin
-		ParseFuncType * pParseFuncType;		// VARK_Func
-	};
-};
-
-struct StructInfo
-{
-	SymbolInfo * pInfo;
-	HashMap<Identifier, VarInfo*> fields;
-};
-
-struct FuncInfo
-{
-	SymbolInfo * pInfo;
-	DynamicArray<SymbolInfo*> aParamsIn;
-	DynamicArray<SymbolInfo*> aParamsOut;
-};
-
 struct SymbolInfo
 {
-	Identifier * pIdent;
+	ResolvedIdentifier * pIdentDeclfn;
 
 	SYMBOLK symbolk;
 
@@ -73,17 +40,21 @@ struct SymbolInfo
 
 	union
 	{
-		VarInfo varInfo;		// SYMBOLK_Var
-		FuncInfo funcInfo;		// SYMBOLK_Func
-		StructInfo structInfo;	// SYMBOLK_Struct
+		AstVarDeclStmt * varDecl;		// SYMBOLK_Var
+		AstFuncDefnStmt * funcDefn;		// SYMBOLK_Func
+		AstStructDefnStmt * structDefn;	// SYMBOLK_Struct
 	};
 };
 
-void init(SymbolInfo * pSymbolInfo, SYMBOLK symbolk, Identifier * pIdent);
+void setSymbolInfo(SymbolInfo * pSymbInfo, SYMBOLK symbolk, AstNode * pDefncl);
+void setIdentResolved(ResolvedIdentifier * pIdentifier, Token * pToken, scopeid declScopeid);
+void setIdentUnresolved(ResolvedIdentifier * pIdentifier, Token * pToken);
 
-void setIdent(Identifier * pIdentifier, Token * pToken, scopeid declScopeid);
-void setIdentUnresolved(Identifier * pIdentifier, Token * pToken);
+u32 identHash(const ResolvedIdentifier & ident);
+u32 identHashPrecomputed(const ResolvedIdentifier & i);
+bool identEq(const ResolvedIdentifier & i0, const ResolvedIdentifier & i1);
 
-u32 identHash(const Identifier & ident);
-u32 identHashPrecomputed(const Identifier & i);
-bool identEq(const Identifier & i0, const Identifier & i1);
+inline bool isResolved(const ResolvedIdentifier & i)
+{
+	return i.declScopeid != gc_unresolvedScopeid;
+}

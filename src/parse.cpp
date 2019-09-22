@@ -53,9 +53,9 @@ bool init(Parser * pParser, Scanner * pScanner)
 	pParser->pScanner = pScanner;
 	init(&pParser->astAlloc);
 	init(&pParser->tokenAlloc);
-	init(&pParser->parseTypeAlloc);
-	init(&pParser->parseFuncTypeAlloc);
-	init(&pParser->symbolInfoAlloc);
+	init(&pParser->typeAlloc);
+	init(&pParser->funcTypeAlloc);
+	// init(&pParser->symbolInfoAlloc);
 	init(&pParser->astNodes);
 	init(&pParser->scopeStack);
 	init(&pParser->symbolTable, identHashPrecomputed, identEq);
@@ -352,11 +352,13 @@ AstNode * parseStructDefnStmt(Parser * pParser)
 		return Up(pErr);
 	}
 
+	pushScope(pParser);
+
 	// Parse vardeclstmt list, then '}'
 
 	DynamicArray<AstNode *> apVarDeclStmt;
 	init(&apVarDeclStmt);
-	Defer(Assert(apVarDeclStmt.pBuffer == nullptr));
+	Defer(destroy(&apVarDeclStmt));
 
 	while (!tryConsumeToken(pParser->pScanner, TOKENK_CloseBrace))
 	{
@@ -395,9 +397,29 @@ AstNode * parseStructDefnStmt(Parser * pParser)
 
 finishStruct:
 
+	popScope(pParser);
+
 	auto * pNode = AstNew(pParser, StructDefnStmt, pIdent->line);
-	setIdent(&pNode->ident, pIdent, declScope);
+	setIdentResolved(&pNode->ident, pIdent, declScope);
 	initMove(&pNode->apVarDeclStmt, &apVarDeclStmt);
+
+	SymbolInfo structDefnInfo;
+	setSymbolInfo(&structDefnInfo, SYMBOLK_Struct, Up(pNode));
+	AstNode * pErr = nullptr;
+
+	if (!tryInsertIntoSymbolTable(pParser, pNode->ident, structDefnInfo, pErr))
+	{
+		Assert(pErr);
+		appendMultiple(
+			&DownErr(pErr)->apChildren,
+			pNode->apVarDeclStmt.pBuffer,
+			pNode->apVarDeclStmt.cItem
+		);
+
+		release(&pParser->astAlloc, Up(pNode));
+
+		return Up(pErr);
+	}
 
 	return Up(pNode);
 }
@@ -407,125 +429,79 @@ bool tryParseFuncDefnStmtOrLiteralExpr(Parser * pParser, FUNCHEADERK funcheaderk
 	Assert(funcheaderk == FUNCHEADERK_Defn || funcheaderk == FUNCHEADERK_Literal);
 	Assert(ppoNode);
 
+	bool success = false;
     bool isDefn = funcheaderk == FUNCHEADERK_Defn;
-
 	int startingLine = peekTokenLine(pParser->pScanner);
 
-	// TODO: This solution still isn't *that* great since if we error we don't attach any of the func header
-	//	to the AST which will lead to a bunch more errors since the variables that we would expect to
-	//	find in the header will not be anywhere in the AST!
-
-	bool addedIntermediatesToAst = false;
-
-	ParseFuncType * pPft = nullptr;
-	Defer(
-		if (!addedIntermediatesToAst)
-		{
-			if (pPft)		releaseParseFuncType(pParser, pPft);
-		}
-	);
+	FuncType * pFuncType = nullptr;
+	Defer(if (!success && pFuncType) releaseFuncType(pParser, pFuncType););
 
 	// Parse header
 
-	Identifier defnIdent;	// Only valid if isDefn
+	// NOTE: Push scope before parsing header so that the symbols declared in the header
+	//	are subsumed by the function's scope.
+
+	pushScope(pParser);
+	Defer(popScope(pParser));
+
+	ResolvedIdentifier identDefn;	// Only valid if isDefn
 	{
 		AstNode * pErrFuncHeader = nullptr;
-        Identifier * pDefnIdent = (isDefn) ? &defnIdent : nullptr;
-		if (!tryParseFuncHeader(pParser, funcheaderk, &pPft, &pErrFuncHeader, pDefnIdent))
+        ResolvedIdentifier * pDefnIdent = (isDefn) ? &identDefn : nullptr;
+		if (!tryParseFuncHeader(pParser, funcheaderk, &pFuncType, &pErrFuncHeader, pDefnIdent))
 		{
 			Assert(pErrFuncHeader);
-			Assert(!pPft);
+			Assert(!pFuncType);
 
 			*ppoNode = pErrFuncHeader;
-			return false;
+			return success = false;
 		}
 
-		Assert(pPft);
+		Assert(pFuncType);
 		Assert (!pErrFuncHeader);
 	}
 
 	// Parse { <stmts> } or do <stmt>
 
-	AstNode * pBody = parseDoStmtOrBlockStmt(pParser);
+	bool pushPopScope = false;
+	AstNode * pBody = parseDoStmtOrBlockStmt(pParser, pushPopScope);
 
 	if (isErrorNode(*pBody))
 	{
 		*ppoNode = pBody;
-		return false;
+		return success = false;
 	}
 
-	// Success!
-
-	addedIntermediatesToAst = true;
-
-	if (isDefn)
+	if (!isDefn)
 	{
-		scopeid declScope;
-		Verify(peek(&pParser->scopeStack, &declScope));
-
-		auto * pNode = AstNew(pParser, FuncDefnStmt, startingLine);
-		pNode->ident = defnIdent;
-		pNode->pFuncType = pPft;
+		auto * pNode = AstNew(pParser, FuncLiteralExpr, startingLine);
+		pNode->pFuncType = pFuncType;
 		pNode->pBodyStmt = pBody;
 		*ppoNode = Up(pNode);
 
-		// Add to symbol table
-		if (lookup(&pParser->symbolTable, pNode->ident))
-		{
-			AssertInfo(false, "TODO: symbol redefinition error");
-		}
-		else
-		{
-			SymbolInfo * pSymbInfo = newSymbolInfo(pParser);
-			init(pSymbInfo, SYMBOLK_Func, &pNode->ident);
-
-			FuncInfo * pFuncInfo = &pSymbInfo->funcInfo;
-			for (uint i = 0; i < pPft->apParamVarDecls.cItem; i++)
-			{
-				AstVarDeclStmt * pParamVarDecl = Down(pPft->apParamVarDecls[i], VarDeclStmt);
-
-				SymbolInfo * pParamSymbInfo = nullptr;
-				bool found = lookup(&pParser->symbolTable, pParamVarDecl->pType->ident, &pParamSymbInfo);
-
-				// null symbol info means that we will need to check for this in the
-				//	type resolution pass
-
-				Assert(Implies(found, pParamSymbInfo));
-				Assert(Implies(!found, !pParamSymbInfo));
-				
-				append(&pFuncInfo->aParamsIn, pParamSymbInfo);
-			}
-
-			for (uint i = 0; i < pPft->apReturnVarDecls.cItem; i++)
-			{
-				AstVarDeclStmt * pReturnVarDecl = Down(pPft->apReturnVarDecls[i], VarDeclStmt);
-
-				SymbolInfo * pParamSymbInfo = nullptr;
-				bool found = lookup(&pParser->symbolTable, pReturnVarDecl->pType->ident, &pParamSymbInfo);
-
-				// null symbol info means that we will need to check for this in the
-				//	type resolution pass
-
-				Assert(Implies(found, pParamSymbInfo));
-				Assert(Implies(!found, !pParamSymbInfo));
-
-				append(&pFuncInfo->aParamsIn, pParamSymbInfo);
-			}
-
-			insert(&pParser->symbolTable, pNode->ident, pSymbInfo);
-		}
-
-		return true;
+		return success = true;
 	}
 	else
 	{
-		Assert(funcheaderk == FUNCHEADERK_Literal);
-
-		auto * pNode = AstNew(pParser, FuncLiteralExpr, startingLine);
-		pNode->pFuncType = pPft;
+		auto * pNode = AstNew(pParser, FuncDefnStmt, startingLine);
+		pNode->ident = identDefn;
+		pNode->pFuncType = pFuncType;
 		pNode->pBodyStmt = pBody;
+		
+		SymbolInfo funcDefnInfo;
+		setSymbolInfo(&funcDefnInfo, SYMBOLK_Func, Up(pNode));
+		AstNode * pErr = nullptr;
+
+		if (!tryInsertIntoSymbolTable(pParser, identDefn, funcDefnInfo, pErr))
+		{
+			Assert(pErr);
+			release(&pParser->astAlloc, Up(pNode));
+			*ppoNode = pErr;
+			return success = false;
+		}
+
 		*ppoNode = Up(pNode);
-		return true;
+		return success = true;
 	}
 }
 
@@ -534,14 +510,9 @@ AstNode * parseVarDeclStmt(Parser * pParser, EXPECTK expectkName, EXPECTK expect
 	AssertInfo(expectkName != EXPECTK_Forbidden, "Function does not (currently) support being called with expectkName forbidden");
 	AssertInfo(expectkSemicolon != EXPECTK_Optional, "Semicolon should either be required or forbidden");
 
-	DynamicArray<ParseTypeModifier> aModifiers;
+	DynamicArray<TypeModifier> aModifiers;
 	init(&aModifiers);
-	Defer(
-		if (aModifiers.pBuffer != nullptr)
-		{
-			destroy(&aModifiers);
-		}
-	);
+	Defer(destroy(&aModifiers););
 
 	// This list already kind of exists embedded in the modifiers, but we store it
 	//	separately here to make it easier to attach them to an error node should
@@ -549,12 +520,7 @@ AstNode * parseVarDeclStmt(Parser * pParser, EXPECTK expectkName, EXPECTK expect
 
 	DynamicArray<AstNode *> apNodeChildren;
 	init(&apNodeChildren);
-	Defer(
-		if (apNodeChildren.pBuffer != nullptr)
-		{
-			destroy(&apNodeChildren);
-		}
-	);
+	Defer(destroy(&apNodeChildren););
 
 	// Remember line # of the first token
 
@@ -565,13 +531,12 @@ AstNode * parseVarDeclStmt(Parser * pParser, EXPECTK expectkName, EXPECTK expect
 		line = tokenNext.line;
 	}
 
-	// BEGIN PARSE TYPE.... move this to separate function!
+	// Parse var type... maybe move this into its own function
 
-
-	while (peekToken(pParser->pScanner, ensurePendingToken(pParser)) != TOKENK_Identifier &&
-            peekToken(pParser->pScanner, ensurePendingToken(pParser)) != TOKENK_Func)
+	while (peekToken(pParser->pScanner) != TOKENK_Identifier &&
+            peekToken(pParser->pScanner) != TOKENK_Func)
 	{
-		if (tryConsumeToken(pParser->pScanner, TOKENK_OpenBracket, ensurePendingToken(pParser)))
+		if (tryConsumeToken(pParser->pScanner, TOKENK_OpenBracket))
 		{
 			// [
 
@@ -587,23 +552,23 @@ AstNode * parseVarDeclStmt(Parser * pParser, EXPECTK expectkName, EXPECTK expect
 				return Up(pErr);
 			}
 
-			if (!tryConsumeToken(pParser->pScanner, TOKENK_CloseBracket, ensurePendingToken(pParser)))
+			if (!tryConsumeToken(pParser->pScanner, TOKENK_CloseBracket))
 			{
 				auto * pErr = AstNewErrListChildMove(pParser, ExpectedTokenkErr, pSubscriptExpr->startLine, &apNodeChildren);
 				append(&pErr->aTokenkValid, TOKENK_CloseBracket);
 				return Up(pErr);
 			}
 
-			ParseTypeModifier mod;
+			TypeModifier mod;
 			mod.typemodk = TYPEMODK_Array;
 			mod.pSubscriptExpr = pSubscriptExpr;
 			append(&aModifiers, mod);
 		}
-		else if (tryConsumeToken(pParser->pScanner, TOKENK_Carat, ensurePendingToken(pParser)))
+		else if (tryConsumeToken(pParser->pScanner, TOKENK_Carat))
 		{
 			// ^
 
-			ParseTypeModifier mod;
+			TypeModifier mod;
 			mod.typemodk = TYPEMODK_Pointer;
 			append(&aModifiers, mod);
 		}
@@ -613,46 +578,43 @@ AstNode * parseVarDeclStmt(Parser * pParser, EXPECTK expectkName, EXPECTK expect
 		}
 	}
 
+	bool success = false;
     Token * pTypeIdent = nullptr;       // Only for non-func type
+	FuncType * pFuncType = nullptr;		// Only for func type
 
-	ParseFuncType * pPft = nullptr;
-	bool addedPftToAst = false;
 	Defer(
-		if (!addedPftToAst && pPft)
-		{
-			releaseParseFuncType(pParser, pPft);
-		}
+		if (!success && pTypeIdent) release(&pParser->tokenAlloc, pTypeIdent);
+		if (!success && pFuncType) releaseFuncType(pParser, pFuncType);
 	);
 
 	bool isFuncType = false;
-	if (pParser->pPendingToken->tokenk == TOKENK_Identifier)
+	if (peekToken(pParser->pScanner) == TOKENK_Identifier)
 	{
         // We want to claim and consume the token if it is an identifier,
         //  but if it is a function we only want to have peeked it, since
         //  tryParseFuncHeader will be expecting "func" as its first token
 
 		isFuncType = false;
-        pTypeIdent = claimPendingToken(pParser);
+        pTypeIdent = ensureAndClaimPendingToken(pParser);
         consumeToken(pParser->pScanner, pTypeIdent);
 	}
-	else if (pParser->pPendingToken->tokenk == TOKENK_Func)
+	else if (peekToken(pParser->pScanner) == TOKENK_Func)
 	{
 		isFuncType = true;
-        int lineOfFunc = pParser->pPendingToken->line;
 
 		AstNode * pErrFuncHeader = nullptr;
-		if (!tryParseFuncHeader(pParser, FUNCHEADERK_VarType, &pPft, &pErrFuncHeader))
+		if (!tryParseFuncHeader(pParser, FUNCHEADERK_VarType, &pFuncType, &pErrFuncHeader))
 		{
 			Assert(pErrFuncHeader);
-            Assert(!pPft);
+            Assert(!pFuncType);
 
 			append(&apNodeChildren, pErrFuncHeader);
 
-			auto * pErr = AstNewErrListChildMove(pParser, BubbleErr, lineOfFunc, &apNodeChildren);
+			auto * pErr = AstNewErrListChildMove(pParser, BubbleErr, peekTokenLine(pParser->pScanner), &apNodeChildren);
 			return Up(pErr);
 		}
 
-		Assert(pPft);	// Got a function header, nice!
+		Assert(pFuncType);	// Got a function header, nice!
         Assert(!pErrFuncHeader);
 	}
 	else
@@ -660,12 +622,12 @@ AstNode * parseVarDeclStmt(Parser * pParser, EXPECTK expectkName, EXPECTK expect
 		Assert(false);
 	}
 
-	// END PARSE TYPE
-
-
 	// Parse name
 
 	Token * pVarIdent = nullptr;
+	Defer(
+		if (!success && pVarIdent) release(&pParser->tokenAlloc, pVarIdent);
+	);
 
 	if (expectkName == EXPECTK_Optional || expectkName == EXPECTK_Required)
 	{
@@ -684,7 +646,7 @@ AstNode * parseVarDeclStmt(Parser * pParser, EXPECTK expectkName, EXPECTK expect
 	}
 	else
 	{
-		Assert(false);
+		AssertInfo(false, "Var decls can be optionally named in some contexts (func params), but it doesn't make sense to forbid naming them!");
 	}
 
 	// Parse init expr
@@ -745,35 +707,45 @@ AstNode * parseVarDeclStmt(Parser * pParser, EXPECTK expectkName, EXPECTK expect
 		}
 	}
 
-	// Success!
-
-	ParseType * pParseType = newParseType(pParser);
+	Type * pType = newType(pParser);
+	Defer(if (!success) releaseType(pParser, pType););
 
 	if (isFuncType)
 	{
-		pParseType->isFuncType = true;
-		pParseType->pParseFuncType = pPft;
-		addedPftToAst = true;
+		pType->isFuncType = true;
+		pType->pFuncType = pFuncType;
 	}
 	else
 	{
-		Identifier identType;
+		ResolvedIdentifier identType;
 		setIdentUnresolved(&identType, pTypeIdent);
 
 		Assert(pTypeIdent->tokenk == TOKENK_Identifier);
-		pParseType->isFuncType = false;
-		pParseType->ident = identType;
+		pType->isFuncType = false;
+		pType->ident = identType;
 	}
 
-	initMove(&pParseType->aTypemods, &aModifiers);
+	initMove(&pType->aTypemods, &aModifiers);
 
-	scopeid declScope;
-	Verify(peek(&pParser->scopeStack, &declScope));
+	scopeid declScope = peekScope(pParser);
 
 	auto * pNode = AstNew(pParser, VarDeclStmt, line);
-	setIdent(&pNode->ident, pVarIdent, declScope);
-	pNode->pType = pParseType;
+	setIdentResolved(&pNode->ident, pVarIdent, declScope);
+	pNode->pType = pType;
 	pNode->pInitExpr = pInitExpr;
+
+	SymbolInfo varDeclInfo;
+	setSymbolInfo(&varDeclInfo, SYMBOLK_Var, Up(pNode));
+	AstNode * pErr = nullptr;
+
+	if (!tryInsertIntoSymbolTable(pParser, pNode->ident, varDeclInfo, pErr))
+	{
+		Assert(pErr);
+		release(&pParser->astAlloc, Up(pNode));
+		appendMultiple(&DownErr(pErr)->apChildren, apNodeChildren.pBuffer, apNodeChildren.cItem);
+
+		return Up(pErr);
+	}
 
 	return Up(pNode);
 }
@@ -876,7 +848,7 @@ AstNode * parseWhileStmt(Parser * pParser)
 	return Up(pNode);
 }
 
-AstNode * parseDoStmtOrBlockStmt(Parser * pParser)
+AstNode * parseDoStmtOrBlockStmt(Parser * pParser, bool pushPopScopeBlock)
 {
 	TOKENK tokenk = peekToken(pParser->pScanner);
 	if (tokenk != TOKENK_OpenBrace &&
@@ -891,7 +863,7 @@ AstNode * parseDoStmtOrBlockStmt(Parser * pParser)
 	AstNode * pStmt = nullptr;
 	if (tokenk == TOKENK_OpenBrace)
 	{
-		pStmt = parseBlockStmt(pParser);
+		pStmt = parseBlockStmt(pParser, pushPopScopeBlock);
 
 		if (isErrorNode(*pStmt))
 		{
@@ -920,7 +892,7 @@ AstNode * parseDoStmtOrBlockStmt(Parser * pParser)
 	return pStmt;
 }
 
-AstNode * parseBlockStmt(Parser * pParser)
+AstNode * parseBlockStmt(Parser * pParser, bool pushPopScope)
 {
 	// Parse {
 
@@ -930,6 +902,8 @@ AstNode * parseBlockStmt(Parser * pParser)
 		append(&pErr->aTokenkValid, TOKENK_OpenBrace);
 		return Up(pErr);
 	}
+
+	if (pushPopScope) pushScope(pParser);
 
 	int openBraceLine = prevTokenLine(pParser->pScanner);
 
@@ -950,6 +924,8 @@ AstNode * parseBlockStmt(Parser * pParser)
 			return Up(pErr);
 		}
 	}
+
+	if (pushPopScope) popScope(pParser);
 
 	// Success!
 
@@ -1250,21 +1226,6 @@ AstNode * parseVarExpr(Parser * pParser, AstNode * pOwnerExpr)
 
 	auto * pNode = AstNew(pParser, VarExpr, pIdent->line);
 	pNode->pOwner = pOwnerExpr;
-
-	// Check all of our scopes for a correpsonding definition. If we find it, this
-	//	variable use is "resolved" to that definition. If we *don't* find it, set it
-	//	as unresolved. We may still resolve it in the future if it is using a variable
-	//	that is defined later (and is permitted to be used before defined, such as struct
-	//	or func defns.
-
-	Stack<scopeid> & scopes = pParser->scopeStack;
-	for (int i = scopes.a.cItem - 1; i >= 0; i--)
-	{
-		Identifier symbolDefnCandidate;
-		setIdent(&symbolDefnCandidate, pIdent, scopes.a[i]);
-		// TODO
-		// lookup(&parser->symbolTable, symbolDefnCandidate)
-	}
 	setIdentUnresolved(&pNode->ident, pIdent);
 
 	return finishParsePrimary(pParser, Up(pNode));
@@ -1273,9 +1234,9 @@ AstNode * parseVarExpr(Parser * pParser, AstNode * pOwnerExpr)
 bool tryParseFuncHeader(
 	Parser * pParser,
 	FUNCHEADERK funcheaderk,
-	ParseFuncType ** ppoFuncType,
+	FuncType ** ppoFuncType,
 	AstNode ** ppoErrNode,
-	Identifier * poDefnIdent)
+	ResolvedIdentifier * poDefnIdent)
 {
 	EXPECTK expectkName = (funcheaderk == FUNCHEADERK_Defn) ? EXPECTK_Required : EXPECTK_Forbidden;
 
@@ -1284,6 +1245,12 @@ bool tryParseFuncHeader(
 
 	// NOTE: If function succeeds, we assign ppoFuncType to the resulting func type that we create
 	//	If it fails, we assign ppoErrorNode to the resulting error node that we generate
+
+	bool success = false;
+	Token * pIdent = nullptr;
+	Defer(
+		if (!success && pIdent) release(&pParser->tokenAlloc, pIdent)
+	);
 
 	*ppoFuncType = nullptr;
 	*ppoErrNode = nullptr;
@@ -1316,11 +1283,15 @@ bool tryParseFuncHeader(
 			return false;
 		}
 
-		Token * pIdent = claimPendingToken(pParser);
+		pIdent = claimPendingToken(pParser);
+
+		// NOTE: We are not responsible for adding the identifier to the symbol table.
+		//	That responsibility falls on the function that allocates the AST node that
+		//	contains the identifier.
 
 		scopeid declScope;
 		Verify(peek(&pParser->scopeStack, &declScope));
-		setIdent(poDefnIdent, pIdent, declScope);
+		setIdentResolved(poDefnIdent, pIdent, declScope);
 	}
 	else
 	{
@@ -1391,7 +1362,7 @@ bool tryParseFuncHeader(
 
 	// Success!
 
-	ParseFuncType * pft = newParseFuncType(pParser);
+	FuncType * pft = newFuncType(pParser);
 	initMove(&pft->apParamVarDecls, &apInParamVarDecls);
 	initMove(&pft->apReturnVarDecls, &apOutParamVarDecls);
     *ppoFuncType = pft;
@@ -1603,6 +1574,32 @@ AstNode * finishParsePrimary(Parser * pParser, AstNode * pExpr)
 	}
 }
 
+bool tryInsertIntoSymbolTable(
+	Parser * pParser,
+	ResolvedIdentifier ident,
+	SymbolInfo symbInfo,
+	AstNode * poErr)
+{
+	// Compute hash so that the caller has 1 less responsibility :)
+
+	ident.hash = identHash(ident);
+
+	SymbolInfo preexistingInfo;
+	if (lookup(&pParser->symbolTable, ident, &preexistingInfo))
+	{
+		// NOTE: It is the responsibility of the caller to append any children to the
+		//	error node that we return.
+
+		auto * pErr = AstNewErr0Child(pParser, SymbolRedefinitionErr, ident.pToken->line);
+		pErr->pDefnToken = preexistingInfo.pIdentDeclfn->pToken;
+		pErr->pRedefnToken = ident.pToken;
+		return false;
+	}
+
+	insert(&pParser->symbolTable, ident, symbInfo);
+	return true;
+}
+
 AstNode * handleScanOrUnexpectedTokenkErr(Parser * pParser, DynamicArray<AstNode *> * papChildren)
 {
 	Token * pErrToken =	 ensureAndClaimPendingToken(pParser);
@@ -1650,9 +1647,20 @@ void pushScope(Parser * pParser)
 	pParser->scopeidNext++;
 }
 
-void popScope(Parser * pParser)
+scopeid peekScope(Parser * pParser)
 {
-	AssertInfo(false, "TODO");
+	scopeid id = -1;
+	peek(&pParser->scopeStack, &id);
+
+	return id;
+}
+
+scopeid popScope(Parser * pParser)
+{
+	scopeid id = -1;
+	pop(&pParser->scopeStack, &id);
+
+	return id;
 }
 
 AstNode * astNew(Parser * pParser, ASTK astk, int line)
@@ -1923,7 +1931,7 @@ void debugPrintSubAst(const AstNode & node, int level, bool skipAfterArrow, Dyna
 		printChildren(node.apChildren, level, "child", true, pMapLevelSkip);
 	};
 
-	auto debugPrintParseFuncType = [printTabs, printChildren](const ParseFuncType & parseFuncType, int level, bool skipAfterArrow, DynamicArray<bool> * pMapLevelSkip)
+	auto debugPrintParseFuncType = [printTabs, printChildren](const FuncType & parseFuncType, int level, bool skipAfterArrow, DynamicArray<bool> * pMapLevelSkip)
 	{
 		if (parseFuncType.apParamVarDecls.cItem == 0)
 		{
@@ -1948,18 +1956,18 @@ void debugPrintSubAst(const AstNode & node, int level, bool skipAfterArrow, Dyna
 		}
 	};
 
-	auto debugPrintParseType = [printTabs, debugPrintParseFuncType, setSkip](const ParseType & parseType, int level, bool skipAfterArrow, DynamicArray<bool> * pMapLevelSkip)
+	auto debugPrintType = [printTabs, debugPrintParseFuncType, setSkip](const Type & type, int level, bool skipAfterArrow, DynamicArray<bool> * pMapLevelSkip)
 	{
         setSkip(pMapLevelSkip, level, false);
 
 		int levelNext = level + 1;
 
-		for (uint i = 0; i < parseType.aTypemods.cItem; i++)
+		for (uint i = 0; i < type.aTypemods.cItem; i++)
 		{
 			printf("\n");
 			printTabs(level, false, false, pMapLevelSkip);
 
-			ParseTypeModifier ptm = parseType.aTypemods[i];
+			TypeModifier ptm = type.aTypemods[i];
 
 			if (ptm.typemodk == TYPEMODK_Array)
 			{
@@ -1974,7 +1982,7 @@ void debugPrintSubAst(const AstNode & node, int level, bool skipAfterArrow, Dyna
 
 		}
 
-		if (parseType.isFuncType)
+		if (type.isFuncType)
 		{
             printf("\n");
             printTabs(level, false, false, pMapLevelSkip);
@@ -1983,13 +1991,13 @@ void debugPrintSubAst(const AstNode & node, int level, bool skipAfterArrow, Dyna
             printf("\n");
             printTabs(level, false, false, pMapLevelSkip);
 
-			debugPrintParseFuncType(*parseType.pParseFuncType, level, skipAfterArrow, pMapLevelSkip);
+			debugPrintParseFuncType(*type.pFuncType, level, skipAfterArrow, pMapLevelSkip);
 		}
 		else
 		{
 			printf("\n");
 			printTabs(level, true, skipAfterArrow, pMapLevelSkip);
-			printf("%s", parseType.ident.pToken->lexeme);
+			printf("%s", type.ident.pToken->lexeme);
 		}
 	};
 
@@ -2410,7 +2418,7 @@ void debugPrintSubAst(const AstNode & node, int level, bool skipAfterArrow, Dyna
 
             bool hasInitExpr = (pStmt->pInitExpr != nullptr);
 
-			debugPrintParseType(*pStmt->pType, levelNext, !hasInitExpr, pMapLevelSkip);
+			debugPrintType(*pStmt->pType, levelNext, !hasInitExpr, pMapLevelSkip);
 			printf("\n");
 			printTabs(levelNext, false, false, pMapLevelSkip);
 

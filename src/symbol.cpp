@@ -1,51 +1,54 @@
 #include "symbol.h"
 
+#include "ast.h"
 #include "token.h"
 
 const scopeid gc_unresolvedScopeid = -1;
+const scopeid gc_globalAndBuiltinScopeid = 0;
 
-void init(SymbolInfo * pSymbolInfo, SYMBOLK symbolk, Identifier * pIdent)
+void setSymbolInfo(SymbolInfo * pSymbInfo, SYMBOLK symbolk, AstNode * pNode)
 {
-	pSymbolInfo->pIdent = pIdent;
-	pSymbolInfo->symbolk = symbolk;
+	pSymbInfo->symbolk = symbolk;
 
 	switch (symbolk)
 	{
 		case SYMBOLK_Var:
 		{
-			pSymbolInfo->varInfo.pInfo = pSymbolInfo;
-			// User should manually init VarInfo based on the VARK
-		} break;
-
-		case SYMBOLK_Func:
-		{
-			pSymbolInfo->funcInfo.pInfo = pSymbolInfo;
-			init(&pSymbolInfo->funcInfo.aParamsIn);
-			init(&pSymbolInfo->funcInfo.aParamsOut);
+			Assert(pNode->astk == ASTK_VarDeclStmt);
+			pSymbInfo->varDecl = (AstVarDeclStmt *) pNode;
 		} break;
 
 		case SYMBOLK_Struct:
 		{
-			pSymbolInfo->structInfo.pInfo = pSymbolInfo;
-			init(&pSymbolInfo->structInfo.fields, identHashPrecomputed, identEq);
+			Assert(pNode->astk == ASTK_StructDefnStmt);
+			pSymbInfo->structDefn = (AstStructDefnStmt *)pNode;
 		} break;
+
+		case SYMBOLK_Func:
+		{
+			Assert(pNode->astk == ASTK_FuncDefnStmt);
+			pSymbInfo->funcDefn = (AstFuncDefnStmt *)pNode;
+		} break;
+
+		default:
+			Assert(false);
 	}
 }
 
-void setIdent(Identifier * pIdentifier, Token * pToken, scopeid declScopeid)
+void setIdentResolved(ResolvedIdentifier * pIdentifier, Token * pToken, scopeid declScopeid)
 {
 	pIdentifier->pToken = pToken;
 	pIdentifier->declScopeid = declScopeid;
 	pIdentifier->hash = identHash(*pIdentifier);
 }
 
-void setIdentUnresolved(Identifier * pIdentifier, Token * pToken)
+void setIdentUnresolved(ResolvedIdentifier * pIdentifier, Token * pToken)
 {
 	pIdentifier->pToken = pToken;
 	pIdentifier->declScopeid = gc_unresolvedScopeid;
 }
 
-u32 identHash(const Identifier & ident)
+u32 identHash(const ResolvedIdentifier & ident)
 {
 	// FNV-1a : http://www.isthe.com/chongo/tech/comp/fnv/
 
@@ -78,17 +81,13 @@ u32 identHash(const Identifier & ident)
 	return result;
 }
 
-u32 identHashPrecomputed(const Identifier & i)
+u32 identHashPrecomputed(const ResolvedIdentifier & i)
 {
 	return i.hash;
 }
 
-bool identEq(const Identifier & i0, const Identifier & i1)
+bool identEq(const ResolvedIdentifier & i0, const ResolvedIdentifier & i1)
 {
-	// TODO: Can probably get rid of this first check as long as we make sure that we
-	//	are only putting identifiers w/ tokens in the symbol table (which should be
-	//	the case...)
-
 	if (!i0.pToken || !i1.pToken)			return false;
 
 	if (i0.hash != i1.hash)					return false;

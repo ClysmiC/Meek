@@ -7,8 +7,8 @@
 // Forward declarations
 
 struct AstNode;
-struct ParseType;
-struct ParseFuncType;
+struct Type;
+struct FuncType;
 
 
 
@@ -38,6 +38,7 @@ enum ASTK : u8
 	ASTK_ChainedAssignErr,
 	ASTK_IllegalDoStmtErr,
 	ASTK_InvokeFuncLiteralErr,
+	ASTK_SymbolRedefinitionErr,
 
 	ASTK_ErrMax,
 
@@ -138,6 +139,12 @@ struct AstIllegalDoStmtErr
 
 struct AstInvokeFuncLiteralErr {};
 
+struct AstSymbolRedefinitionErr
+{
+	Token * pDefnToken;
+	Token * pRedefnToken;
+};
+
 struct AstErr
 {
 	// NOTE: Error kind is encoded in ASTK
@@ -155,6 +162,7 @@ struct AstErr
 		AstChainedAssignErr chainedAssignErr;
         AstIllegalDoStmtErr illegalDoStmtErr;
 		AstInvokeFuncLiteralErr invokeFuncLiteralErr;
+		AstSymbolRedefinitionErr symbolRedefinitionErr;
 	};
 
 	// Errors propogate up the AST, but still hang on to their child nodes so that
@@ -197,7 +205,7 @@ struct AstVarExpr
 	//	just a plain old variable without a dot.
 
 	AstNode * pOwner;
-	Identifier ident;
+	ResolvedIdentifier ident;
 };
 
 struct AstArrayAccessExpr
@@ -214,7 +222,7 @@ struct AstFuncCallExpr
 
 struct AstFuncLiteralExpr
 {
-	ParseFuncType * pFuncType;
+	FuncType * pFuncType;
 	AstNode * pBodyStmt;
 };
 
@@ -236,9 +244,9 @@ struct AstAssignStmt
 
 struct AstVarDeclStmt
 {
-	Identifier ident;
+	ResolvedIdentifier ident;
 
-	ParseType * pType;		// null means inferred type while parsing
+	Type * pType;
 	AstNode * pInitExpr;	// null means default init
 
 
@@ -249,7 +257,7 @@ struct AstVarDeclStmt
 
 struct AstStructDefnStmt
 {
-	Identifier ident;
+	ResolvedIdentifier ident;
 	DynamicArray<AstNode *> apVarDeclStmt;
 };
 
@@ -268,8 +276,8 @@ struct AstWhileStmt
 
 struct AstFuncDefnStmt
 {
-	Identifier ident;
-	ParseFuncType * pFuncType;
+	ResolvedIdentifier ident;
+	FuncType * pFuncType;
 	AstNode * pBodyStmt;
 };
 

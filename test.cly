@@ -8,7 +8,7 @@ float x = square(5);
 
 func hof (func (int i)(Foober k) inputFunc=somefunc)(float j = 3)
 {
-
+	int foop = 16;
 }
 
 // var hofVar =

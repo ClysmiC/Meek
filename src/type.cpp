@@ -2,13 +2,13 @@
 
 #include <string.h>
 
-bool isTypeInferred(const ParseType & parseType)
+bool isTypeInferred(const Type & type)
 {
-	bool result = (strcmp(parseType.ident.pToken->lexeme, "var") == 0);
+	bool result = (strcmp(type.ident.pToken->lexeme, "var") == 0);
     return result;
 }
 
-bool isUnmodifiedType(const ParseType & parseType)
+bool isUnmodifiedType(const Type & type)
 {
-	return parseType.aTypemods.cItem == 0;
+	return type.aTypemods.cItem == 0;
 }

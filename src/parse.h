@@ -28,9 +28,9 @@ struct Parser
 
 	DynamicPoolAllocator<AstNode> astAlloc;
 	DynamicPoolAllocator<Token> tokenAlloc;
-	DynamicPoolAllocator<ParseType> parseTypeAlloc;
-	DynamicPoolAllocator<ParseFuncType> parseFuncTypeAlloc;
-	DynamicPoolAllocator<SymbolInfo> symbolInfoAlloc;
+	DynamicPoolAllocator<Type> typeAlloc;
+	DynamicPoolAllocator<FuncType> funcTypeAlloc;
+	// DynamicPoolAllocator<SymbolInfo> symbolInfoAlloc;
 
 	uint iNode = 0;				// Becomes node's id
 
@@ -39,7 +39,7 @@ struct Parser
 
 	// TODO: probably move this out of the parser and into a more "global" data structure?
 
-	HashMap<Identifier, SymbolInfo*> symbolTable;
+	HashMap<ResolvedIdentifier, SymbolInfo> symbolTable;
 
 	Token * pPendingToken = nullptr;
 
@@ -98,7 +98,8 @@ AstNode * parseExpr(Parser * pParser);
 // Scope management
 
 void pushScope(Parser * pParser);
-void popScope(Parser * pParser);
+scopeid peekScope(Parser * pParser);
+scopeid popScope(Parser * pParser);
 
 // Node allocation
 
@@ -119,8 +120,8 @@ AstNode * parseStructDefnStmt(Parser * pParser);
 AstNode * parseVarDeclStmt(Parser * pParser, EXPECTK expectkName=EXPECTK_Required, EXPECTK expectkInit=EXPECTK_Optional, EXPECTK expectkSemicolon=EXPECTK_Required);
 AstNode * parseIfStmt(Parser * pParser);
 AstNode * parseWhileStmt(Parser * pParser);
-AstNode * parseDoStmtOrBlockStmt(Parser * pParser);
-AstNode * parseBlockStmt(Parser * pParser);
+AstNode * parseDoStmtOrBlockStmt(Parser * pParser, bool pushPopScopeBlock=true);
+AstNode * parseBlockStmt(Parser * pParser, bool pushPopScope=true);
 AstNode * parseReturnStmt(Parser * pParser);
 AstNode * parseBreakStmt(Parser * pParser);
 AstNode * parseContinueStmt(Parser * pParser);
@@ -134,9 +135,16 @@ AstNode * parsePrimary(Parser * pParser);
 AstNode * parseVarExpr(Parser * pParser, AstNode * pOwnerExpr);
 
 bool tryParseFuncDefnStmtOrLiteralExpr(Parser * pParser, FUNCHEADERK funcheaderk, AstNode ** ppoNode);
-bool tryParseFuncHeader(Parser * pParser, FUNCHEADERK funcheaderk, ParseFuncType ** ppoFuncType, AstNode ** ppoErrNode, Identifier * poDefnIdent=nullptr);
+bool tryParseFuncHeader(Parser * pParser, FUNCHEADERK funcheaderk, FuncType ** ppoFuncType, AstNode ** ppoErrNode, ResolvedIdentifier * poDefnIdent=nullptr);
 bool tryParseFuncHeaderParamList(Parser * pParser, FUNCHEADERK funcheaderk, DynamicArray<AstNode *> * papParamVarDecls);
 AstNode * finishParsePrimary(Parser * pParser, AstNode * pLhsExpr);
+
+bool tryInsertIntoSymbolTable(
+	Parser * pParser,
+	ResolvedIdentifier ident,
+	SymbolInfo symbInfo,
+	AstNode * poErr
+);
 
 // NOTE: This moves the children into the AST
 
@@ -149,24 +157,25 @@ Token * ensurePendingToken(Parser * pParser);
 Token * claimPendingToken(Parser * pParser);
 Token * ensureAndClaimPendingToken(Parser * pParser);
 
-inline ParseType * newParseType(Parser * pParser)
+inline Type * newType(Parser * pParser)
 {
-	return allocate(&pParser->parseTypeAlloc);
+	return allocate(&pParser->typeAlloc);
 }
 
-inline void releaseParseType(Parser * pParser, ParseType * pParseType)
+inline void releaseType(Parser * pParser, Type * pParseType)
 {
-	release(&pParser->parseTypeAlloc, pParseType);
+	destroy(&pParseType->aTypemods);
+	release(&pParser->typeAlloc, pParseType);
 }
 
-inline ParseFuncType * newParseFuncType(Parser * pParser)
+inline FuncType * newFuncType(Parser * pParser)
 {
-	return allocate(&pParser->parseFuncTypeAlloc);
+	return allocate(&pParser->funcTypeAlloc);
 }
 
-inline void releaseParseFuncType(Parser * pParser, ParseFuncType * pParseFuncType)
+inline void releaseFuncType(Parser * pParser, FuncType * pParseFuncType)
 {
-    release(&pParser->parseFuncTypeAlloc, pParseFuncType);
+    release(&pParser->funcTypeAlloc, pParseFuncType);
 }
 
 inline void releaseToken(Parser * pParser, Token * pToken)
@@ -174,15 +183,15 @@ inline void releaseToken(Parser * pParser, Token * pToken)
 	release(&pParser->tokenAlloc, pToken);
 }
 
-inline SymbolInfo * newSymbolInfo(Parser * pParser)
-{
-	return allocate(&pParser->symbolInfoAlloc);
-}
-
-inline void releaseSymbolInfo(Parser * pParser, SymbolInfo * pSymbolInfo)
-{
-	release(&pParser->symbolInfoAlloc, pSymbolInfo);
-}
+//inline SymbolInfo * newSymbolInfo(Parser * pParser)
+//{
+//	return allocate(&pParser->symbolInfoAlloc);
+//}
+//
+//inline void releaseSymbolInfo(Parser * pParser, SymbolInfo * pSymbolInfo)
+//{
+//	release(&pParser->symbolInfoAlloc, pSymbolInfo);
+//}
 
 
 // Debug

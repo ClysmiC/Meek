@@ -180,13 +180,11 @@ void initMove (DynamicArray<T> * pArray, DynamicArray<T> * pArraySrc)
 template <typename T>
 void destroy (DynamicArray<T> * pArray)
 {
-    // NOTE: This might help catch destroying dynamic array that was never inited too, but we can't guarantee
-    //  that the allocation zeroes out the memory.
-
-    ALS_COMMON_ARRAY_Assert(pArray->pBuffer);       // Trying to destroy dynamic array that was already destroyed? Or was moved (which performs destroy)?");
-
-	if (pArray->pBuffer) free(pArray->pBuffer);
-    pArray->pBuffer = nullptr;
+	if (pArray->pBuffer)
+	{
+		if (pArray->pBuffer) free(pArray->pBuffer);
+		pArray->pBuffer = nullptr;
+	}
 }
 
 
@@ -366,11 +364,12 @@ bool peek(Stack<T> * pStack, T * poItem)
 }
 
 template<typename T>
-bool pop(Stack<T> * pStack, T * poItem)
+bool pop(Stack<T> * pStack, T * poItem=nullptr)
 {
 	if (isEmpty(pStack)) return false;
 
-	*poItem = pStack->a[pStack->a.cItem - 1];
+	if (poItem) *poItem = pStack->a[pStack->a.cItem - 1];
+
 	pStack->a.cItem--;
 	return true;
 }

@@ -7,7 +7,7 @@
 // Forward declarations
 
 struct AstNode;
-struct ParseFuncType;
+struct FuncType;
 
 
 enum TYPEMODK : u8
@@ -16,63 +16,31 @@ enum TYPEMODK : u8
 	TYPEMODK_Pointer
 };
 
-struct ParseTypeModifier
+struct TypeModifier
 {
 	TYPEMODK typemodk;
 	AstNode * pSubscriptExpr = nullptr;		// Only valid if TYPEMODK_Array
 };
 
-struct ParseType
+struct Type
 {
 	union
 	{
-		Identifier ident;		// Name of unnmodified type. Valid if !isFuncType
-
-        // HMM: Do I need this level of indirection or can I just embed the
-        //  ParseFuncType here?
-
-		ParseFuncType * pParseFuncType;	// Valid if isFuncType
+		ResolvedIdentifier ident;	// !isFuncType
+		FuncType * pFuncType;		// isFuncType
 	};
 
-	DynamicArray<ParseTypeModifier> aTypemods;
+	DynamicArray<TypeModifier> aTypemods;
 	bool isFuncType = false;
 };
 
-bool isTypeInferred(const ParseType & parseType);
-bool isUnmodifiedType(const ParseType & parseType);
+bool isTypeInferred(const Type & type);
+bool isUnmodifiedType(const Type & type);
 
 
 
-struct ParseFuncType
+struct FuncType
 {
 	DynamicArray<AstNode *> apParamVarDecls;
 	DynamicArray<AstNode *> apReturnVarDecls;		// A.k.a. output params
 };
-
-// NOTE: Also used for return values since they have the same syntax as input params. Just think
-//	of them as "output params"
-
-// struct ParseParam
-// {
-// 	union
-// 	{
-// 		ParseType * pType;			// Value if !isDecl
-// 		AstVarDeclStmt * pDecl;		// Value if isDecl
-// 	};
-
-// 	bool isDecl = false;
-// };
-
-
-
-
-// [5+6]int elevenInts;
-
-// ^[12]int paInts;
-
-// [12]^[3]^^^[12]int apInts;
-
-// ^[15]func (int, float)(int) myFunc;
-
-// Maybe optional arrows to help the reader make sense of something like this?
-// [15]func (func ()(), float) -> (func( func(float)->(int) )->(int))
