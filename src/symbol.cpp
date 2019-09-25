@@ -6,9 +6,10 @@
 const scopeid gc_unresolvedScopeid = -1;
 const scopeid gc_globalAndBuiltinScopeid = 0;
 
-void setSymbolInfo(SymbolInfo * pSymbInfo, SYMBOLK symbolk, AstNode * pNode)
+void setSymbolInfo(SymbolInfo * pSymbInfo, const ResolvedIdentifier & ident, SYMBOLK symbolk, AstNode * pNode)
 {
 	pSymbInfo->symbolk = symbolk;
+    pSymbInfo->identDefncl = ident;
 
 	switch (symbolk)
 	{

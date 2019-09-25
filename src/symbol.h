@@ -31,7 +31,7 @@ enum SYMBOLK
 
 struct SymbolInfo
 {
-	ResolvedIdentifier * pIdentDeclfn;
+	ResolvedIdentifier identDefncl;
 
 	SYMBOLK symbolk;
 
@@ -46,7 +46,7 @@ struct SymbolInfo
 	};
 };
 
-void setSymbolInfo(SymbolInfo * pSymbInfo, SYMBOLK symbolk, AstNode * pDefncl);
+void setSymbolInfo(SymbolInfo * pSymbInfo, const ResolvedIdentifier & ident, SYMBOLK symbolk, AstNode * pDefncl);
 void setIdentResolved(ResolvedIdentifier * pIdentifier, Token * pToken, scopeid declScopeid);
 void setIdentUnresolved(ResolvedIdentifier * pIdentifier, Token * pToken);
 

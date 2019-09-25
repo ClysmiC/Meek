@@ -8,7 +8,7 @@
 
 int main()
 {
-#if 0
+#if 1
 	// Desktop setup
 
 	char * filename = "C:/Users/Andrew/Desktop/lang/lang/test.cly";		// TODO: Read this in from command line
@@ -26,7 +26,7 @@ int main()
 	FILE * file = fopen(filename, "rb");
 	Defer(if (file) fclose(file));
 
-	uint bytesRead = file ? fread(buffer, 0x1, bufferSize, file) : -1;
+	int bytesRead = file ? fread(buffer, 0x1, bufferSize, file) : -1;
 
 	if (bytesRead < 0)
 	{

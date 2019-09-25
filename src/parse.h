@@ -143,7 +143,7 @@ bool tryInsertIntoSymbolTable(
 	Parser * pParser,
 	ResolvedIdentifier ident,
 	SymbolInfo symbInfo,
-	AstNode * poErr
+	AstNode ** ppoErr
 );
 
 // NOTE: This moves the children into the AST

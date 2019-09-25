@@ -340,14 +340,14 @@ AstNode * parseStructDefnStmt(Parser * pParser)
 		return Up(pErr);
 	}
 
-	Token * pIdent = claimPendingToken(pParser);
-	Assert(pIdent->tokenk == TOKENK_Identifier);
+	Token * pIdentTok = claimPendingToken(pParser);
+	Assert(pIdentTok->tokenk == TOKENK_Identifier);
 
 	// Parse '{'
 
 	if (!tryConsumeToken(pParser->pScanner, TOKENK_OpenBrace))
 	{
-		auto * pErr = AstNewErr0Child(pParser, ExpectedTokenkErr, pIdent->line);
+		auto * pErr = AstNewErr0Child(pParser, ExpectedTokenkErr, pIdentTok->line);
 		append(&pErr->aTokenkValid, TOKENK_OpenBrace);
 		return Up(pErr);
 	}
@@ -399,15 +399,15 @@ finishStruct:
 
 	popScope(pParser);
 
-	auto * pNode = AstNew(pParser, StructDefnStmt, pIdent->line);
-	setIdentResolved(&pNode->ident, pIdent, declScope);
+	auto * pNode = AstNew(pParser, StructDefnStmt, pIdentTok->line);
+	setIdentResolved(&pNode->ident, pIdentTok, declScope);
 	initMove(&pNode->apVarDeclStmt, &apVarDeclStmt);
 
 	SymbolInfo structDefnInfo;
-	setSymbolInfo(&structDefnInfo, SYMBOLK_Struct, Up(pNode));
+	setSymbolInfo(&structDefnInfo, pNode->ident, SYMBOLK_Struct, Up(pNode));
 	AstNode * pErr = nullptr;
 
-	if (!tryInsertIntoSymbolTable(pParser, pNode->ident, structDefnInfo, pErr))
+	if (!tryInsertIntoSymbolTable(pParser, pNode->ident, structDefnInfo, &pErr))
 	{
 		Assert(pErr);
 		appendMultiple(
@@ -489,10 +489,10 @@ bool tryParseFuncDefnStmtOrLiteralExpr(Parser * pParser, FUNCHEADERK funcheaderk
 		pNode->pBodyStmt = pBody;
 		
 		SymbolInfo funcDefnInfo;
-		setSymbolInfo(&funcDefnInfo, SYMBOLK_Func, Up(pNode));
+		setSymbolInfo(&funcDefnInfo, pNode->ident, SYMBOLK_Func, Up(pNode));
 		AstNode * pErr = nullptr;
 
-		if (!tryInsertIntoSymbolTable(pParser, identDefn, funcDefnInfo, pErr))
+		if (!tryInsertIntoSymbolTable(pParser, identDefn, funcDefnInfo, &pErr))
 		{
 			Assert(pErr);
 			release(&pParser->astAlloc, Up(pNode));
@@ -735,10 +735,10 @@ AstNode * parseVarDeclStmt(Parser * pParser, EXPECTK expectkName, EXPECTK expect
 	pNode->pInitExpr = pInitExpr;
 
 	SymbolInfo varDeclInfo;
-	setSymbolInfo(&varDeclInfo, SYMBOLK_Var, Up(pNode));
+	setSymbolInfo(&varDeclInfo, pNode->ident, SYMBOLK_Var, Up(pNode));
 	AstNode * pErr = nullptr;
 
-	if (!tryInsertIntoSymbolTable(pParser, pNode->ident, varDeclInfo, pErr))
+	if (!tryInsertIntoSymbolTable(pParser, pNode->ident, varDeclInfo, &pErr))
 	{
 		Assert(pErr);
 		release(&pParser->astAlloc, Up(pNode));
@@ -1578,8 +1578,10 @@ bool tryInsertIntoSymbolTable(
 	Parser * pParser,
 	ResolvedIdentifier ident,
 	SymbolInfo symbInfo,
-	AstNode * poErr)
+	AstNode ** ppoErr)
 {
+    Assert(symbInfo.identDefncl.hash == ident.hash);
+
 	// Compute hash so that the caller has 1 less responsibility :)
 
 	ident.hash = identHash(ident);
@@ -1591,8 +1593,9 @@ bool tryInsertIntoSymbolTable(
 		//	error node that we return.
 
 		auto * pErr = AstNewErr0Child(pParser, SymbolRedefinitionErr, ident.pToken->line);
-		pErr->pDefnToken = preexistingInfo.pIdentDeclfn->pToken;
+		pErr->pDefnToken = preexistingInfo.identDefncl.pToken;
 		pErr->pRedefnToken = ident.pToken;
+        *ppoErr = Up(pErr);
 		return false;
 	}
 
@@ -2223,6 +2226,25 @@ void debugPrintSubAst(const AstNode & node, int level, bool skipAfterArrow, Dyna
                 printErrChildren(*pErrCasted, levelNext, pMapLevelSkip);
             }
 		} break;
+
+        case ASTK_SymbolRedefinitionErr:
+        {
+            auto * pErr = DownConst(&node, SymbolRedefinitionErr);
+            auto * pErrCasted = UpErrConst(pErr);
+
+            printf("%s redefinition of symbol %s (defined earlier @ line %d)", parseErrorString, pErr->pDefnToken->lexeme, pErr->pDefnToken->line);
+
+            if (pErrCasted->apChildren.cItem > 0)
+            {
+                // Sloppy... printChildren should probably handle the new line spacing so that if you pass
+                //	it an empty array of children it will still just work.
+
+                printf("\n");
+
+                printTabs(levelNext, false, false, pMapLevelSkip);
+                printErrChildren(*pErrCasted, levelNext, pMapLevelSkip);
+            }
+        } break;
 
 
 

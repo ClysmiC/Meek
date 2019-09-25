@@ -4,11 +4,12 @@
 // var square = func(float f)(float) do return f * f;;
 
 float x = square(5);
-
+int i;
 
 func hof (func (int i)(Foober k) inputFunc=somefunc)(float j = 3)
 {
 	int foop = 16;
+//	int i = 5;
 }
 
 // var hofVar =
