@@ -3,6 +3,7 @@
 #include "ast.h"
 #include "scan.h"
 #include "parse.h"
+#include "resolve_pass.h"
 
 #include <stdio.h>
 
@@ -69,6 +70,9 @@ int main()
 
 #if DEBUG
     debugPrintAst(*pAst);
+
+    ResolvePass resolvePass;
+    doResolvePass(&resolvePass, pAst);
 
     printf("\n");
     if (parser.hadError)

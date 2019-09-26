@@ -68,6 +68,12 @@
     <ClInclude Include="src\symbol.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="src\resolve_pass.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\error.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\ast.cpp">
@@ -89,6 +95,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="src\symbol.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\resolve_pass.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

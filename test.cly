@@ -9,7 +9,7 @@ int i;
 func hof (func (int i)(Foober k) inputFunc=somefunc)(float j = 3)
 {
 	int foop = 16;
-//	int i = 5;
+	int i = 5;
 }
 
 // var hofVar =

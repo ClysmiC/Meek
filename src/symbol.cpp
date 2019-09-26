@@ -4,7 +4,66 @@
 #include "token.h"
 
 const scopeid gc_unresolvedScopeid = -1;
-const scopeid gc_globalAndBuiltinScopeid = 0;
+const scopeid gc_builtInScopeid = 0;
+const scopeid gc_globalScopeid = 1;
+
+//void init(ScopeStack * pScopeStack)
+//{
+//    init(&pScopeStack->stack);
+//    pScopeStack->scopeidNext = gc_builtInScopeid;
+//}
+//
+//void pushScope(ScopeStack * pScopeStack, SCOPEK scopek)
+//{
+//    Scope s;
+//    s.id = pScopeStack->scopeidNext;
+//    s.scopek = scopek;
+//    push(&pScopeStack->stack, s);
+//    pScopeStack->scopeidNext++;
+//}
+//
+//Scope peekScope(ScopeStack * pScopeStack)
+//{
+//    Scope s;
+//    peek(&pScopeStack->stack, &s);
+//
+//    return s;
+//}
+//
+//Scope popScope(ScopeStack * pScopeStack)
+//{
+//    Scope s;
+//    pop(&pScopeStack->stack, &s);
+//
+//    return s;
+//}
+
+void init(SymbolTable * pSymbTable)
+{
+	init(&pSymbTable->table, identHashPrecomputed, identEq);
+	init(&pSymbTable->redefinedIdents);
+    pSymbTable->orderNext = 0;
+}
+
+bool tryInsert(
+	SymbolTable * pSymbolTable,
+	ResolvedIdentifier ident,
+	SymbolInfo symbInfo)
+{
+    Assert(symbInfo.identDefncl.hash == ident.hash);
+
+    symbInfo.tableOrder = pSymbolTable->orderNext;
+    pSymbolTable->orderNext++;
+
+	if (lookup(&pSymbolTable->table, ident))
+	{
+		append(&pSymbolTable->redefinedIdents, ident);
+		return false;
+	}
+
+	insert(&pSymbolTable->table, ident, symbInfo);
+	return true;
+}
 
 void setSymbolInfo(SymbolInfo * pSymbInfo, const ResolvedIdentifier & ident, SYMBOLK symbolk, AstNode * pNode)
 {

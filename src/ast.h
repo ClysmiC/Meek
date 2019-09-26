@@ -10,7 +10,18 @@ struct AstNode;
 struct Type;
 struct FuncType;
 
+// The downside to using a union instead of inheritance is that I can't implicitly upcast. Since there is quite
+//	a bit of pointer casting required, these helpers make it slightly more succinct
 
+#define Up(pNode) reinterpret_cast<AstNode *>(pNode)
+#define UpConst(pNode) reinterpret_cast<const AstNode *>(pNode)
+#define UpErr(pNode) reinterpret_cast<AstErr *>(pNode)
+#define UpErrConst(pNode) reinterpret_cast<const AstErr *>(pNode)
+#define Down(pNode, astk) reinterpret_cast<Ast##astk *>(pNode)
+#define DownConst(pNode, astk) reinterpret_cast<const Ast##astk *>(pNode)
+#define DownErr(pNode) reinterpret_cast<AstErr *>(pNode)
+#define DownErrConst(pNode) reinterpret_cast<const AstErr *>(pNode)
+#define AstNew(pParser, astk, line) reinterpret_cast<Ast##astk *>(astNew(pParser, ASTK_##astk, line))
 
 enum ASTCATK
 {
@@ -38,7 +49,7 @@ enum ASTK : u8
 	ASTK_ChainedAssignErr,
 	ASTK_IllegalDoStmtErr,
 	ASTK_InvokeFuncLiteralErr,
-	ASTK_SymbolRedefinitionErr,
+	// ASTK_SymbolRedefinitionErr,
 
 	ASTK_ErrMax,
 
@@ -139,11 +150,11 @@ struct AstIllegalDoStmtErr
 
 struct AstInvokeFuncLiteralErr {};
 
-struct AstSymbolRedefinitionErr
-{
-	Token * pDefnToken;
-	Token * pRedefnToken;
-};
+// struct AstSymbolRedefinitionErr
+// {
+// 	Token * pDefnToken;
+// 	Token * pRedefnToken;
+// };
 
 struct AstErr
 {
@@ -162,7 +173,7 @@ struct AstErr
 		AstChainedAssignErr chainedAssignErr;
         AstIllegalDoStmtErr illegalDoStmtErr;
 		AstInvokeFuncLiteralErr invokeFuncLiteralErr;
-		AstSymbolRedefinitionErr symbolRedefinitionErr;
+		// AstSymbolRedefinitionErr symbolRedefinitionErr;
 	};
 
 	// Errors propogate up the AST, but still hang on to their child nodes so that
@@ -224,6 +235,7 @@ struct AstFuncLiteralExpr
 {
 	FuncType * pFuncType;
 	AstNode * pBodyStmt;
+    scopeid scopeid;
 };
 
 
@@ -259,6 +271,7 @@ struct AstStructDefnStmt
 {
 	ResolvedIdentifier ident;
 	DynamicArray<AstNode *> apVarDeclStmt;
+    scopeid scopeid;
 };
 
 struct AstIfStmt
@@ -279,11 +292,13 @@ struct AstFuncDefnStmt
 	ResolvedIdentifier ident;
 	FuncType * pFuncType;
 	AstNode * pBodyStmt;
+    scopeid scopeid;
 };
 
 struct AstBlockStmt
 {
 	DynamicArray<AstNode *> apStmts;
+    scopeid scopeid;
 };
 
 struct AstReturnStmt

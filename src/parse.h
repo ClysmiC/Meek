@@ -24,7 +24,11 @@ struct BinopInfo
 
 struct Parser
 {
+	// Scanner
+
 	Scanner * pScanner = nullptr;
+
+	// Allocators
 
 	DynamicPoolAllocator<AstNode> astAlloc;
 	DynamicPoolAllocator<Token> tokenAlloc;
@@ -32,25 +36,26 @@ struct Parser
 	DynamicPoolAllocator<FuncType> funcTypeAlloc;
 	// DynamicPoolAllocator<SymbolInfo> symbolInfoAlloc;
 
+
+	// Scope
+
+    scopeid scopeidNext = 0;
+    Stack<Scope> scopeStack;
+
+	// Symbol Table
+
+	SymbolTable symbolTable;
+
+	// Node construction / bookkeeping
+
 	uint iNode = 0;				// Becomes node's id
-
-	scopeid scopeidNext = 0;
-	Stack<scopeid> scopeStack;
-
-	// TODO: probably move this out of the parser and into a more "global" data structure?
-
-	HashMap<ResolvedIdentifier, SymbolInfo> symbolTable;
-
 	Token * pPendingToken = nullptr;
-
-	// Might be able to replace this with just the root node. Although the root node will need to be a type that
-	//	is essentially just a dynamic array.
-
-	DynamicArray<AstNode *> astNodes;
-
+	DynamicArray<AstNode *> astNodes;		// Might be able to replace this with just the root node. Although the root node will need to be a type that
+											//	is essentially just a dynamic array.
 
 
 	// Error and error recovery
+
 
 	// bool isPanicMode = false;
     bool hadError = false;
@@ -97,9 +102,10 @@ AstNode * parseExpr(Parser * pParser);
 
 // Scope management
 
-void pushScope(Parser * pParser);
-scopeid peekScope(Parser * pParser);
-scopeid popScope(Parser * pParser);
+void pushScope(Parser * pParser, SCOPEK scopek);
+Scope peekScope(Parser * pParser);
+Scope popScope(Parser * pParser);
+
 
 // Node allocation
 
@@ -139,20 +145,12 @@ bool tryParseFuncHeader(Parser * pParser, FUNCHEADERK funcheaderk, FuncType ** p
 bool tryParseFuncHeaderParamList(Parser * pParser, FUNCHEADERK funcheaderk, DynamicArray<AstNode *> * papParamVarDecls);
 AstNode * finishParsePrimary(Parser * pParser, AstNode * pLhsExpr);
 
-bool tryInsertIntoSymbolTable(
-	Parser * pParser,
-	ResolvedIdentifier ident,
-	SymbolInfo symbInfo,
-	AstNode ** ppoErr
-);
 
 // NOTE: This moves the children into the AST
-
 AstNode * handleScanOrUnexpectedTokenkErr(Parser * pParser, DynamicArray<AstNode *> * papChildren = nullptr);
 
 // Only claimed tokens will stay allocated by the parser. If you merely peek, the
 //  node's memory will be overwritten next time you consume a token.
-
 Token * ensurePendingToken(Parser * pParser);
 Token * claimPendingToken(Parser * pParser);
 Token * ensureAndClaimPendingToken(Parser * pParser);

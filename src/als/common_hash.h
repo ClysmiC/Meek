@@ -278,7 +278,11 @@ inline bool _alsHashWorker(
 			{
 				case _ALSHASHOPK_Lookup:
 				{
-					*poValueLookup = pBucketCandidate->value;
+                    if (poValueLookup)
+                    {
+                        *poValueLookup = pBucketCandidate->value;
+                    }
+
 					return true;
 				}
 

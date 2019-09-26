@@ -2,19 +2,6 @@
 
 #include "scan.h"
 
-// The downside to using a union instead of inheritance is that I can't implicitly upcast. Since there is quite
-//	a bit of pointer casting required, these helpers make it slightly more succinct
-
-#define Up(pNode) reinterpret_cast<AstNode *>(pNode)
-#define UpConst(pNode) reinterpret_cast<const AstNode *>(pNode)
-#define UpErr(pNode) reinterpret_cast<AstErr *>(pNode)
-#define UpErrConst(pNode) reinterpret_cast<const AstErr *>(pNode)
-#define Down(pNode, astk) reinterpret_cast<Ast##astk *>(pNode)
-#define DownConst(pNode, astk) reinterpret_cast<const Ast##astk *>(pNode)
-#define DownErr(pNode) reinterpret_cast<AstErr *>(pNode)
-#define DownErrConst(pNode) reinterpret_cast<const AstErr *>(pNode)
-#define AstNew(pParser, astk, line) reinterpret_cast<Ast##astk *>(astNew(pParser, ASTK_##astk, line))
-
 // Absolutely sucks that I need to use 0, 1, 2 suffixes. I tried this approach to simulate default parameters in a macro but MSVC has a bug
 //	with varargs expansion that made it blow up: https://stackoverflow.com/questions/3046889/optional-parameters-with-c-macros
 
@@ -58,7 +45,7 @@ bool init(Parser * pParser, Scanner * pScanner)
 	// init(&pParser->symbolInfoAlloc);
 	init(&pParser->astNodes);
 	init(&pParser->scopeStack);
-	init(&pParser->symbolTable, identHashPrecomputed, identEq);
+	init(&pParser->symbolTable);
 
 	return true;
 }
@@ -68,11 +55,13 @@ AstNode * parseProgram(Parser * pParser, bool * poSuccess)
 	// NOTE: Empty program is valid to parse, but I may still decide that
 	//	that is a semantic error.
 
-	pushScope(pParser);
+	pushScope(pParser, SCOPEK_BuiltIn);
+	Assert(peekScope(pParser).id == gc_builtInScopeid);
 
-	// TODO: Put all of the built-in identifiers into the symbol table
+	// TOOD: put built-in names in the symbol table (int, float, etc.)
 
-	pushScope(pParser);
+	pushScope(pParser, SCOPEK_Global);
+	Assert(peekScope(pParser).id == gc_globalScopeid);
 
 	auto * pNode = AstNew(pParser, Program, 0);
 	init(&pNode->apNodes);
@@ -310,8 +299,7 @@ AstNode * parseExprStmtOrAssignStmt(Parser * pParser)
 
 AstNode * parseStructDefnStmt(Parser * pParser)
 {
-	scopeid declScope;
-	Verify(peek(&pParser->scopeStack, &declScope));
+    scopeid declScope = peekScope(pParser).id;
 
 	// Parse 'struct'
 
@@ -352,7 +340,8 @@ AstNode * parseStructDefnStmt(Parser * pParser)
 		return Up(pErr);
 	}
 
-	pushScope(pParser);
+	pushScope(pParser, SCOPEK_StructDefn);
+    Defer(popScope(pParser));
 
 	// Parse vardeclstmt list, then '}'
 
@@ -397,29 +386,14 @@ AstNode * parseStructDefnStmt(Parser * pParser)
 
 finishStruct:
 
-	popScope(pParser);
-
 	auto * pNode = AstNew(pParser, StructDefnStmt, pIdentTok->line);
 	setIdentResolved(&pNode->ident, pIdentTok, declScope);
 	initMove(&pNode->apVarDeclStmt, &apVarDeclStmt);
+    pNode->scopeid = peekScope(pParser).id;
 
 	SymbolInfo structDefnInfo;
 	setSymbolInfo(&structDefnInfo, pNode->ident, SYMBOLK_Struct, Up(pNode));
-	AstNode * pErr = nullptr;
-
-	if (!tryInsertIntoSymbolTable(pParser, pNode->ident, structDefnInfo, &pErr))
-	{
-		Assert(pErr);
-		appendMultiple(
-			&DownErr(pErr)->apChildren,
-			pNode->apVarDeclStmt.pBuffer,
-			pNode->apVarDeclStmt.cItem
-		);
-
-		release(&pParser->astAlloc, Up(pNode));
-
-		return Up(pErr);
-	}
+	tryInsert(&pParser->symbolTable, pNode->ident, structDefnInfo);
 
 	return Up(pNode);
 }
@@ -441,7 +415,7 @@ bool tryParseFuncDefnStmtOrLiteralExpr(Parser * pParser, FUNCHEADERK funcheaderk
 	// NOTE: Push scope before parsing header so that the symbols declared in the header
 	//	are subsumed by the function's scope.
 
-	pushScope(pParser);
+	pushScope(pParser, SCOPEK_CodeBlock);
 	Defer(popScope(pParser));
 
 	ResolvedIdentifier identDefn;	// Only valid if isDefn
@@ -477,6 +451,7 @@ bool tryParseFuncDefnStmtOrLiteralExpr(Parser * pParser, FUNCHEADERK funcheaderk
 		auto * pNode = AstNew(pParser, FuncLiteralExpr, startingLine);
 		pNode->pFuncType = pFuncType;
 		pNode->pBodyStmt = pBody;
+        pNode->scopeid = peekScope(pParser).id;
 		*ppoNode = Up(pNode);
 
 		return success = true;
@@ -487,18 +462,11 @@ bool tryParseFuncDefnStmtOrLiteralExpr(Parser * pParser, FUNCHEADERK funcheaderk
 		pNode->ident = identDefn;
 		pNode->pFuncType = pFuncType;
 		pNode->pBodyStmt = pBody;
-		
+        pNode->scopeid = peekScope(pParser).id;
+
 		SymbolInfo funcDefnInfo;
 		setSymbolInfo(&funcDefnInfo, pNode->ident, SYMBOLK_Func, Up(pNode));
-		AstNode * pErr = nullptr;
-
-		if (!tryInsertIntoSymbolTable(pParser, identDefn, funcDefnInfo, &pErr))
-		{
-			Assert(pErr);
-			release(&pParser->astAlloc, Up(pNode));
-			*ppoNode = pErr;
-			return success = false;
-		}
+        tryInsert(&pParser->symbolTable, identDefn, funcDefnInfo);
 
 		*ppoNode = Up(pNode);
 		return success = true;
@@ -727,7 +695,7 @@ AstNode * parseVarDeclStmt(Parser * pParser, EXPECTK expectkName, EXPECTK expect
 
 	initMove(&pType->aTypemods, &aModifiers);
 
-	scopeid declScope = peekScope(pParser);
+	scopeid declScope = peekScope(pParser).id;
 
 	auto * pNode = AstNew(pParser, VarDeclStmt, line);
 	setIdentResolved(&pNode->ident, pVarIdent, declScope);
@@ -736,16 +704,7 @@ AstNode * parseVarDeclStmt(Parser * pParser, EXPECTK expectkName, EXPECTK expect
 
 	SymbolInfo varDeclInfo;
 	setSymbolInfo(&varDeclInfo, pNode->ident, SYMBOLK_Var, Up(pNode));
-	AstNode * pErr = nullptr;
-
-	if (!tryInsertIntoSymbolTable(pParser, pNode->ident, varDeclInfo, &pErr))
-	{
-		Assert(pErr);
-		release(&pParser->astAlloc, Up(pNode));
-		appendMultiple(&DownErr(pErr)->apChildren, apNodeChildren.pBuffer, apNodeChildren.cItem);
-
-		return Up(pErr);
-	}
+    tryInsert(&pParser->symbolTable, pNode->ident, varDeclInfo);
 
 	return Up(pNode);
 }
@@ -903,7 +862,8 @@ AstNode * parseBlockStmt(Parser * pParser, bool pushPopScope)
 		return Up(pErr);
 	}
 
-	if (pushPopScope) pushScope(pParser);
+	if (pushPopScope) pushScope(pParser, SCOPEK_CodeBlock);
+    Defer(if (pushPopScope) popScope(pParser));
 
 	int openBraceLine = prevTokenLine(pParser->pScanner);
 
@@ -925,12 +885,11 @@ AstNode * parseBlockStmt(Parser * pParser, bool pushPopScope)
 		}
 	}
 
-	if (pushPopScope) popScope(pParser);
-
 	// Success!
 
 	auto * pNode = AstNew(pParser, BlockStmt, openBraceLine);
 	initMove(&pNode->apStmts, &apStmts);
+    pNode->scopeid = peekScope(pParser).id;
 
 	return Up(pNode);
 }
@@ -1289,9 +1248,7 @@ bool tryParseFuncHeader(
 		//	That responsibility falls on the function that allocates the AST node that
 		//	contains the identifier.
 
-		scopeid declScope;
-		Verify(peek(&pParser->scopeStack, &declScope));
-		setIdentResolved(poDefnIdent, pIdent, declScope);
+		setIdentResolved(poDefnIdent, pIdent, peekScope(pParser).id);
 	}
 	else
 	{
@@ -1574,35 +1531,6 @@ AstNode * finishParsePrimary(Parser * pParser, AstNode * pExpr)
 	}
 }
 
-bool tryInsertIntoSymbolTable(
-	Parser * pParser,
-	ResolvedIdentifier ident,
-	SymbolInfo symbInfo,
-	AstNode ** ppoErr)
-{
-    Assert(symbInfo.identDefncl.hash == ident.hash);
-
-	// Compute hash so that the caller has 1 less responsibility :)
-
-	ident.hash = identHash(ident);
-
-	SymbolInfo preexistingInfo;
-	if (lookup(&pParser->symbolTable, ident, &preexistingInfo))
-	{
-		// NOTE: It is the responsibility of the caller to append any children to the
-		//	error node that we return.
-
-		auto * pErr = AstNewErr0Child(pParser, SymbolRedefinitionErr, ident.pToken->line);
-		pErr->pDefnToken = preexistingInfo.identDefncl.pToken;
-		pErr->pRedefnToken = ident.pToken;
-        *ppoErr = Up(pErr);
-		return false;
-	}
-
-	insert(&pParser->symbolTable, ident, symbInfo);
-	return true;
-}
-
 AstNode * handleScanOrUnexpectedTokenkErr(Parser * pParser, DynamicArray<AstNode *> * papChildren)
 {
 	Token * pErrToken =	 ensureAndClaimPendingToken(pParser);
@@ -1644,26 +1572,29 @@ AstNode * handleScanOrUnexpectedTokenkErr(Parser * pParser, DynamicArray<AstNode
 	}
 }
 
-void pushScope(Parser * pParser)
+void pushScope(Parser * pParser, SCOPEK scopek)
 {
-	push(&pParser->scopeStack, pParser->scopeidNext);
-	pParser->scopeidNext++;
+    Scope s;
+    s.id = pParser->scopeidNext;
+    s.scopek = scopek;
+    push(&pParser->scopeStack, s);
+    pParser->scopeidNext++;
 }
 
-scopeid peekScope(Parser * pParser)
+Scope peekScope(Parser * pParser)
 {
-	scopeid id = -1;
-	peek(&pParser->scopeStack, &id);
+    Scope s;
+    peek(&pParser->scopeStack, &s);
 
-	return id;
+    return s;
 }
 
-scopeid popScope(Parser * pParser)
+Scope popScope(Parser * pParser)
 {
-	scopeid id = -1;
-	pop(&pParser->scopeStack, &id);
+    Scope s;
+    pop(&pParser->scopeStack, &s);
 
-	return id;
+    return s;
 }
 
 AstNode * astNew(Parser * pParser, ASTK astk, int line)
@@ -2226,25 +2157,6 @@ void debugPrintSubAst(const AstNode & node, int level, bool skipAfterArrow, Dyna
                 printErrChildren(*pErrCasted, levelNext, pMapLevelSkip);
             }
 		} break;
-
-        case ASTK_SymbolRedefinitionErr:
-        {
-            auto * pErr = DownConst(&node, SymbolRedefinitionErr);
-            auto * pErrCasted = UpErrConst(pErr);
-
-            printf("%s redefinition of symbol %s (defined earlier @ line %d)", parseErrorString, pErr->pDefnToken->lexeme, pErr->pDefnToken->line);
-
-            if (pErrCasted->apChildren.cItem > 0)
-            {
-                // Sloppy... printChildren should probably handle the new line spacing so that if you pass
-                //	it an empty array of children it will still just work.
-
-                printf("\n");
-
-                printTabs(levelNext, false, false, pMapLevelSkip);
-                printErrChildren(*pErrCasted, levelNext, pMapLevelSkip);
-            }
-        } break;
 
 
 
