@@ -36,8 +36,6 @@ struct Scanner
 
 	int			cNestedBlockComment = 0;		/* this style of comment can nest */
 
-	uint        currentIntLiteralBase;
-
 	bool		madeToken = false;				// Resets at beginning of each call to makeToken
 	bool		hadError = false;
 
@@ -68,6 +66,7 @@ int peekTokenLine(Scanner * pScanner, uint lookahead=0);
 int prevTokenLine(Scanner * pScanner, uint lookbehind=0);
 bool tryConsumeToken(Scanner * pScanner, TOKENK tokenk, Token * poToken=nullptr);
 bool tryConsumeToken(Scanner * pScanner, const TOKENK * aTokenk, int cTokenk, Token * poToken=nullptr);
+bool tryPeekToken(Scanner * pScanner, const TOKENK * aTokenk, int cTokenk, Token * poToken=nullptr);
 TOKENK consumeToken(Scanner * pScanner, Token * poToken=nullptr);
 bool isFinished(Scanner * pScanner);
 

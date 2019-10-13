@@ -5,7 +5,7 @@
 #include <stdarg.h>
 #include <stdio.h>
 
-void reportIceAndExit(const char * errFormat, ...)
+inline void reportIceAndExit(const char * errFormat, ...)
 {
     va_list arglist;
     va_start(arglist, errFormat);

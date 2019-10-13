@@ -149,7 +149,7 @@ struct DynamicArray
 };
 
 template <typename T>
-void init (DynamicArray<T> * pArray, unsigned int startingCapacity=16)
+void init(DynamicArray<T> * pArray, unsigned int startingCapacity=16)
 {
     // UGH: I wish I could assert this, but there is trickiness with unions containing
     //  dynamic arrays and my pool allocator not zero-initializing the memory.
@@ -164,7 +164,7 @@ void init (DynamicArray<T> * pArray, unsigned int startingCapacity=16)
 }
 
 template <typename T>
-void initMove (DynamicArray<T> * pArray, DynamicArray<T> * pArraySrc)
+void initMove(DynamicArray<T> * pArray, DynamicArray<T> * pArraySrc)
 {
     // UGH: I wish I could assert this, but there is trickiness with unions containing
     //  dynamic arrays and my pool allocator not zero-initializing the memory.
@@ -178,7 +178,7 @@ void initMove (DynamicArray<T> * pArray, DynamicArray<T> * pArraySrc)
 }
 
 template <typename T>
-void destroy (DynamicArray<T> * pArray)
+void dispose(DynamicArray<T> * pArray)
 {
 	if (pArray->pBuffer)
 	{
@@ -315,9 +315,23 @@ struct FixedArray
 template <typename T, int CAPACITY>
 void append(FixedArray<T, CAPACITY> * pArray, const T & item)
 {
-	ALS_COMMON_ARRAY_Assert(pArray->cItem < pArray->s_capacity);
+	if (pArray->cItem >= pArray->s_capacity)
+	{
+		ALS_COMMON_ARRAY_Assert(false);
+		return;
+	}
+
 	pArray->aBuffer[pArray->cItem] = item;
 	pArray->cItem++;
+}
+
+template <typename T, int CAPACITY>
+void appendMultiple(FixedArray<T, CAPACITY> * pArray, const T * aItem, int cItem)
+{
+	for (int i = 0; i < cItem; i++)
+	{
+		append(pArray, aItem[i]);
+	}
 }
 
 
@@ -337,9 +351,9 @@ void init(Stack<T> * pStack)
 }
 
 template<typename T>
-void destroy(Stack<T> * pStack)
+void dispose(Stack<T> * pStack)
 {
-	destroy(&pStack->a);
+	dispose(&pStack->a);
 }
 
 template<typename T>
@@ -349,18 +363,24 @@ void push(Stack<T> * pStack, const T & item)
 }
 
 template<typename T>
-bool isEmpty(Stack<T> * pStack)
+bool isEmpty(const Stack<T> & stack)
 {
-	return pStack->a.cItem == 0;
+	return stack.a.cItem == 0;
 }
 
 template<typename T>
-bool peek(Stack<T> * pStack, T * poItem)
+bool peekFar(const Stack<T> & stack, int peekIndex, T * poItem)
 {
-	if (isEmpty(pStack)) return false;
+	if (count(stack) <= peekIndex) return false;
 
-	*poItem = pStack->a[pStack->a.cItem - 1];
+	*poItem = stack.a[pStack->a.cItem - 1 - peekIndex];
 	return true;
+}
+
+template<typename T>
+bool peek(const Stack<T> & stack, T * poItem)
+{
+	return peekFar(stack, 0, poItem);
 }
 
 template<typename T>
@@ -372,4 +392,10 @@ bool pop(Stack<T> * pStack, T * poItem=nullptr)
 
 	pStack->a.cItem--;
 	return true;
+}
+
+template<typename T>
+int count(const Stack<T> & stack)
+{
+	return stack.a.cItem;
 }

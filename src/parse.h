@@ -139,9 +139,10 @@ AstNode * parseBinop(Parser * pParser, const BinopInfo & op);
 AstNode * parseUnopPre(Parser * pParser);
 AstNode * parsePrimary(Parser * pParser);
 AstNode * parseVarExpr(Parser * pParser, AstNode * pOwnerExpr);
+AstNode * parseLiteralExpr(Parser * pParser, bool mustBeIntLiteralk=false);
 
 bool tryParseFuncDefnStmtOrLiteralExpr(Parser * pParser, FUNCHEADERK funcheaderk, AstNode ** ppoNode);
-bool tryParseFuncHeader(Parser * pParser, FUNCHEADERK funcheaderk, FuncType ** ppoFuncType, AstNode ** ppoErrNode, ResolvedIdentifier * poDefnIdent=nullptr);
+bool tryParseFuncHeader(Parser * pParser, FUNCHEADERK funcheaderk, FuncType ** ppoFuncType, AstNode ** ppoErrNode, ScopedIdentifier * poDefnIdent=nullptr);
 bool tryParseFuncHeaderParamList(Parser * pParser, FUNCHEADERK funcheaderk, DynamicArray<AstNode *> * papParamVarDecls);
 AstNode * finishParsePrimary(Parser * pParser, AstNode * pLhsExpr);
 
@@ -162,7 +163,7 @@ inline Type * newType(Parser * pParser)
 
 inline void releaseType(Parser * pParser, Type * pParseType)
 {
-	destroy(&pParseType->aTypemods);
+	dispose(&pParseType->aTypemods);
 	release(&pParser->typeAlloc, pParseType);
 }
 

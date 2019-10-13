@@ -81,10 +81,9 @@ struct HashMap
 };
 
 template <typename K, typename V>
-void insert(
+V * insertNew(
 	HashMap<K, V> * pHashmap,
-	const K & key,
-	const V & value)
+	const K & key)
 {
 	typedef HashMap<K, V> hm;
 
@@ -120,12 +119,11 @@ void insert(
 		}
 		else
 		{
-			// Check if this key is already in our table. If it is, just update the value and return.
+			// Check if this key is already in our table. If it is, just return the existing value
 
 			if ((pBucket->infoBits & AlsHash::s_infoHashMsbs) == hashMsbs && pHashmap->equalFn(key, pBucket->key))
 			{
-				pBucket->value = value;
-				return;
+				return &pBucket->value;
 			}
 		}
 
@@ -137,8 +135,7 @@ void insert(
 			// Double in size!
 
 			growHashmap(pHashmap, (pHashmap->cCapacity << 1));
-			insert(pHashmap, key, value);
-			return;
+			return insertNew(pHashmap, key);
 		}
 
 		j++;
@@ -178,8 +175,7 @@ void insert(
 		if (!pBucketSwappable)
 		{
 			growHashmap(pHashmap, (pHashmap->cCapacity << 1));
-			insert(pHashmap, key, value);
-			return;
+			return insertNew(pHashmap, key);
 		}
 
 		// Copy swappable bucket into the empty bucket and update the offset
@@ -209,7 +205,17 @@ void insert(
 	pBucketEmpty->infoBits |= hashMsbs;
 
 	pBucketEmpty->key = key;
-	pBucketEmpty->value = value;
+	return &pBucketEmpty->value;
+}
+
+template <typename K, typename V>
+void insert(
+	HashMap<K, V> * pHashmap,
+	const K & key,
+	const V & value)
+{
+	V * valueNew = insertNew(pHashmap, key);
+	*valueNew = value;
 }
 
 enum _ALSHASHOPK
@@ -220,12 +226,13 @@ enum _ALSHASHOPK
 };
 
 template <typename K, typename V>
-inline bool _alsHashWorker(
+inline bool _alsHashHelper(
 	HashMap<K, V> * pHashmap,
 	const K & key,
 	_ALSHASHOPK hashopk,
 	const V * pValueNew=nullptr,
-	V * poValueLookup=nullptr)
+	V ** ppoValueLookup=nullptr
+	V * poValueRemoved=nullptr)
 {
 	typedef HashMap<K, V> hm;
 
@@ -278,9 +285,9 @@ inline bool _alsHashWorker(
 			{
 				case _ALSHASHOPK_Lookup:
 				{
-                    if (poValueLookup)
+                    if (ppoValueLookup)
                     {
-                        *poValueLookup = pBucketCandidate->value;
+                        *poValueLookup = &pBucketCandidate->value;
                     }
 
 					return true;
@@ -294,9 +301,9 @@ inline bool _alsHashWorker(
 
 				case _ALSHASHOPK_Remove:
 				{
-					if (poValueLookup)
+					if (poValueRemoved)
 					{
-						*poValueLookup = pBucketCandidate->value;
+						*poValueRemoved = pBucketCandidate->value;
 					}
 
 					pBucketCandidate->infoBits &= ~AlsHash::s_infoOccupiedMask;
@@ -316,17 +323,19 @@ inline bool _alsHashWorker(
 }
 
 template <typename K, typename V>
-bool lookup(
+V * lookup(
 	HashMap<K, V> * pHashmap,
-	const K & key,
-	V * poValue=nullptr)
+	const K & key)
 {
-	return _alsHashWorker(
+	V * pResult = nullptr;
+
+	return _alsHashHelper(
 		pHashmap,
 		key,
 		_ALSHASHOPK_Lookup,
-		(V*)nullptr,
-		poValue
+		nullptr,	// Update
+		&pResult,	// Lookup
+		nullptr,	// Remove
 	);
 }
 
@@ -336,12 +345,13 @@ bool remove(
 	const K & key,
 	V * poValueRemoved=nullptr)
 {
-	return _alsHashWorker(
+	return _alsHashHelper(
 		pHashmap,
 		key,
 		_ALSHASHOPK_Remove,
-		(V*)nullptr,
-		poValueRemoved
+		nullptr,		// Update
+		nullptr,		// Lookup
+		poValueRemoved	// Remove
 	);
 }
 
@@ -351,12 +361,13 @@ bool update(
 	const K & key,
 	const V & value)
 {
-	return _alsHashWorker(
+	return _alsHashHelper(
 		pHashmap,
 		key,
 		_ALSHASHOPK_Update,
-		&value,
-		(V*)nullptr
+		&value,		// Update
+		nullptr,	// Lookup
+		nullptr		// Remove
 	);
 }
 
@@ -436,11 +447,25 @@ void init(
 }
 
 template <typename K, typename V>
-void destroy(HashMap<K, V> * pHashmap)
+void dispose(HashMap<K, V> * pHashmap)
 {
 	if (pHashmap->pBuffer) free(pHashmap->pBuffer);
 	pHashmap->pBuffer = nullptr;
 }
+
+template <typename K, typename V>
+void doForEachValue(HashMap<K, V> * pHashmap, void (*doFn)(V *))
+{
+	for (int i = 0; i < pHashmap->cCapacity; i++)
+	{
+		if (pHashmap->pBuffer[i].infoBits & AlsHash::s_infoOccupiedMask)
+		{
+			doFn(&pHashmap->pBuffer[i].value);
+		}
+	}
+}
+
+
 
 #undef ALS_COMMON_HASH_StaticAssert
 #undef ALS_COMMON_HASH_Assert

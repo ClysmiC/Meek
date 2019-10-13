@@ -95,6 +95,14 @@ enum ASTK : u8
 	//	the ASTCATK functions
 };
 
+enum LITERALK : u8
+{
+	LITERALK_Int,
+	LITERALK_Float,
+	LITERALK_Bool,
+	LITERALK_String
+};
+
 
 
 // IMPORTANT: All AstNodes in the tree are the exact same struct (AstNode). Switch on the ASTK to
@@ -203,6 +211,18 @@ struct AstBinopExpr
 struct AstLiteralExpr
 {
 	Token *	pToken;
+
+	LITERALK literalk;
+	union
+	{
+		int intValue;
+		float floatValue;
+		bool boolValue;
+		char * strValue;	// TODO: Where does this point into... do we strip the quotes in the lexeme buffer?
+	};
+
+	bool isValueSet = false;
+	bool isValueErroneous = false;	// Things like integers that are too large, etc.
 };
 
 struct AstGroupExpr
@@ -216,7 +236,11 @@ struct AstVarExpr
 	//	just a plain old variable without a dot.
 
 	AstNode * pOwner;
-	ResolvedIdentifier ident;
+    Token * pTokenIdent;
+
+	// Non-child
+
+	AstVarDeclStmt * pResolvedDecl;
 };
 
 struct AstArrayAccessExpr
@@ -256,9 +280,9 @@ struct AstAssignStmt
 
 struct AstVarDeclStmt
 {
-	ResolvedIdentifier ident;
+	ScopedIdentifier ident;
 
-	Type * pType;
+	Type * pType;			// null means inferred type that hasn't yet been inferred
 	AstNode * pInitExpr;	// null means default init
 
 
@@ -269,22 +293,9 @@ struct AstVarDeclStmt
 
 struct AstStructDefnStmt
 {
-	ResolvedIdentifier ident;
+	ScopedIdentifier ident;
 	DynamicArray<AstNode *> apVarDeclStmt;
     scopeid scopeid;
-};
-
-struct AstIfStmt
-{
-	AstNode * pCondExpr;
-	AstNode * pThenStmt;
-	AstNode * pElseStmt;
-};
-
-struct AstWhileStmt
-{
-	AstNode * pCondExpr;
-	AstNode * pBodyStmt;
 };
 
 struct AstFuncDefnStmt
@@ -299,6 +310,19 @@ struct AstBlockStmt
 {
 	DynamicArray<AstNode *> apStmts;
     scopeid scopeid;
+};
+
+struct AstIfStmt
+{
+	AstNode * pCondExpr;
+	AstNode * pThenStmt;
+	AstNode * pElseStmt;
+};
+
+struct AstWhileStmt
+{
+	AstNode * pCondExpr;
+	AstNode * pBodyStmt;
 };
 
 struct AstReturnStmt
@@ -390,6 +414,10 @@ StaticAssert(sizeof(AstNode) <= 64);		// Goal: Make it so each AstNode fits in a
                                             // TODO: Make sure we have an option for our allocator to align these to cache lines!
                                             //  (have dynamic allocator allocate an extra 64 bytes and point the "actual" buffer to
                                             //  an aligned spot?
+
+// TODO: other "value" functions
+
+int intValue(AstLiteralExpr * pLiteralExpr);
 
 inline ASTCATK category(ASTK astk)
 {

@@ -7,10 +7,14 @@
 
 Syntax to arbitrarily set members of a struct in a single statement. Special syntax that requires that you set all members that are tagged with some property?
 
-
+Type modifier to encode whether a specific variable is initialized, and programmer needs to supply a compiler directive/cast to go from
+uninitialized -> initialized. Returning an uninitialized value/pointer would be a type mismatch error.
+This would give me pretty good non-nullable checks too. Could be an error to perform the directive if you didn't set non-nullable pointers?
 
 ---Operator overloading---
--Allow overloading of arithmetic operators but disallow modifying the operands
+-Allow overloading of arithmetic operators but disallow modifying the operands to limit the amount of "unknown" that is going on?
+Or maybe use a special notation that is similar to +, but is distinct so that the reader knows it is overloaded.
+Could be ++ or (+) <- hard to type
 
 
 

@@ -347,7 +347,7 @@ AstNode * parseStructDefnStmt(Parser * pParser)
 
 	DynamicArray<AstNode *> apVarDeclStmt;
 	init(&apVarDeclStmt);
-	Defer(destroy(&apVarDeclStmt));
+	Defer(dispose(&apVarDeclStmt));
 
 	while (!tryConsumeToken(pParser->pScanner, TOKENK_CloseBrace))
 	{
@@ -387,7 +387,7 @@ AstNode * parseStructDefnStmt(Parser * pParser)
 finishStruct:
 
 	auto * pNode = AstNew(pParser, StructDefnStmt, pIdentTok->line);
-	setIdentResolved(&pNode->ident, pIdentTok, declScope);
+	setIdent(&pNode->ident, pIdentTok, declScope);
 	initMove(&pNode->apVarDeclStmt, &apVarDeclStmt);
     pNode->scopeid = peekScope(pParser).id;
 
@@ -418,10 +418,10 @@ bool tryParseFuncDefnStmtOrLiteralExpr(Parser * pParser, FUNCHEADERK funcheaderk
 	pushScope(pParser, SCOPEK_CodeBlock);
 	Defer(popScope(pParser));
 
-	ResolvedIdentifier identDefn;	// Only valid if isDefn
+	ScopedIdentifier identDefn;     // Only valid if isDefn
 	{
 		AstNode * pErrFuncHeader = nullptr;
-        ResolvedIdentifier * pDefnIdent = (isDefn) ? &identDefn : nullptr;
+        ScopedIdentifier * pDefnIdent = (isDefn) ? &identDefn : nullptr;
 		if (!tryParseFuncHeader(pParser, funcheaderk, &pFuncType, &pErrFuncHeader, pDefnIdent))
 		{
 			Assert(pErrFuncHeader);
@@ -480,7 +480,7 @@ AstNode * parseVarDeclStmt(Parser * pParser, EXPECTK expectkName, EXPECTK expect
 
 	DynamicArray<TypeModifier> aModifiers;
 	init(&aModifiers);
-	Defer(destroy(&aModifiers););
+	Defer(dispose(&aModifiers););
 
 	// This list already kind of exists embedded in the modifiers, but we store it
 	//	separately here to make it easier to attach them to an error node should
@@ -488,7 +488,7 @@ AstNode * parseVarDeclStmt(Parser * pParser, EXPECTK expectkName, EXPECTK expect
 
 	DynamicArray<AstNode *> apNodeChildren;
 	init(&apNodeChildren);
-	Defer(destroy(&apNodeChildren););
+	Defer(dispose(&apNodeChildren););
 
 	// Remember line # of the first token
 
@@ -685,8 +685,8 @@ AstNode * parseVarDeclStmt(Parser * pParser, EXPECTK expectkName, EXPECTK expect
 	}
 	else
 	{
-		ResolvedIdentifier identType;
-		setIdentUnresolved(&identType, pTypeIdent);
+		ScopedIdentifier identType;
+		setIdentNoScope(&identType, pTypeIdent);
 
 		Assert(pTypeIdent->tokenk == TOKENK_Identifier);
 		pType->isFuncType = false;
@@ -698,7 +698,7 @@ AstNode * parseVarDeclStmt(Parser * pParser, EXPECTK expectkName, EXPECTK expect
 	scopeid declScope = peekScope(pParser).id;
 
 	auto * pNode = AstNew(pParser, VarDeclStmt, line);
-	setIdentResolved(&pNode->ident, pVarIdent, declScope);
+	setIdent(&pNode->ident, pVarIdent, declScope);
 	pNode->pType = pType;
 	pNode->pInitExpr = pInitExpr;
 
@@ -1108,15 +1108,12 @@ AstNode * parsePrimary(Parser * pParser)
 
 		return finishParsePrimary(pParser, Up(pNode));
 	}
-	else if (tryConsumeToken(pParser->pScanner, g_aTokenkLiteral, g_cTokenkLiteral, ensurePendingToken(pParser)))
+	else if (tryPeekToken(pParser->pScanner, g_aTokenkLiteral, g_cTokenkLiteral))
 	{
 		// Literal
 
-		Token * pLiteralToken = claimPendingToken(pParser);
-
-		auto * pNode = AstNew(pParser, LiteralExpr, pLiteralToken->line);
-		pNode->pToken = pLiteralToken;
-		return Up(pNode);
+		const static bool s_mustBeIntLiteral = false;
+		return parseLiteralExpr(pParser, s_mustBeIntLiteral);
 	}
 	else if (peekToken(pParser->pScanner) == TOKENK_Identifier)
 	{
@@ -1162,6 +1159,31 @@ AstNode * parsePrimary(Parser * pParser)
 	}
 }
 
+AstNode * parseLiteralExpr(Parser * pParser, bool mustBeIntLiteralk)
+{
+	const static TOKENK s_tokenkIntLit = TOKENK_IntLiteral;
+
+	const TOKENK * aTokenkValid = (mustBeIntLiteralk) ? &s_tokenkIntLit : g_aTokenkLiteral;
+	const int cTokenkValid = (mustBeIntLiteralk) ? 1 : g_cTokenkLiteral;
+
+	if (!tryConsumeToken(pParser->pScanner, aTokenkValid, cTokenkValid, ensurePendingToken(pParser)))
+	{
+		AstExpectedTokenkErr * pErr = AstNewErr0Child(pParser, ExpectedTokenkErr, peekTokenLine(pParser->pScanner));
+		appendMultiple(&pErr->aTokenkValid, aTokenkValid, cTokenkValid);
+
+		return Up(pErr);
+	}
+
+	Token * pToken = claimPendingToken(pParser);
+
+	auto * pExpr = AstNew(pParser, LiteralExpr, pToken->line);
+	pExpr->pToken = pToken;
+	pExpr->isValueSet = false;
+	pExpr->isValueErroneous = false;
+
+	return Up(pExpr);
+}
+
 AstNode * parseVarExpr(Parser * pParser, AstNode * pOwnerExpr)
 {
 	if (!tryConsumeToken(pParser->pScanner, TOKENK_Identifier, ensurePendingToken(pParser)))
@@ -1185,7 +1207,8 @@ AstNode * parseVarExpr(Parser * pParser, AstNode * pOwnerExpr)
 
 	auto * pNode = AstNew(pParser, VarExpr, pIdent->line);
 	pNode->pOwner = pOwnerExpr;
-	setIdentUnresolved(&pNode->ident, pIdent);
+    pNode->pTokenIdent = pIdent;
+    pNode->pResolvedDecl = nullptr;
 
 	return finishParsePrimary(pParser, Up(pNode));
 }
@@ -1195,7 +1218,7 @@ bool tryParseFuncHeader(
 	FUNCHEADERK funcheaderk,
 	FuncType ** ppoFuncType,
 	AstNode ** ppoErrNode,
-	ResolvedIdentifier * poDefnIdent)
+	ScopedIdentifier * poDefnIdent)
 {
 	EXPECTK expectkName = (funcheaderk == FUNCHEADERK_Defn) ? EXPECTK_Required : EXPECTK_Forbidden;
 
@@ -1248,7 +1271,7 @@ bool tryParseFuncHeader(
 		//	That responsibility falls on the function that allocates the AST node that
 		//	contains the identifier.
 
-		setIdentResolved(poDefnIdent, pIdent, peekScope(pParser).id);
+		setIdent(poDefnIdent, pIdent, peekScope(pParser).id);
 	}
 	else
 	{
@@ -1309,7 +1332,7 @@ bool tryParseFuncHeader(
 		//	into the error node.
 
 		appendMultiple(&apInParamVarDecls, apOutParamVarDecls.pBuffer, apOutParamVarDecls.cItem);
-		destroy(&apOutParamVarDecls);
+		dispose(&apOutParamVarDecls);
 
 		int line = peekTokenLine(pParser->pScanner);
 		auto * pErr = AstNewErrListChildMove(pParser, BubbleErr, line, &apInParamVarDecls);
@@ -1383,7 +1406,7 @@ AstNode * finishParsePrimary(Parser * pParser, AstNode * pExpr)
 
 		case ASTK_VarExpr:
 		{
-			Assert(Down(pExpr, VarExpr)->ident.pToken->tokenk == TOKENK_Identifier);
+			Assert(Down(pExpr, VarExpr)->pTokenIdent->tokenk == TOKENK_Identifier);
 		} break;
 
 		default:
@@ -1400,7 +1423,8 @@ AstNode * finishParsePrimary(Parser * pParser, AstNode * pExpr)
 	{
 		// Array access
 
-		AstNode * pSubscriptExpr = parseExpr(pParser);
+		static const bool s_mustBeIntLiteral = true;		// TODO: Support arbitrary expressions (semantic pass makes sure they are compile time const)
+		AstNode * pSubscriptExpr = parseLiteralExpr(pParser, s_mustBeIntLiteral);
 		if (isErrorNode(*pSubscriptExpr))
 		{
 			// Panic recovery
@@ -1584,7 +1608,7 @@ void pushScope(Parser * pParser, SCOPEK scopek)
 Scope peekScope(Parser * pParser)
 {
     Scope s;
-    peek(&pParser->scopeStack, &s);
+    peek(pParser->scopeStack, &s);
 
     return s;
 }
@@ -1784,7 +1808,7 @@ void debugPrintAst(const AstNode & root)
 {
 	DynamicArray<bool> mpLevelSkip;
 	init(&mpLevelSkip);
-	Defer(destroy(&mpLevelSkip));
+	Defer(dispose(&mpLevelSkip));
 
 	debugPrintSubAst(root, 0, false, &mpLevelSkip);
 	printf("\n");
@@ -1960,7 +1984,7 @@ void debugPrintSubAst(const AstNode & node, int level, bool skipAfterArrow, Dyna
 
 			DynamicArray<StringBox<256>> errMsgs;
 			init(&errMsgs);
-			Defer(destroy(&errMsgs));
+			Defer(dispose(&errMsgs));
 
 			errMessagesFromGrferrtok(pErr->pErrToken->grferrtok, &errMsgs);
 			Assert(errMsgs.cItem > 0);
@@ -2212,7 +2236,7 @@ void debugPrintSubAst(const AstNode & node, int level, bool skipAfterArrow, Dyna
 
 			if (pExpr->pOwner)
 			{
-				printf(". %s", pExpr->ident.pToken->lexeme);
+				printf(". %s", pExpr->pTokenIdent->lexeme);
 				printf("\n");
 
 				printTabs(levelNext, false, false, pMapLevelSkip);
@@ -2224,7 +2248,7 @@ void debugPrintSubAst(const AstNode & node, int level, bool skipAfterArrow, Dyna
 			}
 			else
 			{
-				printf("%s", pExpr->ident.pToken->lexeme);
+				printf("%s", pExpr->pTokenIdent->lexeme);
 			}
 		} break;
 

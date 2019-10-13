@@ -26,7 +26,7 @@ struct Type
 {
 	union
 	{
-		ResolvedIdentifier ident;	// !isFuncType
+		ScopedIdentifier ident;		// !isFuncType
 		FuncType * pFuncType;		// isFuncType
 	};
 
@@ -34,9 +34,9 @@ struct Type
 	bool isFuncType = false;
 };
 
+bool typeEq(const Type & t0, const Type & t1);
 bool isTypeInferred(const Type & type);
 bool isUnmodifiedType(const Type & type);
-
 
 
 struct FuncType
@@ -44,3 +44,5 @@ struct FuncType
 	DynamicArray<AstNode *> apParamVarDecls;
 	DynamicArray<AstNode *> apReturnVarDecls;		// A.k.a. output params
 };
+
+bool funcTypeEq(const FuncType & f0, const FuncType & f1);

@@ -2,6 +2,7 @@
 
 #include "ast.h"
 #include "token.h"
+#include "type.h"
 
 const scopeid gc_unresolvedScopeid = -1;
 const scopeid gc_builtInScopeid = 0;
@@ -40,54 +41,144 @@ const scopeid gc_globalScopeid = 1;
 
 void init(SymbolTable * pSymbTable)
 {
-	init(&pSymbTable->table, identHashPrecomputed, identEq);
-	init(&pSymbTable->redefinedIdents);
-    pSymbTable->orderNext = 0;
+	init(&pSymbTable->varTable, scopedIdentHashPrecomputed, scopedIdentEq);
+	init(&pSymbTable->funcTable, scopedIdentHashPrecomputed, scopedIdentEq);
+	init(&pSymbTable->structTable, scopedIdentHashPrecomputed, scopedIdentEq);
+
+	init(&pSymbTable->redefinedVars);
+    init(&pSymbTable->redefinedFuncs);
+    init(&pSymbTable->redefinedStructs);
+    pSymbTable->sequenceIdNext = 0;
+}
+
+void dispose(SymbolTable * pSymbTable)
+{
+	dispose(&pSymbTable->varTable);
+	dispose(&pSymbTable->structTable);
+
+	// Func table entries all own memory on the heap.
+
+	void (*disposeFn)(DynamicArray<SymbolTableEntry> *) = &dispose;
+	doForEachValue(&pSymbTable->funcTable, disposeFn);
+
+	dispose(&pSymbTable->funcTable);
+
+    dispose(&pSymbTable->redefinedVars);
+    dispose(&pSymbTable->redefinedFuncs);
+    dispose(&pSymbTable->redefinedStructs);
 }
 
 bool tryInsert(
 	SymbolTable * pSymbolTable,
-	ResolvedIdentifier ident,
-	SymbolInfo symbInfo)
+	const ScopedIdentifier & ident,
+	const SymbolInfo & symbInfo)
 {
-    Assert(symbInfo.identDefncl.hash == ident.hash);
+	if (!ident.pToken) return false;
 
-    symbInfo.tableOrder = pSymbolTable->orderNext;
-    pSymbolTable->orderNext++;
+    Assert(symbInfo.ident.hash == ident.hash);
 
-	if (lookup(&pSymbolTable->table, ident))
+	if (symbInfo.symbolk == SYMBOLK_Var || symbInfo.symbolk == SYMBOLK_Struct)
 	{
-		append(&pSymbolTable->redefinedIdents, ident);
-		return false;
-	}
+		auto * pTable = (symbInfo.symbolk == SYMBOLK_Var) ? &pSymbolTable->varTable : &pSymbolTable->structTable;
+		auto * pRedefinedArray = (symbInfo.symbolk == SYMBOLK_Var) ? &pSymbolTable->redefinedVars : &pSymbolTable->redefinedStructs;
 
-	insert(&pSymbolTable->table, ident, symbInfo);
-	return true;
+		if (lookup(pTable, ident))
+		{
+			// Duplicate
+
+			append(pRedefinedArray, symbInfo);
+			return false;
+		}
+
+		SymbolTableEntry symbEntry;
+		symbEntry.symbInfo = symbInfo;
+		symbEntry.sequenceId = pSymbolTable->sequenceIdNext;
+		pSymbolTable->sequenceIdNext++;
+
+		insert(pTable, ident, symbEntry);
+
+		return true;
+	}
+	else
+	{
+		Assert(symbInfo.symbolk == SYMBOLK_Func);
+
+		DynamicArray<SymbolTableEntry> * pEntries = lookup(&pSymbolTable->funcTable, ident);
+		if (!pEntries)
+		{
+			pEntries = insertNew(&pSymbolTable->funcTable, ident);
+			init(pEntries);
+		}
+
+		FuncType * pFuncType = symbInfo.funcDefn->pFuncType;
+		Assert(pFuncType);
+
+		for (int i = 0; i < pEntries->cItem; i++)
+		{
+			SymbolTableEntry * pEntry = &(*pEntries)[i];
+			Assert(pEntry->symbInfo.symbolk == SYMBOLK_Func);
+
+			FuncType * pFuncTypeOther = pEntry->symbInfo.funcDefn->pFuncType;
+			Assert(pFuncTypeOther);
+
+			if (funcTypeEq(*pFuncType, *pFuncTypeOther))
+			{
+				// Duplicate
+
+				append(&pSymbolTable->redefinedFuncs, symbInfo);
+				return false;
+			}
+		}
+
+		SymbolTableEntry symbEntry;
+		symbEntry.symbInfo = symbInfo;
+		symbEntry.sequenceId = pSymbolTable->sequenceIdNext;
+		pSymbolTable->sequenceIdNext++;
+
+		append(pEntries, symbEntry);
+
+		return true;
+	}
 }
 
-void setSymbolInfo(SymbolInfo * pSymbInfo, const ResolvedIdentifier & ident, SYMBOLK symbolk, AstNode * pNode)
+SymbolTableEntry * lookupVar(SymbolTable * pSymbTable, const ScopedIdentifier & ident)
+{
+    return lookup(&pSymbTable->varTable, ident);
+}
+
+SymbolTableEntry * lookupStruct(SymbolTable * pSymbTable, const ScopedIdentifier & ident)
+{
+    return lookup(&pSymbTable->structTable, ident);
+}
+
+DynamicArray<SymbolTableEntry> * lookupFunc(SymbolTable * pSymbTable, const ScopedIdentifier & ident)
+{
+    return lookup(&pSymbTable->funcTable, ident);
+}
+
+void setSymbolInfo(SymbolInfo * pSymbInfo, const ScopedIdentifier & ident, SYMBOLK symbolk, AstNode * pNode)
 {
 	pSymbInfo->symbolk = symbolk;
-    pSymbInfo->identDefncl = ident;
+    pSymbInfo->ident = ident;
 
 	switch (symbolk)
 	{
 		case SYMBOLK_Var:
 		{
 			Assert(pNode->astk == ASTK_VarDeclStmt);
-			pSymbInfo->varDecl = (AstVarDeclStmt *) pNode;
+			pSymbInfo->varDecl = Down(pNode, VarDeclStmt);
 		} break;
 
 		case SYMBOLK_Struct:
 		{
 			Assert(pNode->astk == ASTK_StructDefnStmt);
-			pSymbInfo->structDefn = (AstStructDefnStmt *)pNode;
+			pSymbInfo->structDefn = Down(pNode, StructDefnStmt);
 		} break;
 
 		case SYMBOLK_Func:
 		{
 			Assert(pNode->astk == ASTK_FuncDefnStmt);
-			pSymbInfo->funcDefn = (AstFuncDefnStmt *)pNode;
+			pSymbInfo->funcDefn = Down(pNode, FuncDefnStmt);
 		} break;
 
 		default:
@@ -95,20 +186,27 @@ void setSymbolInfo(SymbolInfo * pSymbInfo, const ResolvedIdentifier & ident, SYM
 	}
 }
 
-void setIdentResolved(ResolvedIdentifier * pIdentifier, Token * pToken, scopeid declScopeid)
+void setIdent(ScopedIdentifier * pIdentifier, Token * pToken, scopeid declScopeid)
 {
 	pIdentifier->pToken = pToken;
-	pIdentifier->declScopeid = declScopeid;
-	pIdentifier->hash = identHash(*pIdentifier);
+	pIdentifier->defnclScopeid = declScopeid;
+	pIdentifier->hash = scopedIdentHash(*pIdentifier);
 }
 
-void setIdentUnresolved(ResolvedIdentifier * pIdentifier, Token * pToken)
+void setIdentNoScope(ScopedIdentifier * pIdentifier, Token * pToken)
 {
 	pIdentifier->pToken = pToken;
-	pIdentifier->declScopeid = gc_unresolvedScopeid;
+	pIdentifier->defnclScopeid = gc_unresolvedScopeid;
 }
 
-u32 identHash(const ResolvedIdentifier & ident)
+void resolveIdentScope(ScopedIdentifier * pIdentifier, scopeid declScopeid)
+{
+	Assert(pIdentifier->pToken);
+	pIdentifier->defnclScopeid = declScopeid;
+	pIdentifier->hash = scopedIdentHash(*pIdentifier);
+}
+
+u32 scopedIdentHash(const ScopedIdentifier & ident)
 {
 	// FNV-1a : http://www.isthe.com/chongo/tech/comp/fnv/
 
@@ -119,9 +217,9 @@ u32 identHash(const ResolvedIdentifier & ident)
 
 	// Hash the scope identifier
 
-	for (uint i = 0; i < sizeof(ident.declScopeid); i++)
+	for (uint i = 0; i < sizeof(ident.defnclScopeid); i++)
 	{
-		u8 byte = *(reinterpret_cast<const u8*>(&ident.declScopeid) + i);
+		u8 byte = *(reinterpret_cast<const u8*>(&ident.defnclScopeid) + i);
 		result ^= byte;
 		result *= s_fnvPrime;
 	}
@@ -141,19 +239,36 @@ u32 identHash(const ResolvedIdentifier & ident)
 	return result;
 }
 
-u32 identHashPrecomputed(const ResolvedIdentifier & i)
+u32 scopedIdentHashPrecomputed(const ScopedIdentifier & i)
 {
 	return i.hash;
 }
 
-bool identEq(const ResolvedIdentifier & i0, const ResolvedIdentifier & i1)
+bool scopedIdentEq(const ScopedIdentifier & i0, const ScopedIdentifier & i1)
 {
-	if (!i0.pToken || !i1.pToken)			return false;
+	if (!i0.pToken || !i1.pToken)			    return false;
 
-	if (i0.hash != i1.hash)					return false;
-	if (i0.declScopeid != i1.declScopeid)	return false;
+	if (i0.hash != i1.hash)					    return false;
+	if (i0.defnclScopeid != i1.defnclScopeid)	return false;
 
 	if (i0.pToken->lexeme == i1.pToken->lexeme)		return true;
 
 	return (strcmp(i0.pToken->lexeme, i1.pToken->lexeme) == 0);
+}
+
+bool isDeclarationOrderIndependent(const SymbolTableEntry & entry)
+{
+	return isDeclarationOrderIndependent(entry.symbInfo.symbolk);
+}
+
+bool isDeclarationOrderIndependent(const SymbolInfo & info)
+{
+	return isDeclarationOrderIndependent(info.symbolk);
+}
+
+bool isDeclarationOrderIndependent(SYMBOLK symbolk)
+{
+	return
+		symbolk == SYMBOLK_Var ||
+		symbolk == SYMBOLK_Struct;
 }

@@ -154,6 +154,21 @@ bool tryConsumeToken(Scanner * pScanner, const TOKENK * aTokenkMatch, int cToken
 	return false;
 }
 
+bool tryPeekToken(Scanner * pScanner, const TOKENK * aTokenkMatch, int cTokenkMatch, Token * poToken)
+{
+	Token throwaway;
+	Token * pToken = (poToken) ? poToken : &throwaway;
+
+	TOKENK tokenkNext = peekToken(pScanner, pToken);
+
+	for (int i = 0; i < cTokenkMatch; i++)
+	{
+		if (tokenkNext == aTokenkMatch[i]) return true;
+	}
+
+	return false;
+}
+
 TOKENK produceNextToken(Scanner * pScanner, Token * poToken)
 {
 	onStartToken(pScanner);
@@ -569,7 +584,7 @@ void _finishAfterConsumeDigit(Scanner * pScanner, char firstDigit, bool startsWi
 	GRFERRTOK grferrtok = GRFERRTOK_None;
 	if (base == 16)
 	{
-		// TODO: Move the case checking to semantic analysis
+		// TODO: Move the case checking to semantic analysis so that we can report more interesting errors if they exist
 
 		// Support both lower and upper case hex letters, but you can't
 		//  mix and match!
@@ -650,8 +665,6 @@ void _finishAfterConsumeDigit(Scanner * pScanner, char firstDigit, bool startsWi
 	{
 		// Note makeToken handles some classes of errors too, like int literals
 		//	that are too big for us to actually store!
-
-		pScanner->currentIntLiteralBase = base;
 
 		(cDot > 0) ?
 			makeToken(pScanner, TOKENK_FloatLiteral, poToken) :

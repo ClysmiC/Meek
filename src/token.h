@@ -141,29 +141,12 @@ struct Token
 	int			column = 0;
 
 	TOKENK		tokenk = TOKENK_Nil;
+    GRFERRTOK   grferrtok = GRFERRTOK_None;      // TOKENK_Error
 
     // TODO: store lexeme length? I *do* make sure that they are null-terminated so
     //  I can always just strlen them but that is pretty lame.
 
 	char *		lexeme = nullptr;
-
-	// NOTE: Literal values do not get set until semantic analysis since there are classes of
-	//	semantic errors that can happen at that time (e.g., int literals that exceed max value)
-
-	union
-	{
-		struct						// TOKENK_IntLiteral
-		{
-			INTLITERALK intliteralk;	// HMM: Is it even worth storing this? Can always just check the first 2 characters of the lexeme
-			int			literalInt;
-        };
-
-		float		literalFloat;	// TOKENK_FloatLiteral
-		bool		literalBool;	// TOKENK_BoolLiteral
-		GRFERRTOK	grferrtok;		// TOKENK_Error
-
-		// String literal can just read the lexeme
-	};
 };
 
 struct ReservedWord

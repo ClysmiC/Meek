@@ -40,44 +40,42 @@ struct Scope
 //Scope peekScope(ScopeStack * pScopeStack);
 //Scope popScope(ScopeStack * pScopeStack);
 
-struct ResolvedIdentifier
+struct ScopedIdentifier
 {
 	Token * pToken;
-	scopeid declScopeid;
+	scopeid defnclScopeid;
 
 	// Cached
 
 	u32 hash;
 };
 
-void setIdentResolved(ResolvedIdentifier * pIdentifier, Token * pToken, scopeid declScopeid);
-void setIdentUnresolved(ResolvedIdentifier * pIdentifier, Token * pToken);
+void setIdent(ScopedIdentifier * pIdentifier, Token * pToken, scopeid declScopeid);
+void setIdentNoScope(ScopedIdentifier * pIdentifier, Token * pToken);
+void resolveIdentScope(ScopedIdentifier * pIdentifier, scopeid declScopeid);
 
-u32 identHash(const ResolvedIdentifier & ident);
-u32 identHashPrecomputed(const ResolvedIdentifier & i);
-bool identEq(const ResolvedIdentifier & i0, const ResolvedIdentifier & i1);
+u32 scopedIdentHash(const ScopedIdentifier & ident);
+u32 scopedIdentHashPrecomputed(const ScopedIdentifier & ident);
+bool scopedIdentEq(const ScopedIdentifier & i0, const ScopedIdentifier & i1);
 
-inline bool isResolved(const ResolvedIdentifier & i)
+bool isScopeSet(const ScopedIdentifier & ident)
 {
-	return i.declScopeid != gc_unresolvedScopeid;
+    return ident.defnclScopeid != gc_unresolvedScopeid;
 }
-
-
 
 enum SYMBOLK
 {
 	SYMBOLK_Var,
 	SYMBOLK_Func,
 	SYMBOLK_Struct,
+
+	// SYMBOLK_ErrorProxy	// "Fake" symbol that we put into table after unresolved ident error so that it only gets reported once
 };
 
 struct SymbolInfo
 {
-	ResolvedIdentifier identDefncl;
-	SYMBOLK symbolk;
-
-	// HMM: Could make this union the first field and use type punning to save pointers
-	//	back to the SymbolInfo
+	ScopedIdentifier ident;		// Redundant w/ the key, but convenient to store here
+	SYMBOLK symbolk;			// Redundant w/ the table type, but convenient to make this a union
 
 	union
 	{
@@ -85,24 +83,38 @@ struct SymbolInfo
 		AstFuncDefnStmt * funcDefn;		// SYMBOLK_Func
 		AstStructDefnStmt * structDefn;	// SYMBOLK_Struct
 	};
-
-    // Order inserted into the symbol table. Used during resolution to figure out if symbol is accessible at a particular point.
-    //  Maintained by the symbol table insertion routine.
-
-    int tableOrder;
 };
 
-void setSymbolInfo(SymbolInfo * pSymbInfo, const ResolvedIdentifier & ident, SYMBOLK symbolk, AstNode * pDefncl);
+struct SymbolTableEntry
+{
+	int sequenceId;		// Increases based on order inserted into symbol table
+	SymbolInfo symbInfo;
+};
 
+void setSymbolInfo(SymbolInfo * pSymbInfo, const ScopedIdentifier & ident, SYMBOLK symbolk, AstNode * pDefncl);
 
+bool isDeclarationOrderIndependent(const SymbolTableEntry & entry);
+bool isDeclarationOrderIndependent(const SymbolInfo & info);
+bool isDeclarationOrderIndependent(SYMBOLK symbolk);
 
 struct SymbolTable
 {
-    HashMap<ResolvedIdentifier, SymbolInfo> table;
-	DynamicArray<ResolvedIdentifier> redefinedIdents;
-    int orderNext = 0;
+    HashMap<ScopedIdentifier, SymbolTableEntry> varTable;
+	HashMap<ScopedIdentifier, SymbolTableEntry> structTable;
+	HashMap<ScopedIdentifier, DynamicArray<SymbolTableEntry>> funcTable;
+
+	DynamicArray<SymbolInfo> redefinedVars;
+	DynamicArray<SymbolInfo> redefinedStructs;
+	DynamicArray<SymbolInfo> redefinedFuncs;
+
+    int sequenceIdNext = 0;
 };
 
-void init(SymbolTable * pSymbTable);
+SymbolTableEntry * lookupVar(SymbolTable * pSymbTable, const ScopedIdentifier & ident);
+SymbolTableEntry * lookupStruct(SymbolTable * pSymbTable, const ScopedIdentifier & ident);
+DynamicArray<SymbolTableEntry> * lookupFunc(SymbolTable * pSymbTable, const ScopedIdentifier & ident);
 
-bool tryInsert(SymbolTable * pSymbolTable, ResolvedIdentifier ident, SymbolInfo symbInfo);
+void init(SymbolTable * pSymbTable);
+void dispose(SymbolTable * pSymbTable);
+
+bool tryInsert(SymbolTable * pSymbolTable, const ScopedIdentifier & ident, const SymbolInfo & symbInfo);
