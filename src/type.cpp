@@ -10,7 +10,7 @@ bool typeEq(const Type & t0, const Type & t1)
 
 	// Check typemods are same
 
-	for (int i = 0; i < t0.aTypemods.cItem; i++)
+	for (uint i = 0; i < t0.aTypemods.cItem; i++)
 	{
 		TypeModifier tmod0 = t0.aTypemods[i];
 		TypeModifier tmod1 = t1.aTypemods[i];
@@ -67,7 +67,7 @@ bool funcTypeEq(const FuncType & f0, const FuncType & f1)
 {
 	if (f0.apParamVarDecls.cItem != f1.apParamVarDecls.cItem) return false;
 
-	for (int i = 0; i < f0.apParamVarDecls.cItem; i++)
+	for (uint i = 0; i < f0.apParamVarDecls.cItem; i++)
 	{
 		AstVarDeclStmt * pDecl0;
 		AstVarDeclStmt * pDecl1;

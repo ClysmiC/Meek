@@ -285,6 +285,7 @@ struct AstVarDeclStmt
 	Type * pType;			// null means inferred type that hasn't yet been inferred
 	AstNode * pInitExpr;	// null means default init
 
+    symbseqid symbseqid;
 
 	// TODO: I want different values here when parsing and after typechecking.
 	//	Namely, while parsing I want to store the expressions inside subscripts,
@@ -295,15 +296,17 @@ struct AstStructDefnStmt
 {
 	ScopedIdentifier ident;
 	DynamicArray<AstNode *> apVarDeclStmt;
-    scopeid scopeid;
+    scopeid scopeid;        // Scope introduced by this struct defn
+    symbseqid symbseqid;
 };
 
 struct AstFuncDefnStmt
 {
-	ResolvedIdentifier ident;
+	ScopedIdentifier ident;
 	FuncType * pFuncType;
 	AstNode * pBodyStmt;
-    scopeid scopeid;
+    scopeid scopeid;        // Scope introduced by this func defn
+    symbseqid symbseqid;
 };
 
 struct AstBlockStmt

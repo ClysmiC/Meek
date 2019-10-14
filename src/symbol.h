@@ -8,10 +8,13 @@ struct AstFuncDefnStmt;
 struct AstStructDefnStmt;
 struct Token;
 
-typedef s32 scopeid;
+typedef u32 scopeid;
 extern const scopeid gc_unresolvedScopeid;
 extern const scopeid gc_builtInScopeid;
 extern const scopeid gc_globalScopeid;
+
+typedef u32 symbseqid;
+extern const symbseqid gc_unsetSymbseqid;
 
 enum SCOPEK : s8
 {
@@ -58,7 +61,7 @@ u32 scopedIdentHash(const ScopedIdentifier & ident);
 u32 scopedIdentHashPrecomputed(const ScopedIdentifier & ident);
 bool scopedIdentEq(const ScopedIdentifier & i0, const ScopedIdentifier & i1);
 
-bool isScopeSet(const ScopedIdentifier & ident)
+inline bool isScopeSet(const ScopedIdentifier & ident)
 {
     return ident.defnclScopeid != gc_unresolvedScopeid;
 }
@@ -79,29 +82,22 @@ struct SymbolInfo
 
 	union
 	{
-		AstVarDeclStmt * varDecl;		// SYMBOLK_Var
-		AstFuncDefnStmt * funcDefn;		// SYMBOLK_Func
-		AstStructDefnStmt * structDefn;	// SYMBOLK_Struct
+		AstVarDeclStmt * pVarDeclStmt;		    // SYMBOLK_Var
+		AstFuncDefnStmt * pFuncDefnStmt;		// SYMBOLK_Func
+		AstStructDefnStmt * pStructDefnStmt;	// SYMBOLK_Struct
 	};
-};
-
-struct SymbolTableEntry
-{
-	int sequenceId;		// Increases based on order inserted into symbol table
-	SymbolInfo symbInfo;
 };
 
 void setSymbolInfo(SymbolInfo * pSymbInfo, const ScopedIdentifier & ident, SYMBOLK symbolk, AstNode * pDefncl);
 
-bool isDeclarationOrderIndependent(const SymbolTableEntry & entry);
 bool isDeclarationOrderIndependent(const SymbolInfo & info);
 bool isDeclarationOrderIndependent(SYMBOLK symbolk);
 
 struct SymbolTable
 {
-    HashMap<ScopedIdentifier, SymbolTableEntry> varTable;
-	HashMap<ScopedIdentifier, SymbolTableEntry> structTable;
-	HashMap<ScopedIdentifier, DynamicArray<SymbolTableEntry>> funcTable;
+    HashMap<ScopedIdentifier, SymbolInfo> varTable;
+	HashMap<ScopedIdentifier, SymbolInfo> structTable;
+	HashMap<ScopedIdentifier, DynamicArray<SymbolInfo>> funcTable;
 
 	DynamicArray<SymbolInfo> redefinedVars;
 	DynamicArray<SymbolInfo> redefinedStructs;
@@ -110,9 +106,9 @@ struct SymbolTable
     int sequenceIdNext = 0;
 };
 
-SymbolTableEntry * lookupVar(SymbolTable * pSymbTable, const ScopedIdentifier & ident);
-SymbolTableEntry * lookupStruct(SymbolTable * pSymbTable, const ScopedIdentifier & ident);
-DynamicArray<SymbolTableEntry> * lookupFunc(SymbolTable * pSymbTable, const ScopedIdentifier & ident);
+SymbolInfo * lookupVar(SymbolTable * pSymbTable, const ScopedIdentifier & ident);
+SymbolInfo * lookupStruct(SymbolTable * pSymbTable, const ScopedIdentifier & ident);
+DynamicArray<SymbolInfo> * lookupFunc(SymbolTable * pSymbTable, const ScopedIdentifier & ident);
 
 void init(SymbolTable * pSymbTable);
 void dispose(SymbolTable * pSymbTable);

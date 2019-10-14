@@ -10,7 +10,7 @@ struct AstNode;
 
 struct ResolvePass
 {
-    int lastSequenceId = 0;
+    symbseqid lastSymbseqid = 0;
 	Stack<scopeid> scopeidStack;
 	SymbolTable * pSymbTable;
 
@@ -21,7 +21,7 @@ struct ResolvePass
 
 inline void init(ResolvePass * pPass)
 {
-	pPass->lastSequenceId = 0;
+	pPass->lastSymbseqid = 0;
 	init(&pPass->scopeidStack);
 	init(&pPass->unresolvedIdents);
 	pPass->hadError = false;

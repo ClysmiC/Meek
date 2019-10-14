@@ -25,13 +25,13 @@ scopeid resolveVarExpr(ResolvePass * pPass, AstNode * pVarExpr)
 
 		ScopedIdentifier candidate;
         setIdent(&candidate, pExpr->pTokenIdent, ownerScopeid);
-		SymbolTableEntry * pEntry = lookupVar(pPass->pSymbTable, candidate);
+		SymbolInfo * pSymbInfo = lookupVar(pPass->pSymbTable, candidate);
 
-		if (pEntry)
+		if (pSymbInfo)
 		{
 			// Resolve!
 
-            pExpr->pResolvedDecl = pEntry->symbInfo.varDecl;
+            pExpr->pResolvedDecl = pSymbInfo->pVarDeclStmt;
 
 			// TODO: Look up type of the variable and return the type declaration's corresponding scopeid
 		}
@@ -183,9 +183,9 @@ void doResolvePass(ResolvePass * pPass, AstNode * pNodeSuper)
 					Verify(peekFar(pPass->scopeidStack, i, &scopeid));
 					resolveIdentScope(&candidate, scopeid);
 
-                    SymbolTableEntry * pSymbEntry = lookupStruct(pPass->pSymbTable, candidate);
+                    SymbolInfo * pSymbInfo = lookupStruct(pPass->pSymbTable, candidate);
 
-					if(pSymbEntry)
+					if(pSymbInfo)
 					{
 						// Resolve it!
 
@@ -204,9 +204,13 @@ void doResolvePass(ResolvePass * pPass, AstNode * pNodeSuper)
 
 			if (pStmt->ident.pToken)
 			{
-                SymbolTableEntry * pSymbEntry = lookupVar(pPass->pSymbTable, pStmt->ident);
-                AssertInfo(pSymbEntry, "We should have put this var decl in the symbol table when we parsed it...");
-				pPass->lastSequenceId = pSymbEntry->sequenceId;
+#if DEBUG
+                SymbolInfo * pSymbInfo = lookupVar(pPass->pSymbTable, pStmt->ident);
+                AssertInfo(pSymbInfo, "We should have put this var decl in the symbol table when we parsed it...");
+                Assert(pSymbInfo->symbolk == SYMBOLK_Var);
+                AssertInfo(pSymbInfo->pVarDeclStmt == pStmt, "At var declaration we should be able to look up the var in the symbol table and find ourselves...");
+#endif
+				pPass->lastSymbseqid = pStmt->symbseqid;
 			}
 
 			if (pStmt->pInitExpr) doResolvePass(pPass, pStmt->pInitExpr);
@@ -216,12 +220,26 @@ void doResolvePass(ResolvePass * pPass, AstNode * pNodeSuper)
         {
 			auto * pStmt = DownConst(pNodeSuper, StructDefnStmt);
 
-			SymbolTableEntry * pSymbEntry = lookupStruct(pPass->pSymbTable, pStmt->ident);
-            AssertInfo(pSymbEntry, "We should have put this struct decl in the symbol table when we parsed it...");
-			pPass->lastSequenceId = pSymbEntry->sequenceId;
+#if DEBUG
+            // Verify assumptions
+
+			SymbolInfo * pSymbInfo = lookupStruct(pPass->pSymbTable, pStmt->ident);
+            AssertInfo(pSymbInfo, "We should have put this struct decl in the symbol table when we parsed it...");
+            Assert(pSymbInfo->symbolk == SYMBOLK_Struct);
+            AssertInfo(pSymbInfo->pStructDefnStmt == pStmt, "At struct definition we should be able to look up the struct in the symbol table and find ourselves...");
+#endif
+
+            // Record sequence id
+
+            Assert(pStmt->symbseqid != gc_unsetSymbseqid);
+			pPass->lastSymbseqid = pStmt->symbseqid;
+
+            // Record scope id
 
 			push(&pPass->scopeidStack, pStmt->scopeid);
 			Defer(pop(&pPass->scopeidStack));
+
+            // Resolve member decls
 
 			for (uint i = 0; i < pStmt->apVarDeclStmt.cItem; i++)
 			{
@@ -233,24 +251,55 @@ void doResolvePass(ResolvePass * pPass, AstNode * pNodeSuper)
         {
 			auto * pStmt = DownConst(pNodeSuper, FuncDefnStmt);
 
-            // TODO: Should be similar to StructDefnStatement above, but need to find the our function among overloads...
+#if DEBUG
+            // Verify assumptions
 
-			SymbolTableEntry * pSymbEntry;
-			Verify(lookup(&pPass->pSymbTable, pStmt->resolvedIdent, pSymbEntry));
-			pPass->lastSequenceId = pSymbEntry->symbolId;
+			DynamicArray<SymbolInfo> * paSymbInfo;
+            paSymbInfo = lookupFunc(pPass->pSymbTable, pStmt->ident);
+
+            AssertInfo(paSymbInfo && paSymbInfo->cItem > 0, "We should have put this func decl in the symbol table when we parsed it...");
+            bool found = false;
+
+            for (uint i = 0; i < paSymbInfo->cItem; i++)
+            {
+                SymbolInfo * pSymbInfo = &(*paSymbInfo)[i];
+                Assert(pSymbInfo->symbolk == SYMBOLK_Func);
+
+                if (funcTypeEq(*pStmt->pFuncType, *pSymbInfo->pFuncDefnStmt->pFuncType))
+                {
+                    found = true;
+                    break;
+                }
+            }
+
+            AssertInfo(found, "At struct definition we should be able to look up the struct in the symbol table and find ourselves...");
+#endif
+
+            // Record sequence id
+
+            Assert(pStmt->symbseqid != gc_unsetSymbseqid);
+            pPass->lastSymbseqid = pStmt->symbseqid;
+
+            // Record scope id
 
 			push(&pPass->scopeidStack, pStmt->scopeid);
 			Defer(pop(&pPass->scopeidStack));
+
+            // Resolve params
 
 			for (uint i = 0; i < pStmt->pFuncType->apParamVarDecls.cItem; i++)
 			{
 				doResolvePass(pPass, pStmt->pFuncType->apParamVarDecls[i]);
 			}
 
+            // Resolve return values
+
 			for (uint i = 0; i < pStmt->pFuncType->apReturnVarDecls.cItem; i++)
 			{
 				doResolvePass(pPass, pStmt->pFuncType->apReturnVarDecls[i]);
 			}
+
+            // Resolve body
 
 			doResolvePass(pPass, pStmt->pBodyStmt);
         } break;
@@ -266,7 +315,7 @@ void doResolvePass(ResolvePass * pPass, AstNode * pNodeSuper)
 			bool shouldPushPop = true;
 			{
 				scopeid scopeidPrev;
-				if (peek(&pPass->scopeidStack, &scopeidPrev))
+				if (peek(pPass->scopeidStack, &scopeidPrev))
 				{
 					shouldPushPop = (scopeidPrev != pStmt->scopeid);
 				}
@@ -275,7 +324,10 @@ void doResolvePass(ResolvePass * pPass, AstNode * pNodeSuper)
 			if (shouldPushPop) push(&pPass->scopeidStack, pStmt->scopeid);
 			Defer(if (shouldPushPop) pop(&pPass->scopeidStack));
 
-			doResolvePass(pPass, pStmt);
+            for (uint i = 0; i < pStmt->apStmts.cItem; i++)
+            {
+			    doResolvePass(pPass, pStmt->apStmts[i]);
+            }
         } break;
 
         case ASTK_WhileStmt:

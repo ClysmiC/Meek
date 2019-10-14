@@ -371,9 +371,9 @@ bool isEmpty(const Stack<T> & stack)
 template<typename T>
 bool peekFar(const Stack<T> & stack, int peekIndex, T * poItem)
 {
-	if (count(stack) <= peekIndex) return false;
+	if (count(stack) <= static_cast<uint>(peekIndex)) return false;
 
-	*poItem = stack.a[pStack->a.cItem - 1 - peekIndex];
+	*poItem = stack.a[stack.a.cItem - 1 - peekIndex];
 	return true;
 }
 
@@ -386,7 +386,7 @@ bool peek(const Stack<T> & stack, T * poItem)
 template<typename T>
 bool pop(Stack<T> * pStack, T * poItem=nullptr)
 {
-	if (isEmpty(pStack)) return false;
+	if (isEmpty(*pStack)) return false;
 
 	if (poItem) *poItem = pStack->a[pStack->a.cItem - 1];
 
@@ -395,7 +395,7 @@ bool pop(Stack<T> * pStack, T * poItem=nullptr)
 }
 
 template<typename T>
-int count(const Stack<T> & stack)
+unsigned int count(const Stack<T> & stack)
 {
 	return stack.a.cItem;
 }

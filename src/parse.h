@@ -39,7 +39,7 @@ struct Parser
 
 	// Scope
 
-    scopeid scopeidNext = 0;
+    scopeid scopeidNext = gc_globalScopeid + 1;
     Stack<Scope> scopeStack;
 
 	// Symbol Table

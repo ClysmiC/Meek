@@ -4,9 +4,11 @@
 #include "token.h"
 #include "type.h"
 
-const scopeid gc_unresolvedScopeid = -1;
-const scopeid gc_builtInScopeid = 0;
-const scopeid gc_globalScopeid = 1;
+const scopeid gc_unresolvedScopeid = 0;
+const scopeid gc_builtInScopeid = 1;
+const scopeid gc_globalScopeid = 2;
+
+const symbseqid gc_unsetSymbseqid = 0;
 
 //void init(ScopeStack * pScopeStack)
 //{
@@ -58,7 +60,7 @@ void dispose(SymbolTable * pSymbTable)
 
 	// Func table entries all own memory on the heap.
 
-	void (*disposeFn)(DynamicArray<SymbolTableEntry> *) = &dispose;
+	void (*disposeFn)(DynamicArray<SymbolInfo> *) = &dispose;
 	doForEachValue(&pSymbTable->funcTable, disposeFn);
 
 	dispose(&pSymbTable->funcTable);
@@ -82,43 +84,55 @@ bool tryInsert(
 		auto * pTable = (symbInfo.symbolk == SYMBOLK_Var) ? &pSymbolTable->varTable : &pSymbolTable->structTable;
 		auto * pRedefinedArray = (symbInfo.symbolk == SYMBOLK_Var) ? &pSymbolTable->redefinedVars : &pSymbolTable->redefinedStructs;
 
+        // Check for duplicate
+
 		if (lookup(pTable, ident))
 		{
-			// Duplicate
-
 			append(pRedefinedArray, symbInfo);
 			return false;
 		}
 
-		SymbolTableEntry symbEntry;
-		symbEntry.symbInfo = symbInfo;
-		symbEntry.sequenceId = pSymbolTable->sequenceIdNext;
-		pSymbolTable->sequenceIdNext++;
+        // Add sequence id to AST node
 
-		insert(pTable, ident, symbEntry);
+        if (symbInfo.symbolk == SYMBOLK_Var)
+        {
+            symbInfo.pVarDeclStmt->symbseqid = pSymbolTable->sequenceIdNext;
+        }
+        else
+        {
+            Assert(symbInfo.symbolk == SYMBOLK_Struct);
+            symbInfo.pStructDefnStmt->symbseqid = pSymbolTable->sequenceIdNext;
+        }
 
+        // Insert into table
+
+		insert(pTable, ident, symbInfo);
 		return true;
 	}
 	else
 	{
 		Assert(symbInfo.symbolk == SYMBOLK_Func);
 
-		DynamicArray<SymbolTableEntry> * pEntries = lookup(&pSymbolTable->funcTable, ident);
+        // Get array of entries or create new one
+
+		DynamicArray<SymbolInfo> * pEntries = lookup(&pSymbolTable->funcTable, ident);
 		if (!pEntries)
 		{
 			pEntries = insertNew(&pSymbolTable->funcTable, ident);
 			init(pEntries);
 		}
 
-		FuncType * pFuncType = symbInfo.funcDefn->pFuncType;
+		FuncType * pFuncType = symbInfo.pFuncDefnStmt->pFuncType;
 		Assert(pFuncType);
 
-		for (int i = 0; i < pEntries->cItem; i++)
-		{
-			SymbolTableEntry * pEntry = &(*pEntries)[i];
-			Assert(pEntry->symbInfo.symbolk == SYMBOLK_Func);
+        // Check for duplicate w/ same parameter signature
 
-			FuncType * pFuncTypeOther = pEntry->symbInfo.funcDefn->pFuncType;
+		for (uint i = 0; i < pEntries->cItem; i++)
+		{
+			SymbolInfo * pSymbInfoCandidate = &(*pEntries)[i];
+			Assert(pSymbInfoCandidate->symbolk == SYMBOLK_Func);
+
+			FuncType * pFuncTypeOther = pSymbInfoCandidate->pFuncDefnStmt->pFuncType;
 			Assert(pFuncTypeOther);
 
 			if (funcTypeEq(*pFuncType, *pFuncTypeOther))
@@ -130,28 +144,29 @@ bool tryInsert(
 			}
 		}
 
-		SymbolTableEntry symbEntry;
-		symbEntry.symbInfo = symbInfo;
-		symbEntry.sequenceId = pSymbolTable->sequenceIdNext;
-		pSymbolTable->sequenceIdNext++;
+        // Add sequence id to AST node
 
-		append(pEntries, symbEntry);
+        symbInfo.pFuncDefnStmt->symbseqid = pSymbolTable->sequenceIdNext;
+        pSymbolTable->sequenceIdNext++;
 
+        // Insert into table
+
+		append(pEntries, symbInfo);
 		return true;
 	}
 }
 
-SymbolTableEntry * lookupVar(SymbolTable * pSymbTable, const ScopedIdentifier & ident)
+SymbolInfo * lookupVar(SymbolTable * pSymbTable, const ScopedIdentifier & ident)
 {
     return lookup(&pSymbTable->varTable, ident);
 }
 
-SymbolTableEntry * lookupStruct(SymbolTable * pSymbTable, const ScopedIdentifier & ident)
+SymbolInfo * lookupStruct(SymbolTable * pSymbTable, const ScopedIdentifier & ident)
 {
     return lookup(&pSymbTable->structTable, ident);
 }
 
-DynamicArray<SymbolTableEntry> * lookupFunc(SymbolTable * pSymbTable, const ScopedIdentifier & ident)
+DynamicArray<SymbolInfo> * lookupFunc(SymbolTable * pSymbTable, const ScopedIdentifier & ident)
 {
     return lookup(&pSymbTable->funcTable, ident);
 }
@@ -166,19 +181,19 @@ void setSymbolInfo(SymbolInfo * pSymbInfo, const ScopedIdentifier & ident, SYMBO
 		case SYMBOLK_Var:
 		{
 			Assert(pNode->astk == ASTK_VarDeclStmt);
-			pSymbInfo->varDecl = Down(pNode, VarDeclStmt);
+			pSymbInfo->pVarDeclStmt = Down(pNode, VarDeclStmt);
 		} break;
 
 		case SYMBOLK_Struct:
 		{
 			Assert(pNode->astk == ASTK_StructDefnStmt);
-			pSymbInfo->structDefn = Down(pNode, StructDefnStmt);
+			pSymbInfo->pStructDefnStmt = Down(pNode, StructDefnStmt);
 		} break;
 
 		case SYMBOLK_Func:
 		{
 			Assert(pNode->astk == ASTK_FuncDefnStmt);
-			pSymbInfo->funcDefn = Down(pNode, FuncDefnStmt);
+			pSymbInfo->pFuncDefnStmt = Down(pNode, FuncDefnStmt);
 		} break;
 
 		default:
@@ -254,11 +269,6 @@ bool scopedIdentEq(const ScopedIdentifier & i0, const ScopedIdentifier & i1)
 	if (i0.pToken->lexeme == i1.pToken->lexeme)		return true;
 
 	return (strcmp(i0.pToken->lexeme, i1.pToken->lexeme) == 0);
-}
-
-bool isDeclarationOrderIndependent(const SymbolTableEntry & entry)
-{
-	return isDeclarationOrderIndependent(entry.symbInfo.symbolk);
 }
 
 bool isDeclarationOrderIndependent(const SymbolInfo & info)

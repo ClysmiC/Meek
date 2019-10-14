@@ -231,7 +231,7 @@ inline bool _alsHashHelper(
 	const K & key,
 	_ALSHASHOPK hashopk,
 	const V * pValueNew=nullptr,
-	V ** ppoValueLookup=nullptr
+	V ** ppoValueLookup=nullptr,
 	V * poValueRemoved=nullptr)
 {
 	typedef HashMap<K, V> hm;
@@ -287,7 +287,7 @@ inline bool _alsHashHelper(
 				{
                     if (ppoValueLookup)
                     {
-                        *poValueLookup = &pBucketCandidate->value;
+                        *ppoValueLookup = &pBucketCandidate->value;
                     }
 
 					return true;
@@ -329,14 +329,16 @@ V * lookup(
 {
 	V * pResult = nullptr;
 
-	return _alsHashHelper(
+	_alsHashHelper(
 		pHashmap,
 		key,
 		_ALSHASHOPK_Lookup,
-		nullptr,	// Update
-		&pResult,	// Lookup
-		nullptr,	// Remove
+		static_cast<const V*>(nullptr),     // Update
+		&pResult,                           // Lookup
+		static_cast<V *>(nullptr) 	        // Remove
 	);
+
+    return pResult;
 }
 
 template <typename K, typename V>
@@ -349,9 +351,9 @@ bool remove(
 		pHashmap,
 		key,
 		_ALSHASHOPK_Remove,
-		nullptr,		// Update
-		nullptr,		// Lookup
-		poValueRemoved	// Remove
+        static_cast<const V*>(nullptr),	// Update
+        static_cast<V*>(nullptr),		// Lookup
+		poValueRemoved	                // Remove
 	);
 }
 
@@ -365,9 +367,9 @@ bool update(
 		pHashmap,
 		key,
 		_ALSHASHOPK_Update,
-		&value,		// Update
-		nullptr,	// Lookup
-		nullptr		// Remove
+		&value,		                // Update
+        static_cast<V*>(nullptr),	// Lookup
+        static_cast<V*>(nullptr)	// Remove
 	);
 }
 
@@ -456,7 +458,7 @@ void dispose(HashMap<K, V> * pHashmap)
 template <typename K, typename V>
 void doForEachValue(HashMap<K, V> * pHashmap, void (*doFn)(V *))
 {
-	for (int i = 0; i < pHashmap->cCapacity; i++)
+	for (uint i = 0; i < pHashmap->cCapacity; i++)
 	{
 		if (pHashmap->pBuffer[i].infoBits & AlsHash::s_infoOccupiedMask)
 		{
