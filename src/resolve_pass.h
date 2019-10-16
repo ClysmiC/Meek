@@ -33,6 +33,8 @@ inline void dispose(ResolvePass * pResolvePass)
 	dispose(&pResolvePass->unresolvedIdents);
 }
 
+scopeid resolveVarExpr(ResolvePass * pPass, AstNode * pNode);
+scopeid resolveExpr(ResolvePass * pPass, AstNode * pNode);
+void resolveStmt(ResolvePass * pPass, AstNode * pNode);
 void doResolvePass(ResolvePass * pPass, AstNode * pNode);
-scopeid resolveVarExpr(ResolvePass * pPass, AstNode * pExpr);
 void reportUnresolvedIdentError(ResolvePass * pPass, ScopedIdentifier ident);

@@ -3,12 +3,12 @@
 #include "als.h"
 #include "token.h"
 #include "symbol.h"
+#include "type.h"
 
 // Forward declarations
 
 struct AstNode;
 struct Type;
-struct FuncType;
 
 // The downside to using a union instead of inheritance is that I can't implicitly upcast. Since there is quite
 //	a bit of pointer casting required, these helpers make it slightly more succinct
@@ -257,9 +257,12 @@ struct AstFuncCallExpr
 
 struct AstFuncLiteralExpr
 {
-	FuncType * pFuncType;
+	DynamicArray<AstNode *> apParamVarDecl;
+	DynamicArray<AstNode *> apReturnVarDecl;		// A.k.a. output params
 	AstNode * pBodyStmt;
+
     scopeid scopeid;
+	typid typid;
 };
 
 
@@ -286,10 +289,7 @@ struct AstVarDeclStmt
 	AstNode * pInitExpr;	// null means default init
 
     symbseqid symbseqid;
-
-	// TODO: I want different values here when parsing and after typechecking.
-	//	Namely, while parsing I want to store the expressions inside subscripts,
-	//	and after typechecking those expressions should all be resolved to ints.
+	typid typid;
 };
 
 struct AstStructDefnStmt
@@ -303,9 +303,13 @@ struct AstStructDefnStmt
 struct AstFuncDefnStmt
 {
 	ScopedIdentifier ident;
-	FuncType * pFuncType;
+
+	DynamicArray<AstNode *> apParamVarDecl;
+	DynamicArray<AstNode *> apReturnVarDecl;		// A.k.a. output params
+
 	AstNode * pBodyStmt;
     scopeid scopeid;        // Scope introduced by this func defn
+	typid typid;
     symbseqid symbseqid;
 };
 

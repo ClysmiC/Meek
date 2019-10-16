@@ -9,6 +9,7 @@
 struct AstNode;
 struct FuncType;
 
+typedef s32 typid;
 
 enum TYPEMODK : u8
 {
@@ -18,9 +19,16 @@ enum TYPEMODK : u8
 
 struct TypeModifier
 {
+	// TODO: I want different values here when parsing and after typechecking.
+	//	Namely, while parsing I want to store the expressions inside subscripts,
+	//	and after typechecking those expressions should all be resolved to ints.
+
 	TYPEMODK typemodk;
 	AstNode * pSubscriptExpr = nullptr;		// Only valid if TYPEMODK_Array
 };
+
+// Type information available during/after parse, and before any types have
+//	been resolved!
 
 struct Type
 {
@@ -38,11 +46,12 @@ bool typeEq(const Type & t0, const Type & t1);
 bool isTypeInferred(const Type & type);
 bool isUnmodifiedType(const Type & type);
 
-
 struct FuncType
 {
-	DynamicArray<AstNode *> apParamVarDecls;
-	DynamicArray<AstNode *> apReturnVarDecls;		// A.k.a. output params
+	DynamicArray<Type *> apParamType;
+	DynamicArray<Type *> apReturnType;		// A.k.a. output params
 };
 
+void init(FuncType * pFuncType);
+void dispose(FuncType * pFuncType);
 bool funcTypeEq(const FuncType & f0, const FuncType & f1);

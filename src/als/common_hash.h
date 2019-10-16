@@ -468,6 +468,81 @@ void doForEachValue(HashMap<K, V> * pHashmap, void (*doFn)(V *))
 }
 
 
+// Bi-directional hashmap. Think of it as a normal hashmap from K -> V
+//	with the bijection property. When operating on it in terms of the map
+//	from K -> V, call the KV routines. If operating in terms of the map V ->
+//	call the V -> K routines
+
+template <typename K, typename V>
+struct BiHashMap
+{
+	HashMap<K, V> mapKV;
+	HashMap<V, K> mapVK;
+};
+
+template <typename K, typename V>
+void init(BiHashMap<K, V> * pBimap)
+{
+	init(&pBimap->mapKV);
+	init(&pBimap->mapVK);
+}
+
+template <typename K, typename V>
+void dispose(BiHashMap<K, V> * pBimap)
+{
+	dispose(&pBimap->mapKV);
+	dispose(&pBimap->mapVK);
+}
+
+template <typename K, typename V>
+bool insert(BiHashMap<K, V> * pBimap, const K & key, const V & value)
+{
+	// SLOW: (kinda)... could write a version of insert(..) or change its semantics
+	//	so that we don't do an update if the item is already in the table.
+	//	Maybe have insert which never does updates and then have "upsert" ?
+
+	if (lookup(&pBimap->mapKV, key)) return false;
+	if (lookup(&pBimap->mapVK, value)) return false;
+
+	insert(&pBimap->mapKV, key, value);
+	insert(&pBimap->mapVK, value, key);
+}
+
+template <typename K, typename V>
+V * lookupByKey(BiHashMap<K, V> * pBimap, const K & key)
+{
+	return lookup(&pBimap->mapKV, key);
+}
+
+template <typename K, typename V>
+K * lookupByValue(BiHashMap<K, V> * pBimap, const V & value)
+{
+	return lookup(&pBimap->mapVK, value);
+}
+
+template <typename K, typename V>
+bool removeByKey(BiHashMap<K, V> * pBimap, const K & key, V * poValueRemoved=nullptr)
+{
+	return remove(&pBimap->mapKV, key, poValueRemoved);
+}
+
+template <typename K, typename V>
+bool removeByValue(BiHashMap<K, V> * pBimap, const V & value, K * poKeyRemoved=nullptr)
+{
+	return remove(&pBimap->mapVK, value, poKeyRemoved);
+}
+
+template <typename K, typename V>
+bool updateByKey(BiHashMap<K, V> * pBimap, const K & key, const V & value)
+{
+	return update(&pBimap->mapKV, key, value);
+}
+
+template <typename K, typename V>
+bool updateByValue(BiHashMap<K, V> * pBimap, const V & value, const K & key)
+{
+	return update(&pBimap->mapVK, value, key);
+}
 
 #undef ALS_COMMON_HASH_StaticAssert
 #undef ALS_COMMON_HASH_Assert

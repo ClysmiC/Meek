@@ -221,10 +221,17 @@ void append(DynamicArray<T> * pArray, const T & t)
 {
 	// Fastest way to insert
 
-	ensureCapacity(pArray, pArray->cItem + 1);
+	T * pNew = appendNew(pArray);
+	*pNew = t;
+}
 
-	pArray->pBuffer[pArray->cItem] = t;
+template <typename T>
+T * appendNew(DynamicArray<T> * pArray)
+{
+	ensureCapacity(pArray, pArray->cItem + 1);
 	pArray->cItem++;
+
+	return &pArray->pBuffer[pArray->cItem - 1];
 }
 
 template <typename T>
@@ -270,6 +277,12 @@ void unorderedRemove(DynamicArray<T> * pArray, int iItem)
 
 	pArray->pBuffer[iItem] = pArray->pBuffer[pArray->cItem - 1];
 	pArray->cItem--;
+}
+
+template <typename T>
+void removeLast(DynamicArray<T> * pArray)
+{
+    if (pArray->cItem > 0) pArray->cItem--;
 }
 
 template <typename T>

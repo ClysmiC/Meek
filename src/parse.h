@@ -34,7 +34,6 @@ struct Parser
 	DynamicPoolAllocator<Token> tokenAlloc;
 	DynamicPoolAllocator<Type> typeAlloc;
 	DynamicPoolAllocator<FuncType> funcTypeAlloc;
-	// DynamicPoolAllocator<SymbolInfo> symbolInfoAlloc;
 
 
 	// Scope
@@ -141,17 +140,52 @@ AstNode * parsePrimary(Parser * pParser);
 AstNode * parseVarExpr(Parser * pParser, AstNode * pOwnerExpr);
 AstNode * parseLiteralExpr(Parser * pParser, bool mustBeIntLiteralk=false);
 
-bool tryParseFuncDefnStmtOrLiteralExpr(Parser * pParser, FUNCHEADERK funcheaderk, AstNode ** ppoNode);
-bool tryParseFuncHeader(Parser * pParser, FUNCHEADERK funcheaderk, FuncType ** ppoFuncType, AstNode ** ppoErrNode, ScopedIdentifier * poDefnIdent=nullptr);
-bool tryParseFuncHeaderParamList(Parser * pParser, FUNCHEADERK funcheaderk, DynamicArray<AstNode *> * papParamVarDecls);
 AstNode * finishParsePrimary(Parser * pParser, AstNode * pLhsExpr);
 
 
+// Any subscript expressions are appended to papNodeChildren for bookkeeping.
+// Any errors are also appended to papNodeChildren
+
+bool tryParseType(
+	Parser * pParser,
+	Type ** ppoType,
+	DynamicArray<AstNode *> * papNodeChildren);
+
+bool tryParseFuncDefnStmtOrLiteralExpr(Parser * pParser, FUNCHEADERK funcheaderk, AstNode ** ppoNode);
+
+
+// Func headers in function definitions and literals are full var decls for params/returns
+// NOTE: Errors are embedded in the pap's for tryParseFuncDefnOrLiteralHeader and tryParseFuncDefnOrLiteralHeaderParamList
+
+bool tryParseFuncDefnOrLiteralHeader(
+	Parser * pParser,
+	FUNCHEADERK funcheaderk,
+	DynamicArray<AstNode *> * papParamVarDecls,
+	DynamicArray<AstNode *> * papReturnVarDecls,
+	ScopedIdentifier * poDefnIdent=nullptr);
+
+bool tryParseFuncDefnOrLiteralHeaderParamList(Parser * pParser, FUNCHEADERK funcheaderk, DynamicArray<AstNode *> * papParamVarDecls);
+
+
+// Func headers as the type of a variable only require type information. Variable names are optional and ignored.
+//	Initializers are disallowed (they don't make any sense when we are talking about *types*).
+// TODO: Consider combining with tryParseFuncDefnOrLiteralHeader... the problem is that they
+//	have different kinds of out parameters, despite the parsing pattern being very similar!
+
+bool tryParseFuncHeaderTypeOnly(
+	Parser * pParser,
+	FuncType * poFuncType,
+	AstErr ** ppoErr);
+
+
 // NOTE: This moves the children into the AST
+
 AstNode * handleScanOrUnexpectedTokenkErr(Parser * pParser, DynamicArray<AstNode *> * papChildren = nullptr);
+
 
 // Only claimed tokens will stay allocated by the parser. If you merely peek, the
 //  node's memory will be overwritten next time you consume a token.
+
 Token * ensurePendingToken(Parser * pParser);
 Token * claimPendingToken(Parser * pParser);
 Token * ensureAndClaimPendingToken(Parser * pParser);
@@ -163,6 +197,10 @@ inline Type * newType(Parser * pParser)
 
 inline void releaseType(Parser * pParser, Type * pParseType)
 {
+	// This is bad. Shouldn't be disposing in release, dispose should be separate.
+	//	But I am still trying to figure out exactly how I want my new -> init -> dispose -> release
+	//	pattern to play out... so for now this will do.
+
 	dispose(&pParseType->aTypemods);
 	release(&pParser->typeAlloc, pParseType);
 }
@@ -182,18 +220,8 @@ inline void releaseToken(Parser * pParser, Token * pToken)
 	release(&pParser->tokenAlloc, pToken);
 }
 
-//inline SymbolInfo * newSymbolInfo(Parser * pParser)
-//{
-//	return allocate(&pParser->symbolInfoAlloc);
-//}
-//
-//inline void releaseSymbolInfo(Parser * pParser, SymbolInfo * pSymbolInfo)
-//{
-//	release(&pParser->symbolInfoAlloc, pSymbolInfo);
-//}
-
-
 // Debug
+// TODO: Move this and implementation to ast_print.h/.cpp
 
 #if DEBUG
 
