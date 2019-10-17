@@ -122,20 +122,18 @@ bool tryInsert(
 			init(pEntries);
 		}
 
-		FuncType * pFuncType = symbInfo.pFuncDefnStmt->pFuncType;
-		Assert(pFuncType);
+        AstFuncDefnStmt * pFuncDefnStmt = symbInfo.pFuncDefnStmt;
 
         // Check for duplicate w/ same parameter signature
 
-		for (uint i = 0; i < pEntries->cItem; i++)
+		for (int i = 0; i < pEntries->cItem; i++)
 		{
 			SymbolInfo * pSymbInfoCandidate = &(*pEntries)[i];
 			Assert(pSymbInfoCandidate->symbolk == SYMBOLK_Func);
 
-			FuncType * pFuncTypeOther = pSymbInfoCandidate->pFuncDefnStmt->pFuncType;
-			Assert(pFuncTypeOther);
+			AstFuncDefnStmt * pFuncDefnStmtOther = pSymbInfoCandidate->pFuncDefnStmt;
 
-			if (funcTypeEq(*pFuncType, *pFuncTypeOther))
+			if (areVarDeclListTypesEq(pFuncDefnStmt->apParamVarDecls, pFuncDefnStmtOther->apParamVarDecls))
 			{
 				// Duplicate
 
@@ -205,7 +203,15 @@ void setIdent(ScopedIdentifier * pIdentifier, Token * pToken, scopeid declScopei
 {
 	pIdentifier->pToken = pToken;
 	pIdentifier->defnclScopeid = declScopeid;
-	pIdentifier->hash = scopedIdentHash(*pIdentifier);
+
+    if (pIdentifier->pToken)
+    {
+	    pIdentifier->hash = scopedIdentHash(*pIdentifier);
+    }
+    else
+    {
+        pIdentifier->hash = 0;
+    }
 }
 
 void setIdentNoScope(ScopedIdentifier * pIdentifier, Token * pToken)
@@ -282,3 +288,119 @@ bool isDeclarationOrderIndependent(SYMBOLK symbolk)
 		symbolk == SYMBOLK_Var ||
 		symbolk == SYMBOLK_Struct;
 }
+
+#if DEBUG
+
+#include <stdio.h>
+
+void debugPrintType(const Type & type)
+{
+	for (int i = 0; i < type.aTypemods.cItem; i++)
+	{
+		TypeModifier tmod = type.aTypemods[i];
+
+		switch (tmod.typemodk)
+		{
+			case TYPEMODK_Array:
+			{
+				// TODO: Change this when arbitrary compile time expressions are allowed
+				//	as the array size expression
+
+				printf("[");
+
+				Assert(tmod.pSubscriptExpr && tmod.pSubscriptExpr->astk == ASTK_LiteralExpr);
+
+				auto * pNode = Down(tmod.pSubscriptExpr, LiteralExpr);
+				Assert(pNode->literalk == LITERALK_Int);
+
+				int value = intValue(pNode);
+				Assert(pNode->isValueSet);
+				AssertInfo(pNode->isValueErroneous, "Just for sake of testing... in reality if it was erroneous then we don't really care/bother about the symbol table");
+
+				printf("%d", value);
+
+				printf("]");
+			} break;
+
+			case TYPEMODK_Pointer:
+			{
+				printf("^");
+			} break;
+		}
+	}
+
+	if (!type.isFuncType)
+	{
+		printf("%s (scopeid: %d)", type.ident.pToken->lexeme, type.ident.defnclScopeid);
+	}
+	else
+	{
+		// TODO: :) ... will need to set up tab/new line stuff so that it
+		//	can nest arbitrarily. Can't be bothered right now!!!
+
+		printf("(function type... CBA to print)");
+	}
+}
+
+void debugPrintSymbolTable(const SymbolTable & symbTable)
+{
+    printf("===Variables===\n\n");
+
+    for (auto it = iter(symbTable.varTable); it.pValue; iterNext(&it))
+    {
+		const ScopedIdentifier * pIdent = it.pKey;
+		SymbolInfo * pSymbInfo = it.pValue;
+
+		Assert(pSymbInfo->symbolk == SYMBOLK_Var);
+
+		printf("name: %s\n", pIdent->pToken->lexeme);
+		printf("type: "); debugPrintType(*pSymbInfo->pVarDeclStmt->pType); printf("\n");
+		printf("scopeid: %d\n", pIdent->defnclScopeid);
+		printf("\n");
+    }
+
+	printf("\n===Functions===\n\n");
+
+	for (auto it = iter(symbTable.funcTable); it.pValue; iterNext(&it))
+	{
+		const ScopedIdentifier * pIdent = it.pKey;
+		DynamicArray<SymbolInfo> * paSymbInfo = it.pValue;
+
+		printf("name: %s\n", pIdent->pToken->lexeme);
+
+        for (int i = 0; i < paSymbInfo->cItem; i++)
+        {
+            SymbolInfo * pSymbInfo = &(*paSymbInfo)[i];
+
+		    Assert(pSymbInfo->symbolk == SYMBOLK_Func);
+
+            if (paSymbInfo->cItem > 1)
+            {
+                printf("\t(overload %d)", i);
+            }
+
+		    for (int j = 0; j < pSymbInfo->pFuncDefnStmt->apParamVarDecls.cItem; j++)
+		    {
+                auto * pNode = pSymbInfo->pFuncDefnStmt->apParamVarDecls[j];
+                Assert(pNode->astk == ASTK_VarDeclStmt);
+                auto * pVarDecl = Down(pNode, VarDeclStmt);
+
+                if (paSymbInfo->cItem > 1) printf("\t\t"); else printf("\t");
+			    printf("type of param %d: ", j); debugPrintType(*pVarDecl->pType); printf("\n");
+		    }
+
+		    for (int j = 0; j < pSymbInfo->pFuncDefnStmt->apReturnVarDecls.cItem; j++)
+		    {
+                auto * pNode = pSymbInfo->pFuncDefnStmt->apReturnVarDecls[j];
+                Assert(pNode->astk == ASTK_VarDeclStmt);
+                auto * pVarDecl = Down(pNode, VarDeclStmt);
+
+                if (paSymbInfo->cItem > 1) printf("\t\t"); else printf("\t");
+			    printf("type of return %d: ", j); debugPrintType(*pVarDecl->pType); printf("\n");
+		    }
+        }
+
+		printf("\n");
+	}
+}
+#endif

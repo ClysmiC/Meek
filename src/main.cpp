@@ -71,8 +71,8 @@ int main()
 #if DEBUG
     debugPrintAst(*pAst);
 
-    ResolvePass resolvePass;
-    doResolvePass(&resolvePass, pAst);
+    // ResolvePass resolvePass;
+    // doResolvePass(&resolvePass, pAst);
 
     printf("\n");
     if (parser.hadError)
@@ -83,6 +83,9 @@ int main()
     {
         printf("No parse errors :)\n");
     }
+
+    printf("\n\n");
+    debugPrintSymbolTable(parser.symbolTable);
 #endif
 
 	/*Token token;

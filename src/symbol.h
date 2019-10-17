@@ -7,6 +7,7 @@ struct AstVarDeclStmt;
 struct AstFuncDefnStmt;
 struct AstStructDefnStmt;
 struct Token;
+struct Type;
 
 typedef u32 scopeid;
 extern const scopeid gc_unresolvedScopeid;
@@ -114,3 +115,8 @@ void init(SymbolTable * pSymbTable);
 void dispose(SymbolTable * pSymbTable);
 
 bool tryInsert(SymbolTable * pSymbolTable, const ScopedIdentifier & ident, const SymbolInfo & symbInfo);
+
+#if DEBUG
+void debugPrintType(const Type & type);
+void debugPrintSymbolTable(const SymbolTable & symbTable);
+#endif

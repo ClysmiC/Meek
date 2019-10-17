@@ -257,8 +257,8 @@ struct AstFuncCallExpr
 
 struct AstFuncLiteralExpr
 {
-	DynamicArray<AstNode *> apParamVarDecl;
-	DynamicArray<AstNode *> apReturnVarDecl;		// A.k.a. output params
+	DynamicArray<AstNode *> apParamVarDecls;
+	DynamicArray<AstNode *> apReturnVarDecls;		// A.k.a. output params
 	AstNode * pBodyStmt;
 
     scopeid scopeid;
@@ -304,8 +304,8 @@ struct AstFuncDefnStmt
 {
 	ScopedIdentifier ident;
 
-	DynamicArray<AstNode *> apParamVarDecl;
-	DynamicArray<AstNode *> apReturnVarDecl;		// A.k.a. output params
+	DynamicArray<AstNode *> apParamVarDecls;
+	DynamicArray<AstNode *> apReturnVarDecls;		// A.k.a. output params
 
 	AstNode * pBodyStmt;
     scopeid scopeid;        // Scope introduced by this func defn

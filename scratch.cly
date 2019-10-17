@@ -1,17 +1,19 @@
-fn bar (int a, float b) -> int
+fn returnVoidImplicit (int a)
 {
-	// ...
 }
 
-fn main () -> int
+fn returnVoidExplicit (int a) -> ()
 {
-	fn (int a, float b) foo = bar;
-
-	Person p;
-	p.id = 6;
 }
 
-struct DataProcessor
+fn returnSingleValue (int a) -> int
 {
-	fn (^DataStream, int columWidth) -> () processData;
+}
+
+fn returnSingleValueParenthesized (int a) -> (int)
+{
+}
+
+fn returnMultipleValues (int a) -> (int, int)
+{
 }

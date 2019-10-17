@@ -10,7 +10,7 @@ bool typeEq(const Type & t0, const Type & t1)
 
 	// Check typemods are same
 
-	for (uint i = 0; i < t0.aTypemods.cItem; i++)
+	for (int i = 0; i < t0.aTypemods.cItem; i++)
 	{
 		TypeModifier tmod0 = t0.aTypemods[i];
 		TypeModifier tmod1 = t1.aTypemods[i];
@@ -63,18 +63,50 @@ bool isUnmodifiedType(const Type & type)
 	return type.aTypemods.cItem == 0;
 }
 
+void init(FuncType * pFuncType)
+{
+    init(&pFuncType->apParamType);
+    init(&pFuncType->apReturnType);
+}
+
+void dispose(FuncType * pFuncType)
+{
+    dispose(&pFuncType->apParamType);
+    dispose(&pFuncType->apReturnType);
+}
+
 bool funcTypeEq(const FuncType & f0, const FuncType & f1)
 {
-	if (f0.apParamVarDecls.cItem != f1.apParamVarDecls.cItem) return false;
+    if (f0.apParamType.cItem != f1.apParamType.cItem) return false;
+    if (f0.apReturnType.cItem != f1.apReturnType.cItem) return false;
 
-	for (uint i = 0; i < f0.apParamVarDecls.cItem; i++)
+    for (int i = 0; i < f0.apParamType.cItem; i++)
+    {
+        if (!typeEq(*f0.apParamType[i], *f1.apParamType[i]))
+            return false;
+    }
+
+    for (int i = 0; i < f0.apReturnType.cItem; i++)
+    {
+        if (!typeEq(*f0.apReturnType[i], *f1.apReturnType[i]))
+            return false;
+    }
+
+    return true;
+}
+
+bool areVarDeclListTypesEq(const DynamicArray<AstNode *> & apVarDecls0, const DynamicArray<AstNode *> & apVarDecls1)
+{
+	if (apVarDecls0.cItem != apVarDecls1.cItem) return false;
+
+	for (int i = 0; i < apVarDecls0.cItem; i++)
 	{
 		AstVarDeclStmt * pDecl0;
 		AstVarDeclStmt * pDecl1;
 
 		{
-			AstNode * pNode0 = f0.apParamVarDecls[i];
-			AstNode * pNode1 = f1.apParamVarDecls[i];
+			AstNode * pNode0 = apVarDecls0[i];
+			AstNode * pNode1 = apVarDecls1[i];
 
 			Assert(pNode0->astk == ASTK_VarDeclStmt);
 			Assert(pNode1->astk == ASTK_VarDeclStmt);
@@ -83,10 +115,8 @@ bool funcTypeEq(const FuncType & f0, const FuncType & f1)
 			pDecl1 = Down(pNode1, VarDeclStmt);
 		}
 
-		// TODO: Disallow type inference in parameters?
-
-		AssertInfo(pDecl0->pType, "Type inference not allowed in function parameter");
-		AssertInfo(pDecl1->pType, "Type inference not allowed in function parameter");
+		AssertInfo(pDecl0->pType, "I don't really handle type inference yet... try again later!");
+		AssertInfo(pDecl1->pType, "I don't really handle type inference yet... try again later!");
 
 		if (!typeEq(*pDecl0->pType, *pDecl1->pType)) return false;
 	}

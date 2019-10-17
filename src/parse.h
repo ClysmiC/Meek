@@ -78,6 +78,11 @@ enum FUNCHEADERK
 	FUNCHEADERK_Literal
 };
 
+enum PARAMK
+{
+    PARAMK_Param,
+    PARAMK_Return
+};
 
 
 // Public
@@ -164,7 +169,7 @@ bool tryParseFuncDefnOrLiteralHeader(
 	DynamicArray<AstNode *> * papReturnVarDecls,
 	ScopedIdentifier * poDefnIdent=nullptr);
 
-bool tryParseFuncDefnOrLiteralHeaderParamList(Parser * pParser, FUNCHEADERK funcheaderk, DynamicArray<AstNode *> * papParamVarDecls);
+bool tryParseFuncDefnOrLiteralHeaderParamList(Parser * pParser, FUNCHEADERK funcheaderk, PARAMK paramk, DynamicArray<AstNode *> * papParamVarDecls);
 
 
 // Func headers as the type of a variable only require type information. Variable names are optional and ignored.

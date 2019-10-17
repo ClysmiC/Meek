@@ -73,12 +73,59 @@ struct HashMap
 	};
 
 	Bucket * pBuffer;
-	uint32_t cCapacity;
-	uint32_t cItem;
+	int32_t cCapacity;
 
 	uint32_t (*hashFn)(const K & key);
 	bool (*equalFn)(const K & key0, const K & key1);
 };
+
+template <typename K, typename V>
+struct HashMapIter
+{
+	const HashMap<K, V> * pHashmap;
+	int iItem;
+
+	const K * pKey;
+	V * pValue;
+};
+
+template <typename K, typename V>
+void iterNext(HashMapIter<K, V> * pIter)
+{
+	typedef HashMap<K, V> hm;
+
+	bool hadNext = false;
+	for (pIter->iItem += 1; pIter->iItem < pIter->pHashmap->cCapacity; pIter->iItem += 1)
+	{
+		hm::Bucket * pBucket = pIter->pHashmap->pBuffer + pIter->iItem;
+		if (pBucket->infoBits & AlsHash::s_infoOccupiedMask)
+		{
+			pIter->pKey = &pBucket->key;
+			pIter->pValue = &pBucket->value;
+			hadNext = true;
+			break;
+		}
+	}
+
+	if (!hadNext)
+	{
+		pIter->pKey = nullptr;
+		pIter->pValue = nullptr;
+	}
+}
+
+template <typename K, typename V>
+HashMapIter<K, V> iter(const HashMap<K, V> & hashmap)
+{
+	HashMapIter<K, V> it;
+	it.pHashmap = &hashmap;
+	it.iItem = -1;
+
+	iterNext(&it);
+
+	return it;
+}
+
 
 template <typename K, typename V>
 V * insertNew(
@@ -376,7 +423,7 @@ bool update(
 template <typename K, typename V>
 void growHashmap(
 	HashMap<K, V> * pHashmap,
-	unsigned int newCapacity)
+	int newCapacity)
 {
 	typedef HashMap<K, V> hm;
 
@@ -440,7 +487,6 @@ void init(
 	startingCapacity = power;
 
 	pHashmap->pBuffer = nullptr;
-	pHashmap->cItem = 0;
 	pHashmap->cCapacity = 0;
 	pHashmap->hashFn = hashFn;
 	pHashmap->equalFn = equalFn;
@@ -458,7 +504,7 @@ void dispose(HashMap<K, V> * pHashmap)
 template <typename K, typename V>
 void doForEachValue(HashMap<K, V> * pHashmap, void (*doFn)(V *))
 {
-	for (uint i = 0; i < pHashmap->cCapacity; i++)
+	for (int i = 0; i < pHashmap->cCapacity; i++)
 	{
 		if (pHashmap->pBuffer[i].infoBits & AlsHash::s_infoOccupiedMask)
 		{

@@ -313,6 +313,7 @@ TOKENK produceNextToken(Scanner * pScanner, Token * poToken)
 					}
 				}
 				else if (tryConsumeChar(pScanner, '-')) makeToken(pScanner, TOKENK_MinusMinus, poToken);
+                else if (tryConsumeChar(pScanner, '>')) makeToken(pScanner, TOKENK_MinusGreater, poToken);
 				else makeToken(pScanner, TOKENK_Minus, poToken);
 			} break;
 

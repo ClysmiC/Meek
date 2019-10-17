@@ -50,7 +50,7 @@ ReservedWord g_aReservedWord[] = {
 	{ "f64",		TOKENK_Identifier },
 	{ "struct",		TOKENK_Struct },
 	{ "enum",		TOKENK_Enum },
-    { "func",       TOKENK_Func },
+    { "fn",         TOKENK_Fn },
 	{ "true",		TOKENK_BoolLiteral },
 	{ "false",		TOKENK_BoolLiteral },
 };
@@ -84,6 +84,7 @@ const char * g_mpTokenkDisplay[] = {
 	"'<'",					// TOKENK_Lesser
 	"'>'",					// TOKENK_Greater
 	"'^'",					// TOKENK_Carat
+    "'->'",                 // TOKENK_MinusGreater
 	"'--'",					// TOKENK_MinusMinus
 	"'++'",					// TOKENK_PlusPlus
 	"'|'",					// TOKENK_Pipe

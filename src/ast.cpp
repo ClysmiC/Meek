@@ -58,7 +58,7 @@ int intValue(AstLiteralExpr * pLiteralExpr)
 
 bool containsErrorNode(const DynamicArray<AstNode *> & apNodes)
 {
-	for (uint i = 0; i < apNodes.cItem; i++)
+	for (int i = 0; i < apNodes.cItem; i++)
 	{
 		const AstNode * pNode = apNodes[i];
 		if (category(*pNode) == ASTCATK_Error)

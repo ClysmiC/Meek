@@ -7,37 +7,39 @@
 
 enum TOKENK
 {
-	TOKENK_Error,
+    TOKENK_Error,
 
-	TOKENK_Identifier,
-	TOKENK_IntLiteral,
-	TOKENK_FloatLiteral,
-	TOKENK_BoolLiteral,
-	TOKENK_StringLiteral,		// TODO: Provide ways to specify more specific kinds of literals? Like s8 or u64?
+    TOKENK_Identifier,
+    TOKENK_IntLiteral,
+    TOKENK_FloatLiteral,
+    TOKENK_BoolLiteral,
+    TOKENK_StringLiteral,		// TODO: Provide ways to specify more specific kinds of literals? Like s8 or u64?
 
-	// Punctuation symbols
+    // Punctuation symbols
 
-	TOKENK_OpenParen,
-	TOKENK_CloseParen,
-	TOKENK_OpenBrace,
-	TOKENK_CloseBrace,
-	TOKENK_OpenBracket,
-	TOKENK_CloseBracket,
-	TOKENK_Dot,
-	TOKENK_Comma,
-	TOKENK_Semicolon,
-	TOKENK_Colon,
-	TOKENK_SingleQuote,
-	TOKENK_Plus,
-	TOKENK_Minus,
-	TOKENK_Star,
-	TOKENK_Slash,
-	TOKENK_Percent,
-	TOKENK_Equal,
-	TOKENK_Bang,
-	TOKENK_Lesser,
-	TOKENK_Greater,
-	TOKENK_Carat,
+    TOKENK_OpenParen,
+    TOKENK_CloseParen,
+    TOKENK_OpenBrace,
+    TOKENK_CloseBrace,
+    TOKENK_OpenBracket,
+    TOKENK_CloseBracket,
+    TOKENK_Dot,
+    TOKENK_Comma,
+    TOKENK_Semicolon,
+    TOKENK_Colon,
+    TOKENK_SingleQuote,
+    TOKENK_Plus,
+    TOKENK_Minus,
+    TOKENK_Star,
+    TOKENK_Slash,
+    TOKENK_Percent,
+    TOKENK_Equal,
+    TOKENK_Bang,
+    TOKENK_Lesser,
+    TOKENK_Greater,
+    TOKENK_Carat,
+
+    TOKENK_MinusGreater,
 
 	TOKENK_MinusMinus,
 	TOKENK_PlusPlus,
@@ -76,7 +78,7 @@ enum TOKENK
 
 	TOKENK_Struct,
 	TOKENK_Enum,
-    TOKENK_Func,
+    TOKENK_Fn,
 						// TODO: union?
 						// TODO: char? string? mstring? (i.e., mutable string... would mainly just be a dynamic array of bytes assuming we have a dynamic array built in type!)
 

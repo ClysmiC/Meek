@@ -52,6 +52,9 @@ struct FuncType
 	DynamicArray<Type *> apReturnType;		// A.k.a. output params
 };
 
+bool funcTypeEq(const FuncType & f0, const FuncType & f1);
+
 void init(FuncType * pFuncType);
 void dispose(FuncType * pFuncType);
-bool funcTypeEq(const FuncType & f0, const FuncType & f1);
+
+bool areVarDeclListTypesEq(const DynamicArray<AstNode *> & apVarDecls0, const DynamicArray<AstNode *> & apVarDecls1);

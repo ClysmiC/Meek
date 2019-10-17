@@ -132,7 +132,7 @@ template <typename T>
 struct DynamicArray
 {
 	T * pBuffer;
-	unsigned int cItem;
+	int cItem;
 	unsigned int capacity;
 
 	static constexpr float s_growthFactor = 1.5f;
@@ -269,6 +269,17 @@ void prepend(DynamicArray<T> * pArray, const T & t)
 }
 
 template <typename T>
+int indexOf(const DynamicArray<T> & array, const T & item)
+{
+    for (int i = 0; i < array.cItem; i++)
+    {
+        if (array[i] == item) return i;
+    }
+
+    return -1;
+}
+
+template <typename T>
 void unorderedRemove(DynamicArray<T> * pArray, int iItem)
 {
 	// Fastest way to remove. Does not maintain order.
@@ -379,6 +390,12 @@ template<typename T>
 bool isEmpty(const Stack<T> & stack)
 {
 	return stack.a.cItem == 0;
+}
+
+template<typename T>
+bool contains(const Stack<T> & stack, const T & item)
+{
+    return indexOf(stack.a, item) != -1;
 }
 
 template<typename T>
