@@ -73,6 +73,8 @@ enum SYMBOLK
 	SYMBOLK_Func,
 	SYMBOLK_Struct,
 
+    SYMBOLK_BuiltInType,
+
 	// SYMBOLK_ErrorProxy	// "Fake" symbol that we put into table after unresolved ident error so that it only gets reported once
 };
 
@@ -97,11 +99,11 @@ bool isDeclarationOrderIndependent(SYMBOLK symbolk);
 struct SymbolTable
 {
     HashMap<ScopedIdentifier, SymbolInfo> varTable;
-	HashMap<ScopedIdentifier, SymbolInfo> structTable;
+	HashMap<ScopedIdentifier, SymbolInfo> typeTable;
 	HashMap<ScopedIdentifier, DynamicArray<SymbolInfo>> funcTable;
 
 	DynamicArray<SymbolInfo> redefinedVars;
-	DynamicArray<SymbolInfo> redefinedStructs;
+	DynamicArray<SymbolInfo> redefinedTypes;
 	DynamicArray<SymbolInfo> redefinedFuncs;
 
     int sequenceIdNext = 0;
@@ -110,6 +112,8 @@ struct SymbolTable
 SymbolInfo * lookupVar(SymbolTable * pSymbTable, const ScopedIdentifier & ident);
 SymbolInfo * lookupStruct(SymbolTable * pSymbTable, const ScopedIdentifier & ident);
 DynamicArray<SymbolInfo> * lookupFunc(SymbolTable * pSymbTable, const ScopedIdentifier & ident);
+
+void insertBuiltInSymbols(SymbolTable * pSymbolTable);
 
 void init(SymbolTable * pSymbTable);
 void dispose(SymbolTable * pSymbTable);

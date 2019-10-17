@@ -58,7 +58,7 @@ AstNode * parseProgram(Parser * pParser, bool * poSuccess)
 	pushScope(pParser, SCOPEK_BuiltIn);
 	Assert(peekScope(pParser).id == gc_builtInScopeid);
 
-	// TOOD: put built-in names in the symbol table (int, float, etc.)
+    insertBuiltInSymbols(&pParser->symbolTable);
 
 	pushScope(pParser, SCOPEK_Global);
 	Assert(peekScope(pParser).id == gc_globalScopeid);
@@ -1199,7 +1199,10 @@ bool tryParseFuncDefnOrLiteralHeader(
 		//	That responsibility falls on the function that allocates the AST node that
 		//	contains the identifier.
 
-		setIdent(poDefnIdent, pIdent, peekScope(pParser).id);
+        // NOTE: Use prev scopeid for the func defn ident instead of the one that the func itself
+        //  has pushed!
+
+		setIdent(poDefnIdent, pIdent, peekScopePrev(pParser).id);
 	}
 	else
 	{
@@ -1822,6 +1825,13 @@ Scope peekScope(Parser * pParser)
 	peek(pParser->scopeStack, &s);
 
 	return s;
+}
+
+Scope peekScopePrev(Parser * pParser)
+{
+    Scope s;
+    Verify(peekFar(pParser->scopeStack, 1, &s));
+    return s;
 }
 
 Scope popScope(Parser * pParser)

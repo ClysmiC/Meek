@@ -108,6 +108,7 @@ AstNode * parseExpr(Parser * pParser);
 
 void pushScope(Parser * pParser, SCOPEK scopek);
 Scope peekScope(Parser * pParser);
+Scope peekScopePrev(Parser * pParser);
 Scope popScope(Parser * pParser);
 
 
