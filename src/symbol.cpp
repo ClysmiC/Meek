@@ -301,41 +301,19 @@ void setIdentNoScope(ScopedIdentifier * pIdentifier, Token * pToken)
 void resolveIdentScope(ScopedIdentifier * pIdentifier, scopeid declScopeid)
 {
 	Assert(pIdentifier->pToken);
+	Assert(pIdentifier->defnclScopeid == gc_unresolvedScopeid);
+	Assert(pIdentifier->hash == 0);
+
 	pIdentifier->defnclScopeid = declScopeid;
 	pIdentifier->hash = scopedIdentHash(*pIdentifier);
 }
 
 u32 scopedIdentHash(const ScopedIdentifier & ident)
 {
-	// FNV-1a : http://www.isthe.com/chongo/tech/comp/fnv/
+	auto hash = startHash(&ident.defnclScopeid, sizeof(ident.defnclScopeid));
+	hash = buildHashCString(ident.pToken->lexeme, hash);
 
-	const static u32 s_offsetBasis = 2166136261;
-	const static u32 s_fnvPrime = 16777619;
-
-	u32 result = s_offsetBasis;
-
-	// Hash the scope identifier
-
-	for (uint i = 0; i < sizeof(ident.defnclScopeid); i++)
-	{
-		u8 byte = *(reinterpret_cast<const u8*>(&ident.defnclScopeid) + i);
-		result ^= byte;
-		result *= s_fnvPrime;
-	}
-
-	// Hash the lexeme
-
-	char * pChar = ident.pToken->lexeme;
-	AssertInfo(pChar, "Identifier shouldn't be an empty string...");
-
-	while (*pChar)
-	{
-		result ^= *pChar;
-		result *= s_fnvPrime;
-		pChar++;
-	}
-
-	return result;
+	return hash;
 }
 
 u32 scopedIdentHashPrecomputed(const ScopedIdentifier & i)

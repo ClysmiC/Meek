@@ -58,7 +58,54 @@ namespace AlsHash
 	const static uint8_t s_infoOccupiedMask		= 0b00100000;
 
 	ALS_COMMON_HASH_StaticAssert(s_infoOffsetMask + 1 >= s_neighborhoodSize);
+}
 
+// FNV-1a : http://www.isthe.com/chongo/tech/comp/fnv/
+
+inline unsigned int buildHash(const void * pBytes, int cBytes, unsigned int runningHash)
+{
+	unsigned int result = runningHash;
+	const static unsigned int s_fnvPrime = 16777619;
+
+	for (int i = 0; i < cBytes; i++)
+	{
+		result ^= static_cast<const char*>(pBytes)[i];
+		result *= s_fnvPrime;
+	}
+
+	return result;
+}
+
+inline unsigned int buildHashCString(const char * cString, unsigned int runningHash)
+{
+	unsigned int result = runningHash;
+	const static unsigned int s_fnvPrime = 16777619;
+
+	while (*cString)
+	{
+		result ^= *cString;
+		result *= s_fnvPrime;
+		cString++;
+	}
+
+	return result;
+}
+
+inline unsigned int startHash(const void * pBytes=nullptr, int cBytes=0)
+{
+	const static unsigned int s_fnvOffsetBasis = 2166136261;
+	return buildHash(pBytes, cBytes, s_fnvOffsetBasis);
+}
+
+inline unsigned int startHashCString(const char * cString)
+{
+	const static unsigned int s_fnvOffsetBasis = 2166136261;
+	return buildHashCString(cString, s_fnvOffsetBasis);
+}
+
+inline unsigned int combineHash(unsigned int hash0, unsigned int hash1)
+{
+	return hash0 ^ 37 * hash1;
 }
 
 template <typename K, typename V>

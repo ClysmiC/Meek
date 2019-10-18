@@ -43,6 +43,9 @@ struct Type
 };
 
 bool typeEq(const Type & t0, const Type & t1);
+uint typeHash(const Type & t);
+
+
 bool isTypeInferred(const Type & type);
 bool isUnmodifiedType(const Type & type);
 
@@ -53,6 +56,7 @@ struct FuncType
 };
 
 bool funcTypeEq(const FuncType & f0, const FuncType & f1);
+uint funcTypeHash(const FuncType & f);
 
 void init(FuncType * pFuncType);
 void dispose(FuncType * pFuncType);

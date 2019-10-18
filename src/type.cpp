@@ -52,6 +52,38 @@ bool typeEq(const Type & t0, const Type & t1)
 	}
 }
 
+uint typeHash(const Type & t)
+{
+	auto hash = startHash();
+
+	for (int i = 0; i < t.aTypemods.cItem; i++)
+	{
+		TypeModifier tmod = t.aTypemods[i];
+		hash = buildHash(&tmod.typemodk, sizeof(tmod.typemodk), hash);
+
+		if (tmod.typemodk == TYPEMODK_Array)
+		{
+			AssertInfo(tmod.pSubscriptExpr->astk == ASTK_LiteralExpr, "Parser should enforce this... for now");
+
+			auto * pIntLit = Down(tmod.pSubscriptExpr, LiteralExpr);
+			AssertInfo(pIntLit->literalk == LITERALK_Int, "Parser should enforce this... for now");
+
+			int intVal = intValue(pIntLit);
+			hash = buildHash(&intVal, sizeof(intVal), hash);
+		}
+	}
+
+	if (t.isFuncType)
+	{
+		return combineHash(hash, funcTypeHash(*t.pFuncType));
+	}
+	else
+	{
+		Assert(isScopeSet(t.ident));
+		return combineHash(hash, scopedIdentHashPrecomputed(t.ident));
+	}
+}
+
 bool isTypeInferred(const Type & type)
 {
 	bool result = (strcmp(type.ident.pToken->lexeme, "var") == 0);
@@ -93,6 +125,23 @@ bool funcTypeEq(const FuncType & f0, const FuncType & f1)
     }
 
     return true;
+}
+
+uint funcTypeHash(const FuncType & f)
+{
+	uint hash = startHash();
+
+    for (int i = 0; i < f.apParamType.cItem; i++)
+    {
+        hash = combineHash(hash, typeHash(*f.apParamType[i]));
+    }
+
+    for (int i = 0; i < f.apReturnType.cItem; i++)
+    {
+        hash = combineHash(hash, typeHash(*f.apReturnType[i]));
+    }
+
+	return hash;
 }
 
 bool areVarDeclListTypesEq(const DynamicArray<AstNode *> & apVarDecls0, const DynamicArray<AstNode *> & apVarDecls1)
