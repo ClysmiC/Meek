@@ -44,6 +44,7 @@ bool init(Parser * pParser, Scanner * pScanner)
 	init(&pParser->astNodes);
 	init(&pParser->scopeStack);
 	init(&pParser->symbolTable);
+	init(&pParser->typeTable);
 
 	return true;
 }
@@ -389,9 +390,20 @@ finishStruct:
 	initMove(&pNode->apVarDeclStmt, &apVarDeclStmt);
 	pNode->scopeid = peekScope(pParser).id;
 
+	// Insert into symbol table
+
 	SymbolInfo structDefnInfo;
 	setSymbolInfo(&structDefnInfo, pNode->ident, SYMBOLK_Struct, Up(pNode));
 	tryInsert(&pParser->symbolTable, pNode->ident, structDefnInfo);
+
+	// Insert into type table
+
+	Type type;
+	init(&type, false /* isFuncType */);
+	Defer(dispose(&type););
+
+	type.ident = pNode->ident;
+	pNode->typidSelf = ensureInTypeTable(&pParser->typeTable, type, true /* debugAssertIfAlreadyInTable */ );
 
 	return Up(pNode);
 }
@@ -514,28 +526,34 @@ AstNode * parseVarDeclStmt(Parser * pParser, EXPECTK expectkName, EXPECTK expect
 
     // Parse type
 
-    Type * pType = nullptr;
-    Defer(
-        if (!success && pType)
-        {
-            dispose(pType);
-            releaseType(pParser, pType);
-        }
-    );
+    // START HERE:
+    // Problem... tryParseType wants me to register with it the typid that it should update when the type ultimately gets resolved.
+    //  This typid is embedded in the AST node that we are creating. The problem is, that we don't want to actually create the AST node
+    //  until we are certain that there are no errors in it! But we can't be certain of that until we parse the type! Really I want the
+    //  registering to be something we can do at a different time, but we need some context! Maybe if this fails it returns a ptr to a PendingUnresolvedType
+    //  with null typidToUpdate and we fill out the typidToUpdate once we create the AST node?
 
-    if (!tryParseType(pParser, &pType, &apNodeChildren))
+    TypePendingResolution * pTypePending;
+    typid typidResolved;
     {
-        Assert(apNodeChildren.cItem > 0);
-
-        AstErr * pErrFromParseType;
+        PARSETYPERESULT parseTypeResult = tryParseType(pParser, &apNodeChildren, &typidResolved, &pTypePending);
+        if (parseTypeResult == PARSETYPERESULT_ParseFailed)
         {
-            AstNode * pNode = apNodeChildren[apNodeChildren.cItem - 1];
-            Assert(category(pNode->astk) == ASTCATK_Error);
-            pErrFromParseType = DownErr(pNode);
+            Assert(apNodeChildren.cItem > 0);
+
+            AstErr * pErrFromParseType;
+            {
+                AstNode * pNode = apNodeChildren[apNodeChildren.cItem - 1];
+                Assert(category(pNode->astk) == ASTCATK_Error);
+                pErrFromParseType = DownErr(pNode);
+            }
+
+            auto * pErr = AstNewErrListChildMove(pParser, BubbleErr, peekTokenLine(pParser->pScanner), &apNodeChildren);
+            return Up(pErr);
         }
 
-        auto * pErr = AstNewErrListChildMove(pParser, BubbleErr, peekTokenLine(pParser->pScanner), &apNodeChildren);
-        return Up(pErr);
+        Assert(Implies(parseTypeResult == PARSETYPERESULT_ParseSucceededTypeResolveSucceeded, !pTypePending));
+        Assert(Implies(parseTypeResult == PARSETYPERESULT_ParseSucceededTypeResolveFailed, pTypePending));
     }
 
 	// Parse name
@@ -623,12 +641,23 @@ AstNode * parseVarDeclStmt(Parser * pParser, EXPECTK expectkName, EXPECTK expect
 		}
 	}
 
+	// Success!
+
 	scopeid declScope = peekScope(pParser).id;
 
 	auto * pNode = AstNew(pParser, VarDeclStmt, line);
 	setIdent(&pNode->ident, pVarIdent, declScope);
-	pNode->pType = pType;
 	pNode->pInitExpr = pInitExpr;
+
+    if (pTypePending)
+    {
+        pTypePending->pTypidUpdateWhenResolved = &pNode->typid;
+    }
+    else
+    {
+        Assert(isTypeResolved(typidResolved));
+        pNode->typid = typidResolved;
+    }
 
     if (pNode->ident.pToken)
     {
@@ -1322,11 +1351,20 @@ bool tryParseFuncDefnOrLiteralHeaderParamList(
 	return true;
 }
 
-bool tryParseType(Parser * pParser, Type ** ppoType, DynamicArray<AstNode *> * papNodeChildren)
+PARSETYPERESULT tryParseType(
+    Parser * pParser,
+    DynamicArray<AstNode *> * papNodeChildren,
+    typid * poTypidResolved,
+    TypePendingResolution ** ppoTypePendingResolution)
 {
+    AssertInfo(ppoTypePendingResolution, "You must have a plan for handling types that are pending resolution if you call this function!");
+
 	DynamicArray<TypeModifier> aModifiers;
 	init(&aModifiers);
 	Defer(dispose(&aModifiers););
+
+    *ppoTypePendingResolution = nullptr;
+    *poTypidResolved = gc_typidUnresolved;      // TODO: Might need to change this when I add type inference ?
 
 	// NOTE; Since all nodes are stored in papNodeChildren, error nodes do not need to attach any children. It is the
 	//	responsibility of the caller to add papNodeChildren to a bubble error if we return false
@@ -1343,7 +1381,7 @@ bool tryParseType(Parser * pParser, Type ** ppoType, DynamicArray<AstNode *> * p
 
 			if (isErrorNode(*pSubscriptExpr))
 			{
-				return false;
+				return PARSETYPERESULT_ParseFailed;
 			}
 
 			if (!tryConsumeToken(pParser->pScanner, TOKENK_CloseBracket))
@@ -1351,7 +1389,7 @@ bool tryParseType(Parser * pParser, Type ** ppoType, DynamicArray<AstNode *> * p
 				auto * pErr = AstNewErr0Child(pParser, ExpectedTokenkErr, pSubscriptExpr->startLine);
 				append(&pErr->aTokenkValid, TOKENK_CloseBracket);
 				append(papNodeChildren, Up(pErr));
-				return false;
+				return PARSETYPERESULT_ParseFailed;
 			}
 
 			TypeModifier mod;
@@ -1371,11 +1409,11 @@ bool tryParseType(Parser * pParser, Type ** ppoType, DynamicArray<AstNode *> * p
 		{
 			AstNode * pErr = handleScanOrUnexpectedTokenkErr(pParser, nullptr);
 			append(papNodeChildren, pErr);
-			return false;
+			return PARSETYPERESULT_ParseFailed;
 		}
 	}
 
-	bool success = false;
+	bool parseSucceeded = false;
 
 	// Init type
 
@@ -1394,13 +1432,14 @@ bool tryParseType(Parser * pParser, Type ** ppoType, DynamicArray<AstNode *> * p
 	// Defer cleanup on fail
 
 	Defer(
-		if (!success)
+		if (!parseSucceeded)
 		{
 			dispose(pType);
 			releaseType(pParser, pType);
 		}
 	);
 
+    typid typid;
 	if (!pType->isFuncType)
 	{
 		Token * pTypeIdent = ensureAndClaimPendingToken(pParser);
@@ -1408,6 +1447,8 @@ bool tryParseType(Parser * pParser, Type ** ppoType, DynamicArray<AstNode *> * p
 
 		Assert(pTypeIdent->tokenk == TOKENK_Identifier);
 		setIdentNoScope(&pType->ident, pTypeIdent);
+
+        typid = resolveTypeOrSetPending(pParser, pType, ppoTypePendingResolution);
 	}
 	else
 	{
@@ -1419,13 +1460,23 @@ bool tryParseType(Parser * pParser, Type ** ppoType, DynamicArray<AstNode *> * p
 		if (!funcHeaderSuccess)
 		{
 			append(papNodeChildren, Up(pErr));
-			return false;
+			return PARSETYPERESULT_ParseFailed;
 		}
+
+        typid = resolveTypeOrSetPending(pParser, pType, ppoTypePendingResolution);
 	}
 
-    *ppoType = pType;
-	success = true;		// Used in Defer
-	return success;
+	parseSucceeded = true;		// Used in Defer
+
+    if (isTypeResolved(typid))
+    {
+        *poTypidResolved = typid;
+        return PARSETYPERESULT_ParseSucceededTypeResolveSucceeded;
+    }
+    else
+    {
+        return PARSETYPERESULT_ParseSucceededTypeResolveFailed;
+    }
 }
 
 bool tryParseFuncHeaderTypeOnly(Parser * pParser, FuncType * poFuncType, AstErr ** ppoErr)
@@ -1452,7 +1503,7 @@ bool tryParseFuncHeaderTypeOnly(Parser * pParser, FuncType * poFuncType, AstErr 
 	auto tryParseParameterTypes = [](
 		Parser * pParser,
 		PARAMK paramk,
-		DynamicArray<Type *> * papTypes,			// Value we are computing
+		DynamicArray<typid> * paTypids,			    // Value we are computing. We will set the typid's of the types we can resolve and set the others to pending
 		DynamicArray<AstNode *> * papNodeChildren)	// Boookkeeping so caller can attach children to errors
 		-> bool
 	{
@@ -1491,18 +1542,36 @@ bool tryParseFuncHeaderTypeOnly(Parser * pParser, FuncType * poFuncType, AstErr 
 
 			// type
 
-            Type * pType;
-            append(papTypes, pType);
+            {
+                TypePendingResolution * pTypePending;
+                typid typidResolved;
+                PARSETYPERESULT parseTypeResult = tryParseType(pParser, papNodeChildren, &typidResolved, &pTypePending);
+                if (parseTypeResult = PARSETYPERESULT_ParseFailed)
+                {
+                    Assert(
+                        papNodeChildren->cItem > 0 &&
+                        category((*papNodeChildren)[papNodeChildren->cItem - 1]->astk) == ASTCATK_Error
+                    );
 
-			if (!tryParseType(pParser, &pType, papNodeChildren))
-			{
-				Assert(
-					papNodeChildren->cItem > 0 &&
-					category((*papNodeChildren)[papNodeChildren->cItem - 1]->astk) == ASTCATK_Error
-				);
+                    return false;
+                }
 
-				return false;
-			}
+                if (parseTypeResult == PARSETYPERESULT_ParseSucceededTypeResolveSucceeded)
+                {
+                    Assert(isTypeResolved(typidResolved));
+                    append(paTypids, typidResolved);
+                }
+                else
+                {
+                    Assert(parseTypeResult == PARSETYPERESULT_ParseSucceededTypeResolveFailed);
+                    Assert(pTypePending);
+
+                    typid * pTypidPending = appendNew(paTypids);
+                    *pTypidPending = gc_typidUnresolved;
+
+                    pTypePending->pTypidUpdateWhenResolved = pTypidPending;
+                }
+            }
 
 			// name (optional)
 			// HMM: It feels funny to allow an identifier but to not put it in the symbol table or bind it to anything.
@@ -1527,7 +1596,7 @@ bool tryParseFuncHeaderTypeOnly(Parser * pParser, FuncType * poFuncType, AstErr 
 	// Parse in parameters
 	//
 
-	if (!tryParseParameterTypes(pParser, PARAMK_Param, &poFuncType->apParamType, &apNodeChildren))
+	if (!tryParseParameterTypes(pParser, PARAMK_Param, &poFuncType->paramTypids, &apNodeChildren))
 	{
 		auto * pErr = AstNewErrListChildMove(pParser, BubbleErr, peekTokenLine(pParser->pScanner), &apNodeChildren);
 		*ppoErr = UpErr(pErr);
@@ -1548,7 +1617,7 @@ bool tryParseFuncHeaderTypeOnly(Parser * pParser, FuncType * poFuncType, AstErr 
 
     if (!arrowOmitted)
     {
-        if (!tryParseParameterTypes(pParser, PARAMK_Return, &poFuncType->apReturnType, &apNodeChildren))
+        if (!tryParseParameterTypes(pParser, PARAMK_Return, &poFuncType->returnTypids, &apNodeChildren))
         {
 	        auto * pErr = AstNewErrListChildMove(pParser, BubbleErr, peekTokenLine(pParser->pScanner), &apNodeChildren);
 	        *ppoErr = UpErr(pErr);

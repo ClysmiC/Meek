@@ -44,6 +44,10 @@ struct Parser
 
 	SymbolTable symbolTable;
 
+	// Type Table
+
+	TypeTable typeTable;
+
 	// Node construction / bookkeeping
 
 	uint iNode = 0;				// Becomes node's id
@@ -148,13 +152,22 @@ AstNode * parseLiteralExpr(Parser * pParser, bool mustBeIntLiteralk=false);
 AstNode * finishParsePrimary(Parser * pParser, AstNode * pLhsExpr);
 
 
-// Any subscript expressions are appended to papNodeChildren for bookkeeping.
-// Any errors are also appended to papNodeChildren
 
-bool tryParseType(
-	Parser * pParser,
-	Type ** ppoType,
-	DynamicArray<AstNode *> * papNodeChildren);
+enum PARSETYPERESULT
+{
+    PARSETYPERESULT_ParseFailed,
+    PARSETYPERESULT_ParseSucceededTypeResolveFailed,
+    PARSETYPERESULT_ParseSucceededTypeResolveSucceeded
+};
+
+// - Any subscript expressions are appended to papNodeChildren for bookkeeping.
+// - Any errors are also appended to papNodeChildren
+
+PARSETYPERESULT tryParseType(
+    Parser * pParser,
+    DynamicArray<AstNode *> * papNodeChildren,
+    typid * poTypidResolved,
+    TypePendingResolution ** ppoTypePendingResolution);
 
 bool tryParseFuncDefnStmtOrLiteralExpr(Parser * pParser, FUNCHEADERK funcheaderk, AstNode ** ppoNode);
 

@@ -118,7 +118,9 @@ void debugPrintFuncHeader(const DynamicArray<AstNode *> & apParamVarDecls, const
 
 void debugPrintType(const Type & type, int level, bool skipAfterArrow, DynamicArray<bool> * pMapLevelSkip)
 {
-    setSkip(pMapLevelSkip, level, false);
+    printf("TODO: fix me");
+
+    /*setSkip(pMapLevelSkip, level, false);
 
     int levelNext = level + 1;
 
@@ -156,16 +158,16 @@ void debugPrintType(const Type & type, int level, bool skipAfterArrow, DynamicAr
         printf("(params)");
         printTabs(level, false, false, pMapLevelSkip);
 
-        for (int i = 0; i < type.funcType.apParamType.cItem; i++)
+        for (int i = 0; i < type.funcType.paramTypids.cItem; i++)
         {
-            bool isLastChild = i == type.funcType.apParamType.cItem - 1;
+            bool isLastChild = i == type.funcType.paramTypids.cItem - 1;
 
             printf("\n");
             printTabs(level, false, false, pMapLevelSkip);
 
             printf("(%s %d):", "param", i);
 
-            debugPrintType(*type.funcType.apParamType[i], levelNext, false, pMapLevelSkip);
+            debugPrintType(*type.funcType.paramTypids[i], levelNext, false, pMapLevelSkip);
 
             if (!isLastChild)
             {
@@ -180,9 +182,9 @@ void debugPrintType(const Type & type, int level, bool skipAfterArrow, DynamicAr
         printf("(return values)");
         printTabs(level, false, false, pMapLevelSkip);
 
-        for (int i = 0; i < type.funcType.apReturnType.cItem; i++)
+        for (int i = 0; i < type.funcType.returnTypids.cItem; i++)
         {
-            bool isLastChild = i == type.funcType.apReturnType.cItem - 1;
+            bool isLastChild = i == type.funcType.returnTypids.cItem - 1;
             bool shouldSetSkip = skipAfterArrow && isLastChild;
 
             printf("\n");
@@ -190,7 +192,7 @@ void debugPrintType(const Type & type, int level, bool skipAfterArrow, DynamicAr
 
             printf("(%s %d):", "return", i);
 
-            debugPrintType(*type.funcType.apReturnType[i], levelNext, isLastChild, pMapLevelSkip);
+            debugPrintType(*type.funcType.returnTypids[i], levelNext, isLastChild, pMapLevelSkip);
 
             if (!isLastChild)
             {
@@ -204,7 +206,7 @@ void debugPrintType(const Type & type, int level, bool skipAfterArrow, DynamicAr
         printf("\n");
         printTabs(level, true, skipAfterArrow, pMapLevelSkip);
         printf("%s", type.ident.pToken->lexeme);
-    }
+    }*/
 };
 
 void debugPrintSubAst(const AstNode & node, int level, bool skipAfterArrow, DynamicArray<bool> * pMapLevelSkip)
@@ -599,7 +601,9 @@ void debugPrintSubAst(const AstNode & node, int level, bool skipAfterArrow, Dyna
 
         case ASTK_VarDeclStmt:
         {
-            auto * pStmt = DownConst(&node, VarDeclStmt);
+            printf("TODO: fix me");
+
+            /*auto * pStmt = DownConst(&node, VarDeclStmt);
 
             printf("(var decl)");
             printf("\n");
@@ -637,7 +641,7 @@ void debugPrintSubAst(const AstNode & node, int level, bool skipAfterArrow, Dyna
                 printTabs(levelNext, false, false, pMapLevelSkip);
                 printf("(init):");
                 debugPrintSubAst(*pStmt->pInitExpr, levelNext, true, pMapLevelSkip);
-            }
+            }*/
         } break;
 
         case ASTK_StructDefnStmt:

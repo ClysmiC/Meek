@@ -564,18 +564,6 @@ void dispose(HashMap<K, V> * pHashmap)
 	pHashmap->pBuffer = nullptr;
 }
 
-template <typename K, typename V>
-void doForEachValue(HashMap<K, V> * pHashmap, void (*doFn)(V *))
-{
-	for (int i = 0; i < pHashmap->cCapacity; i++)
-	{
-		if (pHashmap->pBuffer[i].infoBits & AlsHash::s_infoOccupiedMask)
-		{
-			doFn(&pHashmap->pBuffer[i].value);
-		}
-	}
-}
-
 
 // Bi-directional hashmap where all keys are unique and all values are unique.
 
@@ -592,7 +580,7 @@ void init(
 	uint32_t (*keyHashFn)(const K & key),
 	bool (*keyEqualFn)(const K & key0, const K & key1),
 	uint32_t (*valueHashFn)(const V & value),
-	bool (*valueEqualFn)(const K & value0, const V & value1))
+	bool (*valueEqualFn)(const V & value0, const V & value1))
 {
 	init(
 		&pBimap->mapKV,
@@ -634,7 +622,7 @@ bool insert(BiHashMap<K, V> * pBimap, const K & key, const V & value)
 	*ppK = pKeyInTable;
 	*ppV = pValueInTable;
 
-	insert(&pBimap->mapVK, value, key);
+    return true;
 }
 
 template <typename K, typename V>

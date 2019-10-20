@@ -404,7 +404,7 @@ bool contains(const Stack<T> & stack, const T & item)
 template<typename T>
 bool peekFar(const Stack<T> & stack, int peekIndex, T * poItem)
 {
-	if (count(stack) <= static_cast<uint>(peekIndex)) return false;
+	if (count(stack) <= peekIndex) return false;
 
 	*poItem = stack.a[stack.a.cItem - 1 - peekIndex];
 	return true;
@@ -428,7 +428,7 @@ bool pop(Stack<T> * pStack, T * poItem=nullptr)
 }
 
 template<typename T>
-unsigned int count(const Stack<T> & stack)
+int count(const Stack<T> & stack)
 {
 	return stack.a.cItem;
 }

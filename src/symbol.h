@@ -33,17 +33,6 @@ struct Scope
 	SCOPEK scopek = SCOPEK_Nil;
 };
 
-//struct ScopeStack
-//{
-//    scopeid scopeidNext = 0;
-//    Stack<Scope> stack;
-//};
-//
-//void init(ScopeStack * pScopeStack);
-//void pushScope(ScopeStack * pScopeStack, SCOPEK scopek);
-//Scope peekScope(ScopeStack * pScopeStack);
-//Scope popScope(ScopeStack * pScopeStack);
-
 struct ScopedIdentifier
 {
 	Token * pToken;
@@ -102,6 +91,8 @@ struct SymbolTable
 	HashMap<ScopedIdentifier, SymbolInfo> typeTable;
 	HashMap<ScopedIdentifier, DynamicArray<SymbolInfo>> funcTable;
 
+    DynamicArray<SymbolInfo> funcSymbolsPendingTypeResolution;
+
 	DynamicArray<SymbolInfo> redefinedVars;
 	DynamicArray<SymbolInfo> redefinedTypes;
 	DynamicArray<SymbolInfo> redefinedFuncs;
@@ -110,7 +101,7 @@ struct SymbolTable
 };
 
 SymbolInfo * lookupVar(SymbolTable * pSymbTable, const ScopedIdentifier & ident);
-SymbolInfo * lookupStruct(SymbolTable * pSymbTable, const ScopedIdentifier & ident);
+SymbolInfo * lookupType(SymbolTable * pSymbTable, const ScopedIdentifier & ident);
 DynamicArray<SymbolInfo> * lookupFunc(SymbolTable * pSymbTable, const ScopedIdentifier & ident);
 
 void insertBuiltInSymbols(SymbolTable * pSymbolTable);

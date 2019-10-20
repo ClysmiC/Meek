@@ -47,6 +47,8 @@ void init(SymbolTable * pSymbTable)
 	init(&pSymbTable->funcTable, scopedIdentHashPrecomputed, scopedIdentEq);
 	init(&pSymbTable->typeTable, scopedIdentHashPrecomputed, scopedIdentEq);
 
+    init(&pSymbTable->funcSymbolsPendingTypeResolution);
+
 	init(&pSymbTable->redefinedVars);
     init(&pSymbTable->redefinedFuncs);
     init(&pSymbTable->redefinedTypes);
@@ -60,10 +62,14 @@ void dispose(SymbolTable * pSymbTable)
 
 	// Func table entries all own memory on the heap.
 
-	void (*disposeFn)(DynamicArray<SymbolInfo> *) = &dispose;
-	doForEachValue(&pSymbTable->funcTable, disposeFn);
+    for (auto it = iter(pSymbTable->funcTable); it.pValue; iterNext(&it))
+    {
+        dispose(it.pValue);
+    }
 
 	dispose(&pSymbTable->funcTable);
+
+    dispose(&pSymbTable->funcSymbolsPendingTypeResolution);
 
     dispose(&pSymbTable->redefinedVars);
     dispose(&pSymbTable->redefinedFuncs);
@@ -171,6 +177,15 @@ bool tryInsert(
 	else
 	{
 		Assert(symbInfo.symbolk == SYMBOLK_Func);
+        AstFuncDefnStmt * pFuncDefnStmt = symbInfo.pFuncDefnStmt;
+
+        // NOTE: Only need to check that input params are resolved -- overloading only looks at input params!
+
+        if (!areVarDeclListTypesFullyResolved(pFuncDefnStmt->apParamVarDecls))
+        {
+            append(&pSymbolTable->funcSymbolsPendingTypeResolution, symbInfo);
+            return false;
+        }
 
         // Get array of entries or create new one
 
@@ -181,7 +196,6 @@ bool tryInsert(
 			init(pEntries);
 		}
 
-        AstFuncDefnStmt * pFuncDefnStmt = symbInfo.pFuncDefnStmt;
 
         // Check for duplicate w/ same parameter signature
 
@@ -201,10 +215,12 @@ bool tryInsert(
 			}
 		}
 
+
         // Add sequence id to AST node
 
         symbInfo.pFuncDefnStmt->symbseqid = pSymbolTable->sequenceIdNext;
         pSymbolTable->sequenceIdNext++;
+
 
         // Insert into table
 
@@ -218,7 +234,7 @@ SymbolInfo * lookupVar(SymbolTable * pSymbTable, const ScopedIdentifier & ident)
     return lookup(&pSymbTable->varTable, ident);
 }
 
-SymbolInfo * lookupStruct(SymbolTable * pSymbTable, const ScopedIdentifier & ident)
+SymbolInfo * lookupType(SymbolTable * pSymbTable, const ScopedIdentifier & ident)
 {
     return lookup(&pSymbTable->typeTable, ident);
 }
@@ -400,70 +416,72 @@ void debugPrintType(const Type & type)
 
 void debugPrintSymbolTable(const SymbolTable & symbTable)
 {
-    printf("===Variables===\n\n");
+    printf("TODO: fix me");
 
-    for (auto it = iter(symbTable.varTable); it.pValue; iterNext(&it))
-    {
-		const ScopedIdentifier * pIdent = it.pKey;
-		SymbolInfo * pSymbInfo = it.pValue;
+ //   printf("===Variables===\n\n");
 
-		Assert(pSymbInfo->symbolk == SYMBOLK_Var);
+ //   for (auto it = iter(symbTable.varTable); it.pValue; iterNext(&it))
+ //   {
+	//	const ScopedIdentifier * pIdent = it.pKey;
+	//	SymbolInfo * pSymbInfo = it.pValue;
 
-		printf("name: %s\n", pIdent->pToken->lexeme);
-		printf("type: "); debugPrintType(*pSymbInfo->pVarDeclStmt->pType); printf("\n");
-		printf("scopeid: %d\n", pIdent->defnclScopeid);
-		printf("\n");
-    }
+	//	Assert(pSymbInfo->symbolk == SYMBOLK_Var);
 
-	printf("\n===Functions===\n\n");
+	//	printf("name: %s\n", pIdent->pToken->lexeme);
+	//	printf("type: "); debugPrintType(*pSymbInfo->pVarDeclStmt->pType); printf("\n");
+	//	printf("scopeid: %d\n", pIdent->defnclScopeid);
+	//	printf("\n");
+ //   }
 
-	for (auto it = iter(symbTable.funcTable); it.pValue; iterNext(&it))
-	{
-		const ScopedIdentifier * pIdent = it.pKey;
-		DynamicArray<SymbolInfo> * paSymbInfo = it.pValue;
+	//printf("\n===Functions===\n\n");
 
-		printf("name: %s\n", pIdent->pToken->lexeme);
+	//for (auto it = iter(symbTable.funcTable); it.pValue; iterNext(&it))
+	//{
+	//	const ScopedIdentifier * pIdent = it.pKey;
+	//	DynamicArray<SymbolInfo> * paSymbInfo = it.pValue;
 
-        for (int i = 0; i < paSymbInfo->cItem; i++)
-        {
-            SymbolInfo * pSymbInfo = &(*paSymbInfo)[i];
-		    Assert(pSymbInfo->symbolk == SYMBOLK_Func);
+	//	printf("name: %s\n", pIdent->pToken->lexeme);
 
-            AstFuncDefnStmt * pFuncDefnStmt = Down(pSymbInfo->pFuncDefnStmt, FuncDefnStmt);
+ //       for (int i = 0; i < paSymbInfo->cItem; i++)
+ //       {
+ //           SymbolInfo * pSymbInfo = &(*paSymbInfo)[i];
+	//	    Assert(pSymbInfo->symbolk == SYMBOLK_Func);
 
-            if (paSymbInfo->cItem > 1)
-            {
-                printf("\t(overload %d)\n", i);
-            }
+ //           AstFuncDefnStmt * pFuncDefnStmt = Down(pSymbInfo->pFuncDefnStmt, FuncDefnStmt);
 
-		    for (int j = 0; j < pFuncDefnStmt->apParamVarDecls.cItem; j++)
-		    {
-                auto * pNode = pFuncDefnStmt->apParamVarDecls[j];
-                Assert(pNode->astk == ASTK_VarDeclStmt);
-                auto * pVarDecl = Down(pNode, VarDeclStmt);
+ //           if (paSymbInfo->cItem > 1)
+ //           {
+ //               printf("\t(overload %d)\n", i);
+ //           }
 
-                if (paSymbInfo->cItem > 1) printf("\t\t"); else printf("\t");
-			    printf("param %d type: ", j); debugPrintType(*pVarDecl->pType); printf("\n");
-		    }
+	//	    for (int j = 0; j < pFuncDefnStmt->apParamVarDecls.cItem; j++)
+	//	    {
+ //               auto * pNode = pFuncDefnStmt->apParamVarDecls[j];
+ //               Assert(pNode->astk == ASTK_VarDeclStmt);
+ //               auto * pVarDecl = Down(pNode, VarDeclStmt);
 
-		    for (int j = 0; j < pFuncDefnStmt->apReturnVarDecls.cItem; j++)
-		    {
-                auto * pNode = pFuncDefnStmt->apReturnVarDecls[j];
-                Assert(pNode->astk == ASTK_VarDeclStmt);
-                auto * pVarDecl = Down(pNode, VarDeclStmt);
+ //               if (paSymbInfo->cItem > 1) printf("\t\t"); else printf("\t");
+	//		    printf("param %d type: ", j); debugPrintType(*pVarDecl->pType); printf("\n");
+	//	    }
 
-                if (paSymbInfo->cItem > 1) printf("\t\t"); else printf("\t");
-			    printf("return %d type: ", j); debugPrintType(*pVarDecl->pType); printf("\n");
-		    }
+	//	    for (int j = 0; j < pFuncDefnStmt->apReturnVarDecls.cItem; j++)
+	//	    {
+ //               auto * pNode = pFuncDefnStmt->apReturnVarDecls[j];
+ //               Assert(pNode->astk == ASTK_VarDeclStmt);
+ //               auto * pVarDecl = Down(pNode, VarDeclStmt);
 
-            if (paSymbInfo->cItem > 1) printf("\t\t"); else printf("\t");
-            printf("scopeid defn: %d\n", pIdent->defnclScopeid);
+ //               if (paSymbInfo->cItem > 1) printf("\t\t"); else printf("\t");
+	//		    printf("return %d type: ", j); debugPrintType(*pVarDecl->pType); printf("\n");
+	//	    }
 
-            if (paSymbInfo->cItem > 1) printf("\t\t"); else printf("\t");
-            printf("scopeid body: %d\n", pFuncDefnStmt->scopeid);
-        }
+ //           if (paSymbInfo->cItem > 1) printf("\t\t"); else printf("\t");
+ //           printf("scopeid defn: %d\n", pIdent->defnclScopeid);
 
-		printf("\n");
-	}
+ //           if (paSymbInfo->cItem > 1) printf("\t\t"); else printf("\t");
+ //           printf("scopeid body: %d\n", pFuncDefnStmt->scopeid);
+ //       }
+
+	//	printf("\n");
+	//}
 }
 #endif

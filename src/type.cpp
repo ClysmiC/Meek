@@ -1,7 +1,11 @@
 #include "ast.h"
+#include "parse.h"
 #include "type.h"
 
 #include <string.h>
+
+extern const typid gc_typidUnresolved = 0;
+extern const typid gc_typidUnresolvedInferred = 1;
 
 void init(Type * pType, bool isFuncType)
 {
@@ -39,22 +43,29 @@ void dispose(Type * pType)
 	}
 }
 
-bool isTypeFullyResolved(const Type & type)
+bool isTypeResolved(const Type & type)
 {
 	if (type.isFuncType)
 	{
-		for (int i = 0; i < type.funcType.apParamType.cItem; i++)
-		{
-			if (!isTypeFullyResolved(*type.funcType.apParamType[i])) return false;
-		}
-
-		for (int i = 0; i < type.funcType.apReturnType.cItem; i++)
-		{
-			if (!isTypeFullyResolved(*type.funcType.apReturnType[i])) return false;
-		}
+        return isFuncTypeResolved(type.funcType);
 	}
 
 	return isScopeSet(type.ident);
+}
+
+bool isFuncTypeResolved(const FuncType & funcType)
+{
+    for (int i = 0; i < funcType.paramTypids.cItem; i++)
+    {
+        if (!isTypeResolved(funcType.paramTypids[i])) return false;
+    }
+
+    for (int i = 0; i < funcType.returnTypids.cItem; i++)
+    {
+        if (!isTypeResolved(funcType.returnTypids[i])) return false;
+    }
+
+    return true;
 }
 
 bool isTypeInferred(const Type & type)
@@ -151,36 +162,42 @@ uint typeHash(const Type & t)
 
 void init(FuncType * pFuncType)
 {
-    init(&pFuncType->apParamType);
-    init(&pFuncType->apReturnType);
+    init(&pFuncType->paramTypids);
+    init(&pFuncType->returnTypids);
 }
 
 void initMove(FuncType * pFuncType, FuncType * pFuncTypeSrc)
 {
-	initMove(&pFuncType->apParamType, &pFuncTypeSrc->apParamType);
-	initMove(&pFuncType->apReturnType, &pFuncTypeSrc->apReturnType);
+	initMove(&pFuncType->paramTypids, &pFuncTypeSrc->paramTypids);
+	initMove(&pFuncType->returnTypids, &pFuncTypeSrc->returnTypids);
 }
 
 void dispose(FuncType * pFuncType)
 {
-    dispose(&pFuncType->apParamType);
-    dispose(&pFuncType->apReturnType);
+    dispose(&pFuncType->paramTypids);
+    dispose(&pFuncType->returnTypids);
 }
 
 bool funcTypeEq(const FuncType & f0, const FuncType & f1)
 {
-    if (f0.apParamType.cItem != f1.apParamType.cItem) return false;
-    if (f0.apReturnType.cItem != f1.apReturnType.cItem) return false;
+    AssertInfo(
+        isFuncTypeResolved(f0) && isFuncTypeResolved(f1),
+        "Can't really determine if function types are equal if they aren't yet resolved. "
+        "This function is used by the type table which should only be dealing with types that ARE resolved!"
+    );
 
-    for (int i = 0; i < f0.apParamType.cItem; i++)
+    if (f0.paramTypids.cItem != f1.paramTypids.cItem) return false;
+    if (f0.returnTypids.cItem != f1.returnTypids.cItem) return false;
+
+    for (int i = 0; i < f0.paramTypids.cItem; i++)
     {
-        if (!typeEq(*f0.apParamType[i], *f1.apParamType[i]))
+        if (f0.paramTypids[i] != f1.paramTypids[i])
             return false;
     }
 
-    for (int i = 0; i < f0.apReturnType.cItem; i++)
+    for (int i = 0; i < f0.returnTypids.cItem; i++)
     {
-        if (!typeEq(*f0.apReturnType[i], *f1.apReturnType[i]))
+        if (f0.returnTypids[i] != f1.returnTypids[i])
             return false;
     }
 
@@ -189,23 +206,49 @@ bool funcTypeEq(const FuncType & f0, const FuncType & f1)
 
 uint funcTypeHash(const FuncType & f)
 {
+    AssertInfo(
+        isFuncTypeResolved(f),
+        "This function is used by the type table which should only be dealing with types that ARE resolved!"
+    );
+
 	uint hash = startHash();
 
-    for (int i = 0; i < f.apParamType.cItem; i++)
+    for (int i = 0; i < f.paramTypids.cItem; i++)
     {
-        hash = combineHash(hash, typeHash(*f.apParamType[i]));
+        typid typid = f.paramTypids[i];
+        hash = buildHash(&typid, sizeof(typid), hash);
     }
 
-    for (int i = 0; i < f.apReturnType.cItem; i++)
+    for (int i = 0; i < f.returnTypids.cItem; i++)
     {
-        hash = combineHash(hash, typeHash(*f.apReturnType[i]));
+        typid typid = f.returnTypids[i];
+        hash = buildHash(&typid, sizeof(typid), hash);
     }
 
 	return hash;
 }
 
+bool areVarDeclListTypesFullyResolved(const DynamicArray<AstNode*>& apVarDecls)
+{
+    for (int i = 0; i < apVarDecls.cItem; i++)
+    {
+        Assert(apVarDecls[i]->astk == ASTK_VarDeclStmt);
+        auto * pStmt = Down(apVarDecls[i], VarDeclStmt);
+
+        if (!isTypeResolved(pStmt->typid))
+        {
+            return false;
+        }
+    }
+
+    return true;
+}
+
 bool areVarDeclListTypesEq(const DynamicArray<AstNode *> & apVarDecls0, const DynamicArray<AstNode *> & apVarDecls1)
 {
+    Assert(areVarDeclListTypesFullyResolved(apVarDecls0));
+    Assert(areVarDeclListTypesFullyResolved(apVarDecls1));
+
 	if (apVarDecls0.cItem != apVarDecls1.cItem) return false;
 
 	for (int i = 0; i < apVarDecls0.cItem; i++)
@@ -224,11 +267,122 @@ bool areVarDeclListTypesEq(const DynamicArray<AstNode *> & apVarDecls0, const Dy
 			pDecl1 = Down(pNode1, VarDeclStmt);
 		}
 
-		AssertInfo(pDecl0->pType, "I don't really handle type inference yet... try again later!");
-		AssertInfo(pDecl1->pType, "I don't really handle type inference yet... try again later!");
-
-		if (!typeEq(*pDecl0->pType, *pDecl1->pType)) return false;
+        if (pDecl0->typid != pDecl1->typid) return false;
 	}
 
 	return true;
+}
+
+void init(TypeTable * pTable)
+{
+	init(&pTable->table,
+        typidHash,
+        typidEq,
+        typeHash,
+        typeEq);
+
+	init(&pTable->typesPendingResolution);
+}
+
+const Type * lookupType(TypeTable * pTable, typid typid)
+{
+    return lookupByKey(&pTable->table, typid);
+}
+
+typid ensureInTypeTable(TypeTable * pTable, const Type & type, bool debugAssertIfAlreadyInTable)
+{
+	AssertInfo(isTypeResolved(type), "Shouldn't be inserting an unresolved type into the type table...");
+
+	// SLOW: Could write a combined lookup + insertNew if not found query
+
+	const typid * pTypid = lookupByValue(&pTable->table, type);
+	if (pTypid)
+	{
+		Assert(!debugAssertIfAlreadyInTable);
+		return *pTypid;
+	}
+
+    typid typidInsert = pTable->typidNext;
+    pTable->typidNext++;
+
+	Verify(insert(&pTable->table, typidInsert, type));
+    return typidInsert;
+}
+
+typid resolveTypeOrSetPending(Parser * pParser, Type * pType, TypePendingResolution ** ppoTypePendingResolution)
+{
+	Assert(!isTypeResolved(*pType));
+    AssertInfo(ppoTypePendingResolution, "You must have a plan for handling types that are pending resolution if you call this function!");
+
+	bool resolved = false;
+
+	if (!pType->isFuncType)
+	{
+		// Non-func type
+
+		ScopedIdentifier candidate = pType->ident;
+
+		for (int i = 0; i < count(pParser->scopeStack); i++)
+		{
+            Scope candidateScope;
+			Verify(peekFar(pParser->scopeStack, i, &candidateScope));
+
+            candidate.defnclScopeid = candidateScope.id;
+
+			if (lookupType(&pParser->symbolTable, candidate))
+			{
+				pType->ident = candidate;
+				resolved = true;
+				goto end;
+			}
+		}
+	}
+	else
+	{
+		// Func type
+
+        for (int i = 0; i < pType->funcType.paramTypids.cItem; i++)
+        {
+            if (!isTypeResolved(pType->funcType.paramTypids[i]))
+            {
+                resolved = false;
+                goto end;
+            }
+		}
+
+		for (int i = 0; i < pType->funcType.returnTypids.cItem; i++)
+		{
+            if (!isTypeResolved(pType->funcType.returnTypids[i]))
+            {
+                resolved = false;
+                goto end;
+            }
+		}
+
+		resolved = true;
+	}
+
+end:
+	if (resolved)
+	{
+		typid typid = ensureInTypeTable(&pParser->typeTable, *pType);
+        Assert(isTypeResolved(typid));
+
+        *ppoTypePendingResolution = nullptr;
+
+		dispose(pType);
+		releaseType(pParser, pType);
+
+        return typid;
+	}
+	else
+	{
+        TypePendingResolution * pTypePending = appendNew(&pParser->typeTable.typesPendingResolution);
+        pTypePending->pType = pType;
+        pTypePending->pTypidUpdateWhenResolved = nullptr;    // NOTE: Caller sets this value via the pointer that we return in an out param
+        
+        *ppoTypePendingResolution = pTypePending;
+
+        return gc_typidUnresolved;
+	}
 }
