@@ -33,7 +33,6 @@ struct Parser
 	DynamicPoolAllocator<AstNode> astAlloc;
 	DynamicPoolAllocator<Token> tokenAlloc;
 	DynamicPoolAllocator<Type> typeAlloc;
-	DynamicPoolAllocator<FuncType> funcTypeAlloc;
 
 
 	// Scope
@@ -181,7 +180,8 @@ bool tryParseFuncDefnOrLiteralHeaderParamList(Parser * pParser, FUNCHEADERK func
 bool tryParseFuncHeaderTypeOnly(
 	Parser * pParser,
 	FuncType * poFuncType,
-	AstErr ** ppoErr);
+	AstErr ** ppoErr
+);
 
 
 // NOTE: This moves the children into the AST
@@ -203,22 +203,7 @@ inline Type * newType(Parser * pParser)
 
 inline void releaseType(Parser * pParser, Type * pParseType)
 {
-	// This is bad. Shouldn't be disposing in release, dispose should be separate.
-	//	But I am still trying to figure out exactly how I want my new -> init -> dispose -> release
-	//	pattern to play out... so for now this will do.
-
-	dispose(&pParseType->aTypemods);
 	release(&pParser->typeAlloc, pParseType);
-}
-
-inline FuncType * newFuncType(Parser * pParser)
-{
-	return allocate(&pParser->funcTypeAlloc);
-}
-
-inline void releaseFuncType(Parser * pParser, FuncType * pParseFuncType)
-{
-    release(&pParser->funcTypeAlloc, pParseFuncType);
 }
 
 inline void releaseToken(Parser * pParser, Token * pToken)

@@ -41,8 +41,6 @@ bool init(Parser * pParser, Scanner * pScanner)
 	init(&pParser->astAlloc);
 	init(&pParser->tokenAlloc);
 	init(&pParser->typeAlloc);
-	init(&pParser->funcTypeAlloc);
-	// init(&pParser->symbolInfoAlloc);
 	init(&pParser->astNodes);
 	init(&pParser->scopeStack);
 	init(&pParser->symbolTable);
@@ -407,9 +405,6 @@ bool tryParseFuncDefnStmtOrLiteralExpr(Parser * pParser, FUNCHEADERK funcheaderk
 	bool isDefn = funcheaderk == FUNCHEADERK_Defn;
 	int startingLine = peekTokenLine(pParser->pScanner);
 
-	FuncType * pFuncType = nullptr;
-	Defer(if (!success && pFuncType) releaseFuncType(pParser, pFuncType););
-
 	// Parse header
 
 	// NOTE: Push scope before parsing header so that the symbols declared in the header
@@ -519,8 +514,14 @@ AstNode * parseVarDeclStmt(Parser * pParser, EXPECTK expectkName, EXPECTK expect
 
     // Parse type
 
-    Type * pType = newType(pParser);
-    Defer(if (!success) releaseType(pParser, pType););
+    Type * pType = nullptr;
+    Defer(
+        if (!success && pType)
+        {
+            dispose(pType);
+            releaseType(pParser, pType);
+        }
+    );
 
     if (!tryParseType(pParser, &pType, &apNodeChildren))
     {
@@ -1375,52 +1376,43 @@ bool tryParseType(Parser * pParser, Type ** ppoType, DynamicArray<AstNode *> * p
 	}
 
 	bool success = false;
-	Token * pTypeIdent = nullptr;		// Only for non-func type
-	FuncType * pFuncType = nullptr;		// Only for func type
 
-	// Defer cleanup
+	// Init type
 
-	Defer(
-		if (!success && pTypeIdent)
-		{
-			release(&pParser->tokenAlloc, pTypeIdent);
-		}
-
-		if (!success && pFuncType)
-		{
-            for (int i = 0; i < pFuncType->apParamType.cItem; i++)
-            {
-                releaseType(pParser, pFuncType->apParamType[i]);
-            }
-
-            for (int i = 0; i < pFuncType->apReturnType.cItem; i++)
-            {
-                releaseType(pParser, pFuncType->apReturnType[i]);
-            }
-
-			dispose(pFuncType);
-			releaseFuncType(pParser, pFuncType);
-		}
-	);
-
-	bool isFuncType = false;
+	Type * pType = newType(pParser);
 	if (peekToken(pParser->pScanner) == TOKENK_Identifier)
 	{
-		isFuncType = false;
-		pTypeIdent = ensureAndClaimPendingToken(pParser);
-		consumeToken(pParser->pScanner, pTypeIdent);
+		init(pType, false /* isFuncType */);
 	}
 	else
 	{
-		Assert(peekToken(pParser->pScanner) == TOKENK_Fn);
+		init(pType, true /* isFuncType */);
+	}
 
-		isFuncType = true;
+	reinitMove(&pType->aTypemods, &aModifiers);
 
-		pFuncType = newFuncType(pParser);
-		init(pFuncType);
+	// Defer cleanup on fail
 
+	Defer(
+		if (!success)
+		{
+			dispose(pType);
+			releaseType(pParser, pType);
+		}
+	);
+
+	if (!pType->isFuncType)
+	{
+		Token * pTypeIdent = ensureAndClaimPendingToken(pParser);
+		consumeToken(pParser->pScanner, pTypeIdent);
+
+		Assert(pTypeIdent->tokenk == TOKENK_Identifier);
+		setIdentNoScope(&pType->ident, pTypeIdent);
+	}
+	else
+	{
 		AstErr * pErr = nullptr;
-		bool funcHeaderSuccess = tryParseFuncHeaderTypeOnly(pParser, pFuncType, &pErr);
+		bool funcHeaderSuccess = tryParseFuncHeaderTypeOnly(pParser, &pType->funcType, &pErr);
 
 		Assert(Implies(funcHeaderSuccess, !pErr));
 
@@ -1431,24 +1423,7 @@ bool tryParseType(Parser * pParser, Type ** ppoType, DynamicArray<AstNode *> * p
 		}
 	}
 
-	*ppoType = newType(pParser);
-	if (isFuncType)
-	{
-		(*ppoType)->isFuncType = true;
-		(*ppoType)->pFuncType = pFuncType;
-	}
-	else
-	{
-		ScopedIdentifier identType;
-		setIdentNoScope(&identType, pTypeIdent);
-
-		Assert(pTypeIdent->tokenk == TOKENK_Identifier);
-		(*ppoType)->isFuncType = false;
-		(*ppoType)->ident = identType;
-	}
-
-	initMove(&(*ppoType)->aTypemods, &aModifiers);
-
+    *ppoType = pType;
 	success = true;		// Used in Defer
 	return success;
 }
@@ -1516,7 +1491,7 @@ bool tryParseFuncHeaderTypeOnly(Parser * pParser, FuncType * poFuncType, AstErr 
 
 			// type
 
-            Type * pType = newType(pParser);
+            Type * pType;
             append(papTypes, pType);
 
 			if (!tryParseType(pParser, &pType, papNodeChildren))
@@ -1526,7 +1501,6 @@ bool tryParseFuncHeaderTypeOnly(Parser * pParser, FuncType * poFuncType, AstErr 
 					category((*papNodeChildren)[papNodeChildren->cItem - 1]->astk) == ASTCATK_Error
 				);
 
-                releaseType(pParser, pType);
 				return false;
 			}
 

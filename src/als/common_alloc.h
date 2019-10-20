@@ -245,11 +245,7 @@ void init(DynamicPoolAllocator<T, CapacityPerBucket> * pAlloc)
 {
 	typedef DynamicPoolAllocator<T, CapacityPerBucket> dpa;
 
-    // Pre-allocate the first bucket. No reason we couldn' delay this until the first allocation, but meh.
-
-	pAlloc->pBuckets = new dpa::Bucket;
-    init(&pAlloc->pBuckets->alloc);
-	pAlloc->pFree = pAlloc->pBuckets;
+	pAlloc->pFree = nullptr;
 }
 
 template <typename T, unsigned int CapacityPerBucket>

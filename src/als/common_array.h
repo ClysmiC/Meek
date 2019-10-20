@@ -149,32 +149,35 @@ struct DynamicArray
 };
 
 template <typename T>
-void init(DynamicArray<T> * pArray, unsigned int startingCapacity=16)
+void init(DynamicArray<T> * pArray)
 {
-    // UGH: I wish I could assert this, but there is trickiness with unions containing
-    //  dynamic arrays and my pool allocator not zero-initializing the memory.
-
-	// ALS_COMMON_ARRAY_Assert(!pArray->pBuffer);
-
     pArray->cItem = 0;
     pArray->capacity = 0;
     pArray->pBuffer = nullptr;
+}
 
-	ensureCapacity(pArray, startingCapacity);
+template <typename T>
+void reinit(DynamicArray<T> * pArray)
+{
+	dispose(pArray);
+	init(pArray);
 }
 
 template <typename T>
 void initMove(DynamicArray<T> * pArray, DynamicArray<T> * pArraySrc)
 {
-    // UGH: I wish I could assert this, but there is trickiness with unions containing
-    //  dynamic arrays and my pool allocator not zero-initializing the memory.
-
-	// ALS_COMMON_ARRAY_Assert(!pArray->pBuffer);
 	*pArray = *pArraySrc;
 
 	pArraySrc->pBuffer = nullptr;
 	pArraySrc->cItem = 0;
 	pArraySrc->capacity = 0;
+}
+
+template <typename T>
+void reinitMove(DynamicArray<T> * pArray, DynamicArray<T> * pArraySrc)
+{
+	dispose(pArray);
+	initMove(pArray, pArraySrc);
 }
 
 template <typename T>

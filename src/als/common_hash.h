@@ -177,7 +177,8 @@ HashMapIter<K, V> iter(const HashMap<K, V> & hashmap)
 template <typename K, typename V>
 V * insertNew(
 	HashMap<K, V> * pHashmap,
-	const K & key)
+	const K & key,
+	K ** ppoKeyInTable=nullptr)		// Only really useful for BiHashMap... don't set this in most cases!
 {
 	typedef HashMap<K, V> hm;
 
@@ -274,7 +275,7 @@ V * insertNew(
 
 		// Copy swappable bucket into the empty bucket and update the offset
 
-        *pBucketEmpty = *pBucketSwappable;
+		*pBucketEmpty = *pBucketSwappable;
 
 		int newOffset = (pBucketSwappable->infoBits & AlsHash::s_infoOffsetMask )+ dOffset;
 		ALS_COMMON_HASH_Assert(newOffset < H);
@@ -299,6 +300,10 @@ V * insertNew(
 	pBucketEmpty->infoBits |= hashMsbs;
 
 	pBucketEmpty->key = key;
+
+	if (ppoKeyInTable)
+		*ppoKeyInTable = &pBucketEmpty->key;
+
 	return &pBucketEmpty->value;
 }
 
@@ -306,17 +311,18 @@ template <typename K, typename V>
 void insert(
 	HashMap<K, V> * pHashmap,
 	const K & key,
-	const V & value)
+	const V & value,
+	K ** ppoKeyInTable=nullptr)		// Only really useful for BiHashMap... don't set this in most cases!
 {
-	V * valueNew = insertNew(pHashmap, key);
+	V * valueNew = insertNew(pHashmap, key, ppoKeyInTable);
 	*valueNew = value;
 }
 
 enum _ALSHASHOPK
 {
-    _ALSHASHOPK_Lookup,
-    _ALSHASHOPK_Update,
-    _ALSHASHOPK_Remove
+	_ALSHASHOPK_Lookup,
+	_ALSHASHOPK_Update,
+	_ALSHASHOPK_Remove
 };
 
 template <typename K, typename V>
@@ -326,7 +332,8 @@ inline bool _alsHashHelper(
 	_ALSHASHOPK hashopk,
 	const V * pValueNew=nullptr,
 	V ** ppoValueLookup=nullptr,
-	V * poValueRemoved=nullptr)
+	V * poValueRemoved=nullptr,
+	K ** ppoKeyFound=nullptr)		// Only really useful for BiHashMap... don't set this in most cases!
 {
 	typedef HashMap<K, V> hm;
 
@@ -375,14 +382,19 @@ inline bool _alsHashHelper(
 
 		if (pHashmap->equalFn(key, pBucketCandidate->key))
 		{
+			if (ppoKeyFound)
+			{
+				*ppoKeyFound = &pBucketCandidate->key;
+			}
+
 			switch (hashopk)
 			{
 				case _ALSHASHOPK_Lookup:
 				{
-                    if (ppoValueLookup)
-                    {
-                        *ppoValueLookup = &pBucketCandidate->value;
-                    }
+					if (ppoValueLookup)
+					{
+						*ppoValueLookup = &pBucketCandidate->value;
+					}
 
 					return true;
 				}
@@ -419,7 +431,8 @@ inline bool _alsHashHelper(
 template <typename K, typename V>
 V * lookup(
 	HashMap<K, V> * pHashmap,
-	const K & key)
+	const K & key,
+	K ** ppoKeyFound=nullptr)		// Only really useful for BiHashMap... don't set this in most cases!
 {
 	V * pResult = nullptr;
 
@@ -427,12 +440,13 @@ V * lookup(
 		pHashmap,
 		key,
 		_ALSHASHOPK_Lookup,
-		static_cast<const V*>(nullptr),     // Update
-		&pResult,                           // Lookup
-		static_cast<V *>(nullptr) 	        // Remove
+		static_cast<const V*>(nullptr),		// Update
+		&pResult,							// Lookup
+		static_cast<V *>(nullptr),			// Remove
+		ppoKeyFound							// Address of found key
 	);
 
-    return pResult;
+	return pResult;
 }
 
 template <typename K, typename V>
@@ -445,9 +459,10 @@ bool remove(
 		pHashmap,
 		key,
 		_ALSHASHOPK_Remove,
-        static_cast<const V*>(nullptr),	// Update
-        static_cast<V*>(nullptr),		// Lookup
-		poValueRemoved	                // Remove
+		static_cast<const V*>(nullptr),	// Update
+		static_cast<V*>(nullptr),		// Lookup
+		poValueRemoved,					// Remove
+		static_cast<K **>(nullptr)		// Address of found key
 	);
 }
 
@@ -461,9 +476,10 @@ bool update(
 		pHashmap,
 		key,
 		_ALSHASHOPK_Update,
-		&value,		                // Update
-        static_cast<V*>(nullptr),	// Lookup
-        static_cast<V*>(nullptr)	// Remove
+		&value,						// Update
+		static_cast<V*>(nullptr),	// Lookup
+		static_cast<V*>(nullptr)	// Remove
+		static_cast<K **>(nullptr)	// Address of found key
 	);
 }
 
@@ -499,10 +515,10 @@ void growHashmap(
 		{
 			hm::Bucket * pBucket = pBufferOld + i;
 
-            if (pBucket->infoBits & AlsHash::s_infoOccupiedMask)
-            {
-			    insert(pHashmap, pBucket->key, pBucket->value);
-            }
+			if (pBucket->infoBits & AlsHash::s_infoOccupiedMask)
+			{
+				insert(pHashmap, pBucket->key, pBucket->value);
+			}
 		}
 
 		// Free old buffer
@@ -561,23 +577,34 @@ void doForEachValue(HashMap<K, V> * pHashmap, void (*doFn)(V *))
 }
 
 
-// Bi-directional hashmap. Think of it as a normal hashmap from K -> V
-//	with the bijection property. When operating on it in terms of the map
-//	from K -> V, call the KV routines. If operating in terms of the map V ->
-//	call the V -> K routines
+// Bi-directional hashmap where all keys are unique and all values are unique.
 
 template <typename K, typename V>
 struct BiHashMap
 {
-	HashMap<K, V> mapKV;
-	HashMap<V, K> mapVK;
+	HashMap<K, V*> mapKV;
+	HashMap<V, K*> mapVK;
 };
 
 template <typename K, typename V>
-void init(BiHashMap<K, V> * pBimap)
+void init(
+	BiHashMap<K, V> * pBimap,
+	uint32_t (*keyHashFn)(const K & key),
+	bool (*keyEqualFn)(const K & key0, const K & key1),
+	uint32_t (*valueHashFn)(const V & value),
+	bool (*valueEqualFn)(const K & value0, const V & value1))
 {
-	init(&pBimap->mapKV);
-	init(&pBimap->mapVK);
+	init(
+		&pBimap->mapKV,
+		keyHashFn,
+		keyEqualFn
+	);
+
+	init(
+		&pBimap->mapVK,
+		valueHashFn,
+		valueEqualFn
+	);
 }
 
 template <typename K, typename V>
@@ -595,46 +622,119 @@ bool insert(BiHashMap<K, V> * pBimap, const K & key, const V & value)
 	//	Maybe have insert which never does updates and then have "upsert" ?
 
 	if (lookup(&pBimap->mapKV, key)) return false;
-	if (lookup(&pBimap->mapVK, value)) return false;
 
-	insert(&pBimap->mapKV, key, value);
+	ALS_COMMON_HASH_Assert(!lookup(&pBimap->mapVK, value));
+
+	K * pKeyInTable;
+	V * pValueInTable;
+
+	V ** ppV = insertNew(&pBimap->mapKV, key, &pKeyInTable);
+	K ** ppK = insertNew(&pBimap->mapVK, value, &pValueInTable);
+
+	*ppK = pKeyInTable;
+	*ppV = pValueInTable;
+
 	insert(&pBimap->mapVK, value, key);
 }
 
 template <typename K, typename V>
-V * lookupByKey(BiHashMap<K, V> * pBimap, const K & key)
+const V * lookupByKey(BiHashMap<K, V> * pBimap, const K & key)
 {
-	return lookup(&pBimap->mapKV, key);
+	return *lookup(&pBimap->mapKV, key);
 }
 
 template <typename K, typename V>
-K * lookupByValue(BiHashMap<K, V> * pBimap, const V & value)
+const K * lookupByValue(BiHashMap<K, V> * pBimap, const V & value)
 {
-	return lookup(&pBimap->mapVK, value);
+	return *lookup(&pBimap->mapVK, value);
 }
 
 template <typename K, typename V>
 bool removeByKey(BiHashMap<K, V> * pBimap, const K & key, V * poValueRemoved=nullptr)
 {
-	return remove(&pBimap->mapKV, key, poValueRemoved);
+	V * pValueInTable;
+
+	bool result = remove(&pBimap->mapKV, key, &pValueInTable);
+
+	if (!result) return false;
+
+	// Copy actual value before we remove it from the other table
+
+	if (poValueRemoved)
+		*poValueRemoved = *pValueInTable;
+
+
+	// Could optimize this since we already have a pointer to the value we want to remove. But that isn't
+	//	easily exposed in the hash table API
+
+	ALS_COMMON_HASH_Verify(remove(&pBimap->mapVK, *pValueInTable));
+
+	return true;
 }
 
 template <typename K, typename V>
 bool removeByValue(BiHashMap<K, V> * pBimap, const V & value, K * poKeyRemoved=nullptr)
 {
-	return remove(&pBimap->mapVK, value, poKeyRemoved);
+	K * pKeyInTable;
+
+	bool result = remove(&pBimap->mapVK, value, &pKeyInTable);
+
+	if (!result) return false;
+
+	// Copy actual key before we remove it from the other table
+
+	if (poKeyRemoved)
+		*poKeyRemoved = *pKeyInTable;
+
+
+	// Could optimize this since we already have a pointer to the key we want to remove. But that isn't
+	//	easily exposed in the hash table API
+
+	ALS_COMMON_HASH_Verify(remove(&pBimap->mapKV, *pKeyInTable));
+
+	return true;
 }
 
 template <typename K, typename V>
 bool updateByKey(BiHashMap<K, V> * pBimap, const K & key, const V & value)
 {
-	return update(&pBimap->mapKV, key, value);
+	K * pKeyInTable;
+	V * pValueInTableOld = lookup(&pBimap->mapKV, key, &pKeyInTable);
+	if (!pValueInTableOld) return false;
+
+	ALS_COMMON_HASH_Verify(
+		remove(&pBimap->mapVK, *pValueInTableOld)
+	);
+
+	V * pValueInTableNew;
+	insert(&pBimap->mapVK, value, pKeyInTable, &pValueInTableNew);
+
+	ALS_COMMON_HASH_Verify(
+		update(&pBimap->mapKV, key, pValueInTableNew)
+	);
+
+	return true;
 }
 
 template <typename K, typename V>
 bool updateByValue(BiHashMap<K, V> * pBimap, const V & value, const K & key)
 {
-	return update(&pBimap->mapVK, value, key);
+	V * pValueInTable;
+	K * pKeyInTableOld = lookup(&pBimap->mapVK, value, &pValueInTable);
+	if (!pKeyInTableOld) return false;
+
+	ALS_COMMON_HASH_Verify(
+		remove(&pBimap->mapKV, *pKeyInTableOld)
+	);
+
+	K * pKeyInTableNew;
+	insert(&pBimap->mapKV, key, pValueInTable, &pKeyInTableNew);
+
+	ALS_COMMON_HASH_Verify(
+		update(&pBimap->mapVK, value, pKeyInTableNew)
+	);
+
+	return true;
 }
 
 #undef ALS_COMMON_HASH_StaticAssert

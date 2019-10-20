@@ -3,6 +3,71 @@
 
 #include <string.h>
 
+void init(Type * pType, bool isFuncType)
+{
+	pType->isFuncType = isFuncType;
+	init(&pType->aTypemods);
+
+	if (pType->isFuncType)
+	{
+		init(&pType->funcType);
+	}
+	else
+	{
+		Token * pToken = nullptr;
+		setIdentNoScope(&pType->ident, pToken);
+	}
+}
+
+void initMove(Type * pType, Type * pTypeSrc)
+{
+	pType->isFuncType = pTypeSrc->isFuncType;
+	initMove(&pType->aTypemods, &pTypeSrc->aTypemods);
+
+	if (pType->isFuncType)
+	{
+		initMove(&pType->funcType, &pTypeSrc->funcType);
+	}
+}
+
+void dispose(Type * pType)
+{
+	dispose(&pType->aTypemods);
+	if (pType->isFuncType)
+	{
+		dispose(&pType->funcType);
+	}
+}
+
+bool isTypeFullyResolved(const Type & type)
+{
+	if (type.isFuncType)
+	{
+		for (int i = 0; i < type.funcType.apParamType.cItem; i++)
+		{
+			if (!isTypeFullyResolved(*type.funcType.apParamType[i])) return false;
+		}
+
+		for (int i = 0; i < type.funcType.apReturnType.cItem; i++)
+		{
+			if (!isTypeFullyResolved(*type.funcType.apReturnType[i])) return false;
+		}
+	}
+
+	return isScopeSet(type.ident);
+}
+
+bool isTypeInferred(const Type & type)
+{
+	bool result = (strcmp(type.ident.pToken->lexeme, "var") == 0);
+    return result;
+}
+
+bool isUnmodifiedType(const Type & type)
+{
+	return type.aTypemods.cItem == 0;
+}
+
 bool typeEq(const Type & t0, const Type & t1)
 {
 	if (t0.isFuncType != t1.isFuncType) return false;
@@ -44,7 +109,7 @@ bool typeEq(const Type & t0, const Type & t1)
 
 	if (t0.isFuncType)
 	{
-		return funcTypeEq(*t0.pFuncType, *t1.pFuncType);
+		return funcTypeEq(t0.funcType, t1.funcType);
 	}
 	else
 	{
@@ -75,7 +140,7 @@ uint typeHash(const Type & t)
 
 	if (t.isFuncType)
 	{
-		return combineHash(hash, funcTypeHash(*t.pFuncType));
+		return combineHash(hash, funcTypeHash(t.funcType));
 	}
 	else
 	{
@@ -84,21 +149,16 @@ uint typeHash(const Type & t)
 	}
 }
 
-bool isTypeInferred(const Type & type)
-{
-	bool result = (strcmp(type.ident.pToken->lexeme, "var") == 0);
-    return result;
-}
-
-bool isUnmodifiedType(const Type & type)
-{
-	return type.aTypemods.cItem == 0;
-}
-
 void init(FuncType * pFuncType)
 {
     init(&pFuncType->apParamType);
     init(&pFuncType->apReturnType);
+}
+
+void initMove(FuncType * pFuncType, FuncType * pFuncTypeSrc)
+{
+	initMove(&pFuncType->apParamType, &pFuncTypeSrc->apParamType);
+	initMove(&pFuncType->apReturnType, &pFuncTypeSrc->apReturnType);
 }
 
 void dispose(FuncType * pFuncType)

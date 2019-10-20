@@ -156,16 +156,16 @@ void debugPrintType(const Type & type, int level, bool skipAfterArrow, DynamicAr
         printf("(params)");
         printTabs(level, false, false, pMapLevelSkip);
 
-        for (int i = 0; i < type.pFuncType->apParamType.cItem; i++)
+        for (int i = 0; i < type.funcType.apParamType.cItem; i++)
         {
-            bool isLastChild = i == type.pFuncType->apParamType.cItem - 1;
+            bool isLastChild = i == type.funcType.apParamType.cItem - 1;
 
             printf("\n");
             printTabs(level, false, false, pMapLevelSkip);
 
             printf("(%s %d):", "param", i);
 
-            debugPrintType(*type.pFuncType->apParamType[i], levelNext, false, pMapLevelSkip);
+            debugPrintType(*type.funcType.apParamType[i], levelNext, false, pMapLevelSkip);
 
             if (!isLastChild)
             {
@@ -180,9 +180,9 @@ void debugPrintType(const Type & type, int level, bool skipAfterArrow, DynamicAr
         printf("(return values)");
         printTabs(level, false, false, pMapLevelSkip);
 
-        for (int i = 0; i < type.pFuncType->apReturnType.cItem; i++)
+        for (int i = 0; i < type.funcType.apReturnType.cItem; i++)
         {
-            bool isLastChild = i == type.pFuncType->apReturnType.cItem - 1;
+            bool isLastChild = i == type.funcType.apReturnType.cItem - 1;
             bool shouldSetSkip = skipAfterArrow && isLastChild;
 
             printf("\n");
@@ -190,7 +190,7 @@ void debugPrintType(const Type & type, int level, bool skipAfterArrow, DynamicAr
 
             printf("(%s %d):", "return", i);
 
-            debugPrintType(*type.pFuncType->apReturnType[i], levelNext, isLastChild, pMapLevelSkip);
+            debugPrintType(*type.funcType.apReturnType[i], levelNext, isLastChild, pMapLevelSkip);
 
             if (!isLastChild)
             {
