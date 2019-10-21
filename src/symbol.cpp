@@ -152,7 +152,7 @@ bool tryInsert(
 
         // Check for duplicate
 
-		if (lookup(pTable, ident))
+		if (lookup(*pTable, ident))
 		{
 			append(pRedefinedArray, symbInfo);
 			return false;
@@ -189,7 +189,7 @@ bool tryInsert(
 
         // Get array of entries or create new one
 
-		DynamicArray<SymbolInfo> * pEntries = lookup(&pSymbolTable->funcTable, ident);
+		DynamicArray<SymbolInfo> * pEntries = lookup(pSymbolTable->funcTable, ident);
 		if (!pEntries)
 		{
 			pEntries = insertNew(&pSymbolTable->funcTable, ident);
@@ -229,19 +229,19 @@ bool tryInsert(
 	}
 }
 
-SymbolInfo * lookupVar(SymbolTable * pSymbTable, const ScopedIdentifier & ident)
+SymbolInfo * lookupVar(const SymbolTable & symbTable, const ScopedIdentifier & ident)
 {
-    return lookup(&pSymbTable->varTable, ident);
+    return lookup(symbTable.varTable, ident);
 }
 
-SymbolInfo * lookupType(SymbolTable * pSymbTable, const ScopedIdentifier & ident)
+SymbolInfo * lookupType(const SymbolTable & symbTable, const ScopedIdentifier & ident)
 {
-    return lookup(&pSymbTable->typeTable, ident);
+    return lookup(symbTable.typeTable, ident);
 }
 
-DynamicArray<SymbolInfo> * lookupFunc(SymbolTable * pSymbTable, const ScopedIdentifier & ident)
+DynamicArray<SymbolInfo> * lookupFunc(const SymbolTable & symbTable, const ScopedIdentifier & ident)
 {
-    return lookup(&pSymbTable->funcTable, ident);
+    return lookup(symbTable.funcTable, ident);
 }
 
 void setSymbolInfo(SymbolInfo * pSymbInfo, const ScopedIdentifier & ident, SYMBOLK symbolk, AstNode * pNode)

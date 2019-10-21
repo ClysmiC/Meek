@@ -100,9 +100,9 @@ struct SymbolTable
     int sequenceIdNext = 0;
 };
 
-SymbolInfo * lookupVar(SymbolTable * pSymbTable, const ScopedIdentifier & ident);
-SymbolInfo * lookupType(SymbolTable * pSymbTable, const ScopedIdentifier & ident);
-DynamicArray<SymbolInfo> * lookupFunc(SymbolTable * pSymbTable, const ScopedIdentifier & ident);
+SymbolInfo * lookupVar(const SymbolTable & pSymbTable, const ScopedIdentifier & ident);
+SymbolInfo * lookupType(const SymbolTable & pSymbTable, const ScopedIdentifier & ident);
+DynamicArray<SymbolInfo> * lookupFunc(const SymbolTable & pSymbTable, const ScopedIdentifier & ident);
 
 void insertBuiltInSymbols(SymbolTable * pSymbolTable);
 

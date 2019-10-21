@@ -400,7 +400,6 @@ finishStruct:
 
 	Type type;
 	init(&type, false /* isFuncType */);
-	Defer(dispose(&type););
 
 	type.ident = pNode->ident;
 	pNode->typidSelf = ensureInTypeTable(&pParser->typeTable, type, true /* debugAssertIfAlreadyInTable */ );
@@ -1448,7 +1447,7 @@ PARSETYPERESULT tryParseType(
 		Assert(pTypeIdent->tokenk == TOKENK_Identifier);
 		setIdentNoScope(&pType->ident, pTypeIdent);
 
-        typid = resolveTypeOrSetPending(pParser, pType, ppoTypePendingResolution);
+        typid = resolveIntoTypeTableOrSetPending(pParser, pType, ppoTypePendingResolution);
 	}
 	else
 	{
@@ -1463,7 +1462,7 @@ PARSETYPERESULT tryParseType(
 			return PARSETYPERESULT_ParseFailed;
 		}
 
-        typid = resolveTypeOrSetPending(pParser, pType, ppoTypePendingResolution);
+        typid = resolveIntoTypeTableOrSetPending(pParser, pType, ppoTypePendingResolution);
 	}
 
 	parseSucceeded = true;		// Used in Defer

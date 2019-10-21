@@ -67,6 +67,10 @@ int main()
 
     bool success;
     AstNode * pAst = parseProgram(&parser, &success);
+    
+    // TODO: Check for parse error
+
+    bool allTypesResolved = tryResolveAllPendingTypesIntoTypeTable(&parser);
 
 #if DEBUG
     debugPrintAst(*pAst);

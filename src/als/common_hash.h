@@ -430,14 +430,14 @@ inline bool _alsHashHelper(
 
 template <typename K, typename V>
 V * lookup(
-	HashMap<K, V> * pHashmap,
+	const HashMap<K, V> & pHashmap,
 	const K & key,
 	K ** ppoKeyFound=nullptr)		// Only really useful for BiHashMap... don't set this in most cases!
 {
 	V * pResult = nullptr;
 
 	_alsHashHelper(
-		pHashmap,
+		const_cast<HashMap<K, V> *>(&pHashmap),   // Helper is a more general function so the parameter can't be const, but the lookup code path maintains constness
 		key,
 		_ALSHASHOPK_Lookup,
 		static_cast<const V*>(nullptr),		// Update
@@ -609,9 +609,9 @@ bool insert(BiHashMap<K, V> * pBimap, const K & key, const V & value)
 	//	so that we don't do an update if the item is already in the table.
 	//	Maybe have insert which never does updates and then have "upsert" ?
 
-	if (lookup(&pBimap->mapKV, key)) return false;
+	if (lookup(pBimap->mapKV, key)) return false;
 
-	ALS_COMMON_HASH_Assert(!lookup(&pBimap->mapVK, value));
+	ALS_COMMON_HASH_Assert(!lookup(pBimap->mapVK, value));
 
 	K * pKeyInTable;
 	V * pValueInTable;
@@ -626,15 +626,23 @@ bool insert(BiHashMap<K, V> * pBimap, const K & key, const V & value)
 }
 
 template <typename K, typename V>
-const V * lookupByKey(BiHashMap<K, V> * pBimap, const K & key)
+const V * lookupByKey(const BiHashMap<K, V> & bimap, const K & key)
 {
-	return *lookup(&pBimap->mapKV, key);
+	V ** ppResult = lookup(bimap.mapKV, key);
+
+    if (ppResult) return *ppResult;
+
+    return nullptr;
 }
 
 template <typename K, typename V>
-const K * lookupByValue(BiHashMap<K, V> * pBimap, const V & value)
+const K * lookupByValue(BiHashMap<K, V> & bimap, const V & value)
 {
-	return *lookup(&pBimap->mapVK, value);
+    K ** ppResult = lookup(bimap.mapVK, value);
+
+    if (ppResult) return *ppResult;
+
+    return nullptr;
 }
 
 template <typename K, typename V>

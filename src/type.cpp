@@ -286,7 +286,7 @@ void init(TypeTable * pTable)
 
 const Type * lookupType(TypeTable * pTable, typid typid)
 {
-    return lookupByKey(&pTable->table, typid);
+    return lookupByKey(pTable->table, typid);
 }
 
 typid ensureInTypeTable(TypeTable * pTable, const Type & type, bool debugAssertIfAlreadyInTable)
@@ -295,7 +295,7 @@ typid ensureInTypeTable(TypeTable * pTable, const Type & type, bool debugAssertI
 
 	// SLOW: Could write a combined lookup + insertNew if not found query
 
-	const typid * pTypid = lookupByValue(&pTable->table, type);
+	const typid * pTypid = lookupByValue(pTable->table, type);
 	if (pTypid)
 	{
 		Assert(!debugAssertIfAlreadyInTable);
@@ -309,33 +309,30 @@ typid ensureInTypeTable(TypeTable * pTable, const Type & type, bool debugAssertI
     return typidInsert;
 }
 
-typid resolveTypeOrSetPending(Parser * pParser, Type * pType, TypePendingResolution ** ppoTypePendingResolution)
+bool tryResolveType(Type * pType, const SymbolTable & symbolTable, const Stack<Scope> & scopeStack)
 {
-	Assert(!isTypeResolved(*pType));
-    AssertInfo(ppoTypePendingResolution, "You must have a plan for handling types that are pending resolution if you call this function!");
-
-	bool resolved = false;
-
 	if (!pType->isFuncType)
 	{
 		// Non-func type
 
 		ScopedIdentifier candidate = pType->ident;
 
-		for (int i = 0; i < count(pParser->scopeStack); i++)
+		for (int i = 0; i < count(scopeStack); i++)
 		{
             Scope candidateScope;
-			Verify(peekFar(pParser->scopeStack, i, &candidateScope));
+			Verify(peekFar(scopeStack, i, &candidateScope));
 
             candidate.defnclScopeid = candidateScope.id;
+            candidate.hash = scopedIdentHash(candidate);
 
-			if (lookupType(&pParser->symbolTable, candidate))
+			if (lookupType(symbolTable, candidate))
 			{
 				pType->ident = candidate;
-				resolved = true;
-				goto end;
+				return true;
 			}
 		}
+
+        return false;
 	}
 	else
 	{
@@ -345,8 +342,7 @@ typid resolveTypeOrSetPending(Parser * pParser, Type * pType, TypePendingResolut
         {
             if (!isTypeResolved(pType->funcType.paramTypids[i]))
             {
-                resolved = false;
-                goto end;
+                return false;
             }
 		}
 
@@ -354,23 +350,29 @@ typid resolveTypeOrSetPending(Parser * pParser, Type * pType, TypePendingResolut
 		{
             if (!isTypeResolved(pType->funcType.returnTypids[i]))
             {
-                resolved = false;
-                goto end;
+				return false;
             }
 		}
 
-		resolved = true;
+		return true;
 	}
+}
 
-end:
-	if (resolved)
+typid resolveIntoTypeTableOrSetPending(
+	Parser * pParser,
+	Type * pType,
+	TypePendingResolution ** ppoTypePendingResolution)
+{
+	Assert(!isTypeResolved(*pType));
+    AssertInfo(ppoTypePendingResolution, "You must have a plan for handling types that are pending resolution if you call this function!");
+
+	if (tryResolveType(pType, pParser->symbolTable, pParser->scopeStack))
 	{
 		typid typid = ensureInTypeTable(&pParser->typeTable, *pType);
         Assert(isTypeResolved(typid));
 
         *ppoTypePendingResolution = nullptr;
 
-		dispose(pType);
 		releaseType(pParser, pType);
 
         return typid;
@@ -380,9 +382,52 @@ end:
         TypePendingResolution * pTypePending = appendNew(&pParser->typeTable.typesPendingResolution);
         pTypePending->pType = pType;
         pTypePending->pTypidUpdateWhenResolved = nullptr;    // NOTE: Caller sets this value via the pointer that we return in an out param
-        
+
+		init(&pTypePending->scopeStack);
+
+		// TODO: Deep copy function for stack/array
+
+		for (int i = count(pParser->scopeStack) - 1; i >= 0; i--)
+		{
+            Scope scope;
+            Verify(peekFar(pParser->scopeStack, i, &scope));
+
+			push(&pTypePending->scopeStack, scope);
+		}
+
         *ppoTypePendingResolution = pTypePending;
 
         return gc_typidUnresolved;
 	}
+}
+
+bool tryResolveAllPendingTypesIntoTypeTable(Parser * pParser)
+{
+	bool madeProgress = true;
+	while (madeProgress && pParser->typeTable.typesPendingResolution.cItem > 0)
+	{
+		madeProgress = false;
+
+		// Iterate backwards to perform removals w/o any fuss
+
+		for (int i = pParser->typeTable.typesPendingResolution.cItem - 1; i >= 0; i--)
+		{
+			TypePendingResolution * pTypePending = &pParser->typeTable.typesPendingResolution[i];
+
+			if (tryResolveType(pTypePending->pType, pParser->symbolTable, pTypePending->scopeStack))
+			{
+				madeProgress = true;
+
+				typid typid = ensureInTypeTable(&pParser->typeTable, *(pTypePending->pType));
+				*(pTypePending->pTypidUpdateWhenResolved) = typid;
+
+				dispose(&pTypePending->scopeStack);
+				releaseType(pParser, pTypePending->pType);
+
+				unorderedRemove(&pParser->typeTable.typesPendingResolution, i);
+			}
+		}
+	}
+
+	return (pParser->typeTable.typesPendingResolution.cItem == 0);
 }

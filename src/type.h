@@ -99,12 +99,14 @@ inline bool typidEq(const typid & typid0, const typid & typid1)
 
 struct TypePendingResolution
 {
+	Stack<Scope> scopeStack;
 	Type * pType;
 	typid * pTypidUpdateWhenResolved;
 };
 
 struct TypeTable
 {
+	// Parser * pParser;		// HACK: Need to access parser to release Types once they get resolved, since the originals are pool allocated from the parser
 	BiHashMap<typid, Type> table;
 
 	// Due to order independence of certain types of declarations, unresolved types are put in
@@ -116,10 +118,15 @@ struct TypeTable
 };
 
 void init(TypeTable * pTable);
-typid ensureInTypeTable(TypeTable * pTable, const Type & type, bool debugAssertIfAlreadyInTable=false);
 const Type * lookupType(TypeTable * pTable, typid typid);
 
-// NOTE: If succeeds in resolving pType, this function disposes/releases it (since it has a copy in the type table
-//	that is accessible by the returned typid)
+// NOTE: This function releases pType
+typid ensureInTypeTable(TypeTable * pTable, const Type & type, bool debugAssertIfAlreadyInTable=false);
 
-typid resolveTypeOrSetPending(Parser * pParser, Type * pType, TypePendingResolution ** ppoTypePendingResolution);
+bool tryResolveType(Type * pType, const SymbolTable & symbolTable, const Stack<Scope> & scopeStack);
+typid resolveIntoTypeTableOrSetPending(
+	Parser * pParser,
+	Type * pType,
+	TypePendingResolution ** ppoTypePendingResolution);
+
+bool tryResolveAllPendingTypesIntoTypeTable(Parser * pParser);
