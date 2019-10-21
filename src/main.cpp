@@ -72,6 +72,8 @@ int main()
 
     bool allTypesResolved = tryResolveAllPendingTypesIntoTypeTable(&parser);
 
+    // TODO: resolve function symbols (function overload stuff needs types to be all resolved to work)
+
 #if DEBUG
     debugPrintAst(*pAst);
 

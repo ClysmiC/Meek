@@ -1,19 +1,6 @@
-fn returnVoidImplicit (int a)
+struct DynamicArray<T>
 {
-}
-
-fn returnVoidExplicit (int a) -> ()
-{
-}
-
-fn returnSingleValue (int a) -> int
-{
-}
-
-fn returnSingleValueParenthesized (int a) -> (int)
-{
-}
-
-fn returnMultipleValues (int a) -> (int, int)
-{
+	^T pBuffer = nullptr;
+	int cItem = 0;
+	int cCapacity = 0;
 }
