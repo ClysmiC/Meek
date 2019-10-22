@@ -2,6 +2,8 @@
 
 #include "als.h"
 
+#include "id_def.h"
+
 struct AstNode;
 struct AstVarDeclStmt;
 struct AstFuncDefnStmt;
@@ -9,12 +11,11 @@ struct AstStructDefnStmt;
 struct Token;
 struct Type;
 
-typedef u32 scopeid;
 extern const scopeid gc_unresolvedScopeid;
 extern const scopeid gc_builtInScopeid;
 extern const scopeid gc_globalScopeid;
 
-typedef u32 symbseqid;
+
 extern const symbseqid gc_unsetSymbseqid;
 
 enum SCOPEK : s8
@@ -77,10 +78,12 @@ struct SymbolInfo
 		AstVarDeclStmt * pVarDeclStmt;		    // SYMBOLK_Var
 		AstFuncDefnStmt * pFuncDefnStmt;		// SYMBOLK_Func
 		AstStructDefnStmt * pStructDefnStmt;	// SYMBOLK_Struct
+        typid typid;                            // SYMBOLK_BuiltInType
 	};
 };
 
 void setSymbolInfo(SymbolInfo * pSymbInfo, const ScopedIdentifier & ident, SYMBOLK symbolk, AstNode * pDefncl);
+void setBuiltinTypeSymbolInfo(SymbolInfo * pSymbInfo, const ScopedIdentifier & ident, typid typid);
 
 bool isDeclarationOrderIndependent(const SymbolInfo & info);
 bool isDeclarationOrderIndependent(SYMBOLK symbolk);
@@ -91,7 +94,7 @@ struct SymbolTable
 	HashMap<ScopedIdentifier, SymbolInfo> typeTable;
 	HashMap<ScopedIdentifier, DynamicArray<SymbolInfo>> funcTable;
 
-    DynamicArray<SymbolInfo> funcSymbolsPendingTypeResolution;
+    DynamicArray<SymbolInfo> funcSymbolsPendingResolution;
 
 	DynamicArray<SymbolInfo> redefinedVars;
 	DynamicArray<SymbolInfo> redefinedTypes;
@@ -100,16 +103,17 @@ struct SymbolTable
     int sequenceIdNext = 0;
 };
 
-SymbolInfo * lookupVar(const SymbolTable & pSymbTable, const ScopedIdentifier & ident);
-SymbolInfo * lookupType(const SymbolTable & pSymbTable, const ScopedIdentifier & ident);
-DynamicArray<SymbolInfo> * lookupFunc(const SymbolTable & pSymbTable, const ScopedIdentifier & ident);
-
-void insertBuiltInSymbols(SymbolTable * pSymbolTable);
-
 void init(SymbolTable * pSymbTable);
 void dispose(SymbolTable * pSymbTable);
 
+void insertBuiltInSymbols(SymbolTable * pSymbolTable);
+
+SymbolInfo * lookupVar(const SymbolTable & symbTable, const ScopedIdentifier & ident);
+SymbolInfo * lookupType(const SymbolTable & symbTable, const ScopedIdentifier & ident);
+DynamicArray<SymbolInfo> * lookupFunc(const SymbolTable & symbTable, const ScopedIdentifier & ident);
+
 bool tryInsert(SymbolTable * pSymbolTable, const ScopedIdentifier & ident, const SymbolInfo & symbInfo);
+bool tryResolvePendingFuncSymbolsAfterTypesResolved(SymbolTable * pSymbTable);
 
 #if DEBUG
 void debugPrintType(const Type & type);

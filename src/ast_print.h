@@ -1,6 +1,7 @@
 #pragma once
 
 #include "als.h"
+#include "type.h"
 
 // NOTE: This is purely debug code that is hacked together without much care or thought.
 
@@ -9,27 +10,32 @@
 struct AstNode;
 struct AstErr;
 struct Type;
+struct TypeTable;
+
+struct DebugPrintCtx
+{
+    TypeTable * pTypeTable;
+    DynamicArray<bool> mpLevelSkip;
+};
 
 // Public
 
-void debugPrintAst(const AstNode & pRoot);
+void debugPrintAst(DebugPrintCtx * pCtx, const AstNode & root);
 
 // Internal
 
-void debugPrintSubAst(const AstNode & pNode, int level, bool skipAfterArrow, DynamicArray<bool> * pMapLevelSkip);
+void debugPrintSubAst(DebugPrintCtx * pCtx, const AstNode & node, int level, bool skipAfterArrow);
 
-void debugPrintAst(const AstNode & root);
+void setSkip(DebugPrintCtx * pCtx, int level, bool skip);
 
-void setSkip(DynamicArray<bool> * pMapLevelSkip, int level, bool skip);
+void printTabs(DebugPrintCtx * pCtx, int level, bool printArrows, bool skipAfterArrow);
 
-void printTabs(int level, bool printArrows, bool skipAfterArrow, DynamicArray<bool> * pMapLevelSkip);
+void printChildren(DebugPrintCtx * pCtx, const DynamicArray<AstNode *> & apChildren, int level, const char * label, bool setSkipOnLastChild);
 
-void printChildren(const DynamicArray<AstNode *> & apChildren, int level, const char * label, bool setSkipOnLastChild, DynamicArray<bool> * pMapLevelSkip);
+void printErrChildren(DebugPrintCtx * pCtx, const AstErr & node, int level);
 
-void printErrChildren(const AstErr & node, int level, DynamicArray<bool> * pMapLevelSkip);
+void debugPrintFuncHeader(DebugPrintCtx * pCtx, const DynamicArray<AstNode *> & apParamVarDecls, const DynamicArray<AstNode *> & apReturnVarDecls, int level, bool skipAfterArrow);
 
-void debugPrintFuncHeader(const DynamicArray<AstNode *> & apParamVarDecls, const DynamicArray<AstNode *> & apReturnVarDecls, int level, bool skipAfterArrow, DynamicArray<bool> * pMapLevelSkip);
-
-void debugPrintType(const Type & type, int level, bool skipAfterArrow, DynamicArray<bool> * pMapLevelSkip);
+void debugPrintType(DebugPrintCtx * pCtx, typid typid, int level, bool skipAfterArrow);
 
 #endif

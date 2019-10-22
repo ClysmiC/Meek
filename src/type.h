@@ -1,6 +1,8 @@
 #pragma once
 
 #include "als.h"
+
+#include "id_def.h"
 #include "symbol.h"
 #include "token.h"
 
@@ -10,10 +12,12 @@ struct AstNode;
 struct Parser;
 struct Type;
 
-typedef u32 typid;
-
 extern const typid gc_typidUnresolved;
 extern const typid gc_typidUnresolvedInferred;
+
+extern const typid gc_typidInt;
+extern const typid gc_typidFloat;
+extern const typid gc_typidBool;
 
 enum TYPEMODK : u8
 {
@@ -77,13 +81,6 @@ void dispose(FuncType * pFuncType);
 bool areVarDeclListTypesFullyResolved(const DynamicArray<AstNode *> & apVarDecls);
 bool areVarDeclListTypesEq(const DynamicArray<AstNode *> & apVarDecls0, const DynamicArray<AstNode *> & apVarDecls1);
 
-// Life-cycle of a type
-//	- During parse, types are allocated by a pool allocator and filled out w/ all known info.
-//	- If type can be fully resolved during parse, we ensure that a copy is in the table (copying it in if needed) and then
-//		dispose/release the original.
-//	- If it can't be fully resolved, we store a pointer to it in the "pending resolution" list. After parsing,
-//		we iterate over the list as many times as needed to insert all types pending resolution. Once resolved,
-//		we do the same thing as types that get resolved during the parse (copy into table then dispose/release original)
 
 inline uint typidHash(const typid & typid)
 {
@@ -104,6 +101,14 @@ struct TypePendingResolution
 	typid * pTypidUpdateWhenResolved;
 };
 
+// Life-cycle of a type
+//	- During parse, types are allocated by a pool allocator and filled out w/ all known info.
+//	- If type can be fully resolved during parse, we ensure that a copy is in the table (copying it in if needed) and then
+//		release the original
+//	- If it can't be fully resolved, we store a pointer to it in the "pending resolution" list. After parsing,
+//		we iterate over the list as many times as needed to insert all types pending resolution. Once resolved,
+//		we do the same thing as types that get resolved during the parse (copy into table then dispose/release original)
+
 struct TypeTable
 {
 	// Parser * pParser;		// HACK: Need to access parser to release Types once they get resolved, since the originals are pool allocated from the parser
@@ -118,6 +123,7 @@ struct TypeTable
 };
 
 void init(TypeTable * pTable);
+void insertBuiltInTypes(TypeTable * pTable);
 const Type * lookupType(TypeTable * pTable, typid typid);
 
 // NOTE: This function releases pType

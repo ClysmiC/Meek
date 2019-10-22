@@ -378,6 +378,17 @@ void init(Stack<T> * pStack)
 }
 
 template<typename T>
+void initCopy(Stack<T> * pStack, const Stack<T> & stackSrc)
+{
+	init(&pStack->a);
+
+	for (int i = 0; i < stackSrc.a.cItem; i++)
+	{
+		append(&pStack->a, stackSrc.a[i]);
+	}
+}
+
+template<typename T>
 void dispose(Stack<T> * pStack)
 {
 	dispose(&pStack->a);

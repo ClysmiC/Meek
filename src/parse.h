@@ -223,13 +223,3 @@ inline void releaseToken(Parser * pParser, Token * pToken)
 {
 	release(&pParser->tokenAlloc, pToken);
 }
-
-// Debug
-// TODO: Move this and implementation to ast_print.h/.cpp
-
-#if DEBUG
-
-void debugPrintAst(const AstNode & pRoot);
-void debugPrintSubAst(const AstNode & pNode, int level, bool skipAfterArrow, DynamicArray<bool> * pMapLevelSkip);
-
-#endif

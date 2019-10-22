@@ -8,34 +8,34 @@
 #if DEBUG
 
 
-void debugPrintAst(const AstNode & root)
+void debugPrintAst(DebugPrintCtx * pCtx, const AstNode & root)
 {
     DynamicArray<bool> mpLevelSkip;
     init(&mpLevelSkip);
     Defer(dispose(&mpLevelSkip));
 
-    debugPrintSubAst(root, 0, false, &mpLevelSkip);
+    debugPrintSubAst(pCtx, root, 0, false);
     printf("\n");
 }
 
-void setSkip(DynamicArray<bool> * pMapLevelSkip, int level, bool skip) {
-    Assert(level <= pMapLevelSkip->cItem);
+void setSkip(DebugPrintCtx * pCtx, int level, bool skip) {
+    Assert(level <= pCtx->mpLevelSkip.cItem);
 
-    if (level == pMapLevelSkip->cItem)
+    if (level == pCtx->mpLevelSkip.cItem)
     {
-        append(pMapLevelSkip, skip);
+        append(&pCtx->mpLevelSkip, skip);
     }
     else
     {
-        (*pMapLevelSkip)[level] = skip;
+        pCtx->mpLevelSkip[level] = skip;
     }
 }
 
-void printTabs(int level, bool printArrows, bool skipAfterArrow, DynamicArray<bool> * pMapLevelSkip) {
+void printTabs(DebugPrintCtx * pCtx, int level, bool printArrows, bool skipAfterArrow) {
     Assert(Implies(skipAfterArrow, printArrows));
     for (int i = 0; i < level; i++)
     {
-        if ((*pMapLevelSkip)[i])
+        if (pCtx->mpLevelSkip[i])
         {
             printf("   ");
         }
@@ -49,7 +49,7 @@ void printTabs(int level, bool printArrows, bool skipAfterArrow, DynamicArray<bo
 
                 if (skipAfterArrow)
                 {
-                    setSkip(pMapLevelSkip, level - 1, skipAfterArrow);
+                    setSkip(pCtx, level - 1, skipAfterArrow);
                 }
             }
             else
@@ -60,7 +60,7 @@ void printTabs(int level, bool printArrows, bool skipAfterArrow, DynamicArray<bo
     }
 };
 
-void printChildren(const DynamicArray<AstNode *> & apChildren, int level, const char * label, bool setSkipOnLastChild, DynamicArray<bool> * pMapLevelSkip)
+void printChildren(DebugPrintCtx * pCtx, const DynamicArray<AstNode *> & apChildren, int level, const char * label, bool setSkipOnLastChild)
 {
     for (int i = 0; i < apChildren.cItem; i++)
     {
@@ -68,155 +68,165 @@ void printChildren(const DynamicArray<AstNode *> & apChildren, int level, const 
         bool shouldSetSkip = setSkipOnLastChild && isLastChild;
 
         printf("\n");
-        printTabs(level, false, false, pMapLevelSkip);
+        printTabs(pCtx, level, false, false);
 
         printf("(%s %d):", label, i);
         debugPrintSubAst(
+            pCtx,
             *apChildren[i],
             level,
-            shouldSetSkip,
-            pMapLevelSkip
+            shouldSetSkip
         );
 
         if (!isLastChild)
         {
             printf("\n");
-            printTabs(level, false, false, pMapLevelSkip);
+            printTabs(pCtx, level, false, false);
         }
     }
 };
 
-void printErrChildren(const AstErr & node, int level, DynamicArray<bool> * pMapLevelSkip)
+void printErrChildren(DebugPrintCtx * pCtx, const AstErr & node, int level)
 {
-    printChildren(node.apChildren, level, "child", true, pMapLevelSkip);
+    printChildren(pCtx, node.apChildren, level, "child", true);
 };
 
-void debugPrintFuncHeader(const DynamicArray<AstNode *> & apParamVarDecls, const DynamicArray<AstNode *> & apReturnVarDecls, int level, bool skipAfterArrow, DynamicArray<bool> * pMapLevelSkip)
+void debugPrintFuncHeader(DebugPrintCtx * pCtx, const DynamicArray<AstNode *> & apParamVarDecls, const DynamicArray<AstNode *> & apReturnVarDecls, int level, bool skipAfterArrow)
 {
     if (apParamVarDecls.cItem == 0)
     {
         printf("\n");
-        printTabs(level, true, false, pMapLevelSkip);
+        printTabs(pCtx, level, true, false);
         printf("(no params)");
     }
     else
     {
-        printChildren(apParamVarDecls, level, "param", false, pMapLevelSkip);
+        printChildren(pCtx, apParamVarDecls, level, "param", false);
     }
 
     if (apReturnVarDecls.cItem == 0)
     {
         printf("\n");
-        printTabs(level, true, skipAfterArrow, pMapLevelSkip);
+        printTabs(pCtx, level, true, skipAfterArrow);
         printf("(no return vals)");
     }
     else
     {
-        printChildren(apReturnVarDecls, level, "return val", skipAfterArrow, pMapLevelSkip);
+        printChildren(pCtx, apReturnVarDecls, level, "return val", skipAfterArrow);
     }
 };
 
-void debugPrintType(const Type & type, int level, bool skipAfterArrow, DynamicArray<bool> * pMapLevelSkip)
+void debugPrintType(DebugPrintCtx * pCtx, typid typid, int level, bool skipAfterArrow)
 {
-    printf("TODO: fix me");
-
-    /*setSkip(pMapLevelSkip, level, false);
-
+    setSkip(pCtx, level, false);
     int levelNext = level + 1;
 
-    for (int i = 0; i < type.aTypemods.cItem; i++)
+    if (!isTypeResolved(typid))
     {
         printf("\n");
-        printTabs(level, false, false, pMapLevelSkip);
+        printTabs(pCtx, level, false, false);
 
-        TypeModifier ptm = type.aTypemods[i];
+        printf("!! unresolved type !!\n");
 
-        if (ptm.typemodk == TYPEMODK_Array)
+        return;
+    }
+
+    const Type * pType = lookupType(pCtx->pTypeTable, typid);
+    Assert(pType);
+
+    for (int i = 0; i < pType->aTypemods.cItem; i++)
+    {
+        printf("\n");
+        printTabs(pCtx, level, false, false);
+
+        TypeModifier tmod = pType->aTypemods[i];
+
+        if (tmod.typemodk == TYPEMODK_Array)
         {
             printf("(array of)");
-            debugPrintSubAst(*ptm.pSubscriptExpr, levelNext, false, pMapLevelSkip);
+            debugPrintSubAst(pCtx, *tmod.pSubscriptExpr, levelNext, false);
         }
         else
         {
-            Assert(ptm.typemodk == TYPEMODK_Pointer);
+            Assert(tmod.typemodk == TYPEMODK_Pointer);
             printf("(pointer to)");
         }
     }
 
-    if (type.isFuncType)
+    if (pType->isFuncType)
     {
         printf("\n");
-        printTabs(level, false, false, pMapLevelSkip);
+        printTabs(pCtx, level, false, false);
         printf("(func)");
 
         printf("\n");
-        printTabs(level, false, false, pMapLevelSkip);
+        printTabs(pCtx, level, false, false);
 
         printf("\n");
-        printTabs(level, false, false, pMapLevelSkip);
+        printTabs(pCtx, level, false, false);
 
         printf("(params)");
-        printTabs(level, false, false, pMapLevelSkip);
+        printTabs(pCtx, level, false, false);
 
-        for (int i = 0; i < type.funcType.paramTypids.cItem; i++)
+        for (int i = 0; i < pType->funcType.paramTypids.cItem; i++)
         {
-            bool isLastChild = i == type.funcType.paramTypids.cItem - 1;
+            bool isLastChild = i == pType->funcType.paramTypids.cItem - 1;
 
             printf("\n");
-            printTabs(level, false, false, pMapLevelSkip);
+            printTabs(pCtx, level, false, false);
 
             printf("(%s %d):", "param", i);
 
-            debugPrintType(*type.funcType.paramTypids[i], levelNext, false, pMapLevelSkip);
+            debugPrintType(pCtx, pType->funcType.paramTypids[i], levelNext, false);
 
             if (!isLastChild)
             {
                 printf("\n");
-                printTabs(level, false, false, pMapLevelSkip);
+                printTabs(pCtx, level, false, false);
             }
         }
 
         printf("\n");
-        printTabs(level, false, false, pMapLevelSkip);
+        printTabs(pCtx, level, false, false);
 
         printf("(return values)");
-        printTabs(level, false, false, pMapLevelSkip);
+        printTabs(pCtx, level, false, false);
 
-        for (int i = 0; i < type.funcType.returnTypids.cItem; i++)
+        for (int i = 0; i < pType->funcType.returnTypids.cItem; i++)
         {
-            bool isLastChild = i == type.funcType.returnTypids.cItem - 1;
+            bool isLastChild = i == pType->funcType.returnTypids.cItem - 1;
             bool shouldSetSkip = skipAfterArrow && isLastChild;
 
             printf("\n");
-            printTabs(level, false, false, pMapLevelSkip);
+            printTabs(pCtx, level, false, false);
 
             printf("(%s %d):", "return", i);
 
-            debugPrintType(*type.funcType.returnTypids[i], levelNext, isLastChild, pMapLevelSkip);
+            debugPrintType(pCtx, pType->funcType.returnTypids[i], levelNext, isLastChild);
 
             if (!isLastChild)
             {
                 printf("\n");
-                printTabs(level, false, false, pMapLevelSkip);
+                printTabs(pCtx, level, false, false);
             }
         }
     }
     else
     {
         printf("\n");
-        printTabs(level, true, skipAfterArrow, pMapLevelSkip);
-        printf("%s", type.ident.pToken->lexeme);
-    }*/
+        printTabs(pCtx, level, true, skipAfterArrow);
+        printf("%s", pType->ident.pToken->lexeme);
+    }
 };
 
-void debugPrintSubAst(const AstNode & node, int level, bool skipAfterArrow, DynamicArray<bool> * pMapLevelSkip)
+void debugPrintSubAst(DebugPrintCtx * pCtx, const AstNode & node, int level, bool skipAfterArrow)
 {
     static const char * scanErrorString = "[scan error]:";
     static const char * parseErrorString = "[parse error]:";
 
-    setSkip(pMapLevelSkip, level, false);
+    setSkip(pCtx, level, false);
     printf("\n");
-    printTabs(level, true, skipAfterArrow, pMapLevelSkip);
+    printTabs(pCtx, level, true, skipAfterArrow);
 
     int levelNext = level + 1;
 
@@ -252,12 +262,12 @@ void debugPrintSubAst(const AstNode & node, int level, bool skipAfterArrow, Dyna
                 for (int i = 0; i < errMsgs.cItem; i++)
                 {
                     printf("\n");
-                    printTabs(level, true, skipAfterArrow, pMapLevelSkip);
+                    printTabs(pCtx, level, true, skipAfterArrow);
                     printf("- %s", errMsgs[i].aBuffer);
                 }
             }
 
-            printErrChildren(*pErrCasted, levelNext, pMapLevelSkip);
+            printErrChildren(pCtx, *pErrCasted, levelNext);
         } break;
 
         case ASTK_BubbleErr:
@@ -274,8 +284,8 @@ void debugPrintSubAst(const AstNode & node, int level, bool skipAfterArrow, Dyna
 
                 printf("\n");
 
-                printTabs(levelNext, false, false, pMapLevelSkip);
-                printErrChildren(*pErrCasted, levelNext, pMapLevelSkip);
+                printTabs(pCtx, levelNext, false, false);
+                printErrChildren(pCtx, *pErrCasted, levelNext);
             }
         } break;
 
@@ -293,8 +303,8 @@ void debugPrintSubAst(const AstNode & node, int level, bool skipAfterArrow, Dyna
 
                 printf("\n");
 
-                printTabs(levelNext, false, false, pMapLevelSkip);
-                printErrChildren(*pErrCasted, levelNext, pMapLevelSkip);
+                printTabs(pCtx, levelNext, false, false);
+                printErrChildren(pCtx, *pErrCasted, levelNext);
             }
         } break;
 
@@ -334,8 +344,8 @@ void debugPrintSubAst(const AstNode & node, int level, bool skipAfterArrow, Dyna
 
                 printf("\n");
 
-                printTabs(levelNext, false, false, pMapLevelSkip);
-                printErrChildren(*pErrCasted, levelNext, pMapLevelSkip);
+                printTabs(pCtx, levelNext, false, false);
+                printErrChildren(pCtx, *pErrCasted, levelNext);
             }
         } break;
 
@@ -353,8 +363,8 @@ void debugPrintSubAst(const AstNode & node, int level, bool skipAfterArrow, Dyna
 
                 printf("\n");
 
-                printTabs(levelNext, false, false, pMapLevelSkip);
-                printErrChildren(*pErrCasted, levelNext, pMapLevelSkip);
+                printTabs(pCtx, levelNext, false, false);
+                printErrChildren(pCtx, *pErrCasted, levelNext);
             }
         } break;
 
@@ -372,8 +382,8 @@ void debugPrintSubAst(const AstNode & node, int level, bool skipAfterArrow, Dyna
 
                 printf("\n");
 
-                printTabs(levelNext, false, false, pMapLevelSkip);
-                printErrChildren(*pErrCasted, levelNext, pMapLevelSkip);
+                printTabs(pCtx, levelNext, false, false);
+                printErrChildren(pCtx, *pErrCasted, levelNext);
             }
         } break;
 
@@ -391,8 +401,8 @@ void debugPrintSubAst(const AstNode & node, int level, bool skipAfterArrow, Dyna
 
                 printf("\n");
 
-                printTabs(levelNext, false, false, pMapLevelSkip);
-                printErrChildren(*pErrCasted, levelNext, pMapLevelSkip);
+                printTabs(pCtx, levelNext, false, false);
+                printErrChildren(pCtx, *pErrCasted, levelNext);
             }
         } break;
 
@@ -410,8 +420,8 @@ void debugPrintSubAst(const AstNode & node, int level, bool skipAfterArrow, Dyna
 
                 printf("\n");
 
-                printTabs(levelNext, false, false, pMapLevelSkip);
-                printErrChildren(*pErrCasted, levelNext, pMapLevelSkip);
+                printTabs(pCtx, levelNext, false, false);
+                printErrChildren(pCtx, *pErrCasted, levelNext);
             }
         } break;
 
@@ -429,8 +439,8 @@ void debugPrintSubAst(const AstNode & node, int level, bool skipAfterArrow, Dyna
 
                 printf("\n");
 
-                printTabs(levelNext, false, false, pMapLevelSkip);
-                printErrChildren(*pErrCasted, levelNext, pMapLevelSkip);
+                printTabs(pCtx, levelNext, false, false);
+                printErrChildren(pCtx, *pErrCasted, levelNext);
             }
         } break;
 
@@ -445,12 +455,12 @@ void debugPrintSubAst(const AstNode & node, int level, bool skipAfterArrow, Dyna
             printf("%s ", pExpr->pOp->lexeme);
             printf("\n");
 
-            printTabs(levelNext, false, false, pMapLevelSkip);
-            debugPrintSubAst(*pExpr->pLhsExpr, levelNext, false, pMapLevelSkip);
+            printTabs(pCtx, levelNext, false, false);
+            debugPrintSubAst(pCtx, *pExpr->pLhsExpr, levelNext, false);
             printf("\n");
 
-            printTabs(levelNext, false, false, pMapLevelSkip);
-            debugPrintSubAst(*pExpr->pRhsExpr, levelNext, true, pMapLevelSkip);
+            printTabs(pCtx, levelNext, false, false);
+            debugPrintSubAst(pCtx, *pExpr->pRhsExpr, levelNext, true);
         } break;
 
         case ASTK_GroupExpr:
@@ -460,8 +470,8 @@ void debugPrintSubAst(const AstNode & node, int level, bool skipAfterArrow, Dyna
             printf("()");
             printf("\n");
 
-            printTabs(levelNext, false, false, pMapLevelSkip);
-            debugPrintSubAst(*pExpr->pExpr, levelNext, true, pMapLevelSkip);
+            printTabs(pCtx, levelNext, false, false);
+            debugPrintSubAst(pCtx, *pExpr->pExpr, levelNext, true);
         } break;
 
         case ASTK_LiteralExpr:
@@ -478,8 +488,8 @@ void debugPrintSubAst(const AstNode & node, int level, bool skipAfterArrow, Dyna
             printf("%s ", pExpr->pOp->lexeme);
             printf("\n");
 
-            printTabs(levelNext, false, false, pMapLevelSkip);
-            debugPrintSubAst(*pExpr->pExpr, levelNext, true, pMapLevelSkip);
+            printTabs(pCtx, levelNext, false, false);
+            debugPrintSubAst(pCtx, *pExpr->pExpr, levelNext, true);
         } break;
 
         case ASTK_VarExpr:
@@ -491,12 +501,12 @@ void debugPrintSubAst(const AstNode & node, int level, bool skipAfterArrow, Dyna
                 printf(". %s", pExpr->pTokenIdent->lexeme);
                 printf("\n");
 
-                printTabs(levelNext, false, false, pMapLevelSkip);
+                printTabs(pCtx, levelNext, false, false);
                 printf("\n");
 
-                printTabs(levelNext, false, false, pMapLevelSkip);
+                printTabs(pCtx, levelNext, false, false);
                 printf("(owner):");
-                debugPrintSubAst(*pExpr->pOwner, levelNext, true, pMapLevelSkip);
+                debugPrintSubAst(pCtx, *pExpr->pOwner, levelNext, true);
             }
             else
             {
@@ -510,17 +520,17 @@ void debugPrintSubAst(const AstNode & node, int level, bool skipAfterArrow, Dyna
             printf("[]");
             printf("\n");
 
-            printTabs(levelNext, false, false, pMapLevelSkip);
+            printTabs(pCtx, levelNext, false, false);
             printf("\n");
 
-            printTabs(levelNext, false, false, pMapLevelSkip);
+            printTabs(pCtx, levelNext, false, false);
             printf("(array):");
-            debugPrintSubAst(*pExpr->pArray, levelNext, false, pMapLevelSkip);
+            debugPrintSubAst(pCtx, *pExpr->pArray, levelNext, false);
 
             printf("\n");
-            printTabs(levelNext, false, false, pMapLevelSkip);
+            printTabs(pCtx, levelNext, false, false);
             printf("(subscript):");
-            debugPrintSubAst(*pExpr->pSubscript, levelNext, true, pMapLevelSkip);
+            debugPrintSubAst(pCtx, *pExpr->pSubscript, levelNext, true);
         } break;
 
         case ASTK_FuncCallExpr:
@@ -529,17 +539,17 @@ void debugPrintSubAst(const AstNode & node, int level, bool skipAfterArrow, Dyna
             printf("(func call)");
             printf("\n");
 
-            printTabs(levelNext, false, false, pMapLevelSkip);
+            printTabs(pCtx, levelNext, false, false);
             printf("\n");
 
-            printTabs(levelNext, false, false, pMapLevelSkip);
+            printTabs(pCtx, levelNext, false, false);
             printf("(func):");
 
             bool noArgs = pExpr->apArgs.cItem == 0;
 
-            debugPrintSubAst(*pExpr->pFunc, levelNext, noArgs, pMapLevelSkip);
+            debugPrintSubAst(pCtx, *pExpr->pFunc, levelNext, noArgs);
 
-            printChildren(pExpr->apArgs, levelNext, "arg", true, pMapLevelSkip);
+            printChildren(pCtx, pExpr->apArgs, levelNext, "arg", true);
         } break;
 
         case ASTK_FuncLiteralExpr:
@@ -549,11 +559,11 @@ void debugPrintSubAst(const AstNode & node, int level, bool skipAfterArrow, Dyna
             printf("(func literal)");
 
             printf("\n");
-            printTabs(levelNext, false, false, pMapLevelSkip);
+            printTabs(pCtx, levelNext, false, false);
 
-            debugPrintFuncHeader(pStmt->apParamVarDecls, pStmt->apReturnVarDecls, levelNext, false, pMapLevelSkip);
+            debugPrintFuncHeader(pCtx, pStmt->apParamVarDecls, pStmt->apReturnVarDecls, levelNext, false);
 
-            debugPrintSubAst(*pStmt->pBodyStmt, levelNext, true, pMapLevelSkip);
+            debugPrintSubAst(pCtx, *pStmt->pBodyStmt, levelNext, true);
         } break;
 
 
@@ -567,9 +577,9 @@ void debugPrintSubAst(const AstNode & node, int level, bool skipAfterArrow, Dyna
             printf("(expr stmt)");
             printf("\n");
 
-            printTabs(levelNext, false, false, pMapLevelSkip);
+            printTabs(pCtx, levelNext, false, false);
 
-            debugPrintSubAst(*pStmt->pExpr, levelNext, true, pMapLevelSkip);
+            debugPrintSubAst(pCtx, *pStmt->pExpr, levelNext, true);
         } break;
 
         case ASTK_AssignStmt:
@@ -579,69 +589,67 @@ void debugPrintSubAst(const AstNode & node, int level, bool skipAfterArrow, Dyna
             printf("%s", pStmt->pAssignToken->lexeme);
             printf("\n");
 
-            printTabs(levelNext, false, false, pMapLevelSkip);
+            printTabs(pCtx, levelNext, false, false);
             printf("\n");
 
-            printTabs(levelNext, false, false, pMapLevelSkip);
+            printTabs(pCtx, levelNext, false, false);
             printf("(lhs):");
 
-            debugPrintSubAst(*pStmt->pLhsExpr, levelNext, false, pMapLevelSkip);
+            debugPrintSubAst(pCtx, *pStmt->pLhsExpr, levelNext, false);
             printf("\n");
 
-            printTabs(levelNext, false, false, pMapLevelSkip);
+            printTabs(pCtx, levelNext, false, false);
             printf("\n");
 
-            printTabs(levelNext, false, false, pMapLevelSkip);
+            printTabs(pCtx, levelNext, false, false);
             printf("(rhs):");
             printf("\n");
 
-            printTabs(levelNext, false, false, pMapLevelSkip);
-            debugPrintSubAst(*pStmt->pRhsExpr, levelNext, true, pMapLevelSkip);
+            printTabs(pCtx, levelNext, false, false);
+            debugPrintSubAst(pCtx, *pStmt->pRhsExpr, levelNext, true);
         } break;
 
         case ASTK_VarDeclStmt:
         {
-            printf("TODO: fix me");
-
-            /*auto * pStmt = DownConst(&node, VarDeclStmt);
+            auto * pStmt = DownConst(&node, VarDeclStmt);
 
             printf("(var decl)");
             printf("\n");
 
-            printTabs(levelNext, false, false, pMapLevelSkip);
+            printTabs(pCtx, levelNext, false, false);
             printf("\n");
 
             if (pStmt->ident.pToken)
             {
-                printTabs(levelNext, false, false, pMapLevelSkip);
+                printTabs(pCtx, levelNext, false, false);
                 printf("(ident):");
                 printf("\n");
 
-                printTabs(levelNext, true, false, pMapLevelSkip);
+                printTabs(pCtx, levelNext, true, false);
                 printf("%s", pStmt->ident.pToken->lexeme);
                 printf("\n");
 
-                printTabs(levelNext, false, false, pMapLevelSkip);
+                printTabs(pCtx, levelNext, false, false);
                 printf("\n");
             }
 
-            printTabs(levelNext, false, false, pMapLevelSkip);
+            printTabs(pCtx, levelNext, false, false);
             printf("(type):");
 
             bool hasInitExpr = (pStmt->pInitExpr != nullptr);
 
-            debugPrintType(*pStmt->pType, levelNext, !hasInitExpr, pMapLevelSkip);
+            debugPrintType(pCtx, pStmt->typid, levelNext, !hasInitExpr);
             printf("\n");
-            printTabs(levelNext, false, false, pMapLevelSkip);
+            printTabs(pCtx, levelNext, false, false);
 
 
             if (hasInitExpr)
             {
                 printf("\n");
-                printTabs(levelNext, false, false, pMapLevelSkip);
+                printTabs(pCtx, levelNext, false, false);
                 printf("(init):");
-                debugPrintSubAst(*pStmt->pInitExpr, levelNext, true, pMapLevelSkip);
-            }*/
+                debugPrintSubAst(pCtx, *pStmt->pInitExpr, levelNext, true);
+            }
         } break;
 
         case ASTK_StructDefnStmt:
@@ -651,20 +659,20 @@ void debugPrintSubAst(const AstNode & node, int level, bool skipAfterArrow, Dyna
             printf("(struct defn)");
 
             printf("\n");
-            printTabs(levelNext, false, false, pMapLevelSkip);
+            printTabs(pCtx, levelNext, false, false);
 
             printf("\n");
-            printTabs(levelNext, false, false, pMapLevelSkip);
+            printTabs(pCtx, levelNext, false, false);
             printf("(name):");
 
             printf("\n");
-            printTabs(levelNext, true, false, pMapLevelSkip);
+            printTabs(pCtx, levelNext, true, false);
             printf("%s", pStmt->ident.pToken->lexeme);
 
             printf("\n");
-            printTabs(levelNext, false, false, pMapLevelSkip);
+            printTabs(pCtx, levelNext, false, false);
 
-            printChildren(pStmt->apVarDeclStmt, levelNext, "vardecl", true, pMapLevelSkip);
+            printChildren(pCtx, pStmt->apVarDeclStmt, levelNext, "vardecl", true);
         } break;
 
         case ASTK_FuncDefnStmt:
@@ -674,22 +682,22 @@ void debugPrintSubAst(const AstNode & node, int level, bool skipAfterArrow, Dyna
             printf("(func defn)");
 
             printf("\n");
-            printTabs(levelNext, false, false, pMapLevelSkip);
+            printTabs(pCtx, levelNext, false, false);
 
             printf("\n");
-            printTabs(levelNext, false, false, pMapLevelSkip);
+            printTabs(pCtx, levelNext, false, false);
             printf("(name):");
 
             printf("\n");
-            printTabs(levelNext, true, false, pMapLevelSkip);
+            printTabs(pCtx, levelNext, true, false);
             printf("%s", pStmt->ident.pToken->lexeme);
 
             printf("\n");
-            printTabs(levelNext, false, false, pMapLevelSkip);
+            printTabs(pCtx, levelNext, false, false);
 
-            debugPrintFuncHeader(pStmt->apParamVarDecls, pStmt->apReturnVarDecls, levelNext, false, pMapLevelSkip);
+            debugPrintFuncHeader(pCtx, pStmt->apParamVarDecls, pStmt->apReturnVarDecls, levelNext, false);
 
-            debugPrintSubAst(*pStmt->pBodyStmt, levelNext, true, pMapLevelSkip);
+            debugPrintSubAst(pCtx, *pStmt->pBodyStmt, levelNext, true);
         } break;
 
         case ASTK_BlockStmt:
@@ -701,10 +709,10 @@ void debugPrintSubAst(const AstNode & node, int level, bool skipAfterArrow, Dyna
             if (pStmt->apStmts.cItem > 0)
             {
                 printf("\n");
-                printTabs(levelNext, false, false, pMapLevelSkip);
+                printTabs(pCtx, levelNext, false, false);
             }
 
-            printChildren(pStmt->apStmts, levelNext, "stmt", true, pMapLevelSkip);
+            printChildren(pCtx, pStmt->apStmts, levelNext, "stmt", true);
         } break;
 
         case ASTK_WhileStmt:
@@ -714,18 +722,18 @@ void debugPrintSubAst(const AstNode & node, int level, bool skipAfterArrow, Dyna
             printf("(while)");
 
             printf("\n");
-            printTabs(levelNext, false, false, pMapLevelSkip);
+            printTabs(pCtx, levelNext, false, false);
 
             printf("\n");
-            printTabs(levelNext, false, false, pMapLevelSkip);
+            printTabs(pCtx, levelNext, false, false);
             printf("(cond):");
 
-            debugPrintSubAst(*pStmt->pCondExpr, levelNext, false, pMapLevelSkip);
+            debugPrintSubAst(pCtx, *pStmt->pCondExpr, levelNext, false);
 
             printf("\n");
-            printTabs(levelNext, false, false, pMapLevelSkip);
+            printTabs(pCtx, levelNext, false, false);
 
-            debugPrintSubAst(*pStmt->pBodyStmt, levelNext, true, pMapLevelSkip);
+            debugPrintSubAst(pCtx, *pStmt->pBodyStmt, levelNext, true);
         } break;
 
         case ASTK_IfStmt:
@@ -735,29 +743,29 @@ void debugPrintSubAst(const AstNode & node, int level, bool skipAfterArrow, Dyna
             printf("(if)");
 
             printf("\n");
-            printTabs(levelNext, false, false, pMapLevelSkip);
+            printTabs(pCtx, levelNext, false, false);
 
             printf("\n");
-            printTabs(levelNext, false, false, pMapLevelSkip);
+            printTabs(pCtx, levelNext, false, false);
             printf("(cond):");
 
-            debugPrintSubAst(*pStmt->pCondExpr, levelNext, false, pMapLevelSkip);
+            debugPrintSubAst(pCtx, *pStmt->pCondExpr, levelNext, false);
 
             printf("\n");
-            printTabs(levelNext, false, false, pMapLevelSkip);
+            printTabs(pCtx, levelNext, false, false);
 
-            debugPrintSubAst(*pStmt->pThenStmt, levelNext, !pStmt->pElseStmt, pMapLevelSkip);
+            debugPrintSubAst(pCtx, *pStmt->pThenStmt, levelNext, !pStmt->pElseStmt);
 
             if (pStmt->pElseStmt)
             {
                 printf("\n");
-                printTabs(levelNext, false, false, pMapLevelSkip);
+                printTabs(pCtx, levelNext, false, false);
 
                 printf("\n");
-                printTabs(levelNext, false, false, pMapLevelSkip);
+                printTabs(pCtx, levelNext, false, false);
                 printf("(else):");
 
-                debugPrintSubAst(*pStmt->pElseStmt, levelNext, true, pMapLevelSkip);
+                debugPrintSubAst(pCtx, *pStmt->pElseStmt, levelNext, true);
             }
         } break;
 
@@ -769,9 +777,9 @@ void debugPrintSubAst(const AstNode & node, int level, bool skipAfterArrow, Dyna
             if (pStmt->pExpr)
             {
                 printf("\n");
-                printTabs(levelNext, false, false, pMapLevelSkip);
+                printTabs(pCtx, levelNext, false, false);
 
-                debugPrintSubAst(*pStmt->pExpr, levelNext, true, pMapLevelSkip);
+                debugPrintSubAst(pCtx, *pStmt->pExpr, levelNext, true);
             }
         } break;
 
@@ -798,9 +806,9 @@ void debugPrintSubAst(const AstNode & node, int level, bool skipAfterArrow, Dyna
             printf("(program)");
             printf("\n");
 
-            printTabs(levelNext, false, false, pMapLevelSkip);
+            printTabs(pCtx, levelNext, false, false);
 
-            printChildren(pNode->apNodes, levelNext, "stmt", true, pMapLevelSkip);
+            printChildren(pCtx, pNode->apNodes, levelNext, "stmt", true);
         } break;
 
         default:

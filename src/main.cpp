@@ -1,6 +1,7 @@
 #include "als.h"
 
 #include "ast.h"
+#include "ast_print.h"
 #include "scan.h"
 #include "parse.h"
 #include "resolve_pass.h"
@@ -67,15 +68,39 @@ int main()
 
     bool success;
     AstNode * pAst = parseProgram(&parser, &success);
-    
+
     // TODO: Check for parse error
 
     bool allTypesResolved = tryResolveAllPendingTypesIntoTypeTable(&parser);
+	bool allFuncSymbolsResolved = tryResolvePendingFuncSymbolsAfterTypesResolved(&parser.symbolTable);
+
+    if (!allTypesResolved)
+    {
+        printf("Unable to resolve following type(s):\n");
+
+        for (int i = 0; i < parser.typeTable.typesPendingResolution.cItem; i++)
+        {
+            Type * pType = parser.typeTable.typesPendingResolution[i].pType;
+
+            if (pType->isFuncType)
+            {
+                printf("(skipping func type)\n");
+            }
+            else
+            {
+                printf("%s", pType->ident.pToken->lexeme);
+            }
+        }
+    }
 
     // TODO: resolve function symbols (function overload stuff needs types to be all resolved to work)
 
 #if DEBUG
-    debugPrintAst(*pAst);
+    DebugPrintCtx debugPrintCtx;
+    init(&debugPrintCtx.mpLevelSkip);
+    debugPrintCtx.pTypeTable = &parser.typeTable;
+
+    debugPrintAst(&debugPrintCtx, *pAst);
 
     // ResolvePass resolvePass;
     // doResolvePass(&resolvePass, pAst);

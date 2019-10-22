@@ -18,10 +18,14 @@ fn returnSingleValue (float a) -> bool
 {
 }
 
-fn returnSingleValueParenthesized (int foo) -> (int a)
+fn returnSingleValueParenthesized (foo bar) -> (int a)
 {
 }
 
 fn returnMultipleValues (int a) -> (int, int)
+{
+}
+
+struct foo
 {
 }

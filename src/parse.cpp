@@ -57,6 +57,7 @@ AstNode * parseProgram(Parser * pParser, bool * poSuccess)
 	pushScope(pParser, SCOPEK_BuiltIn);
 	Assert(peekScope(pParser).id == gc_builtInScopeid);
 
+    insertBuiltInTypes(&pParser->typeTable);
     insertBuiltInSymbols(&pParser->symbolTable);
 
 	pushScope(pParser, SCOPEK_Global);

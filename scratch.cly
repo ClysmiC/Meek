@@ -1,6 +1,6 @@
 struct DynamicArray<T>
 {
-	^T pBuffer = nullptr;
+	?[]T buffer = nullptr;		// Unique (!) nullable (?) pointer. I own this resource.
 	int cItem = 0;
 	int cCapacity = 0;
 }

@@ -34,6 +34,7 @@
     <ClInclude Include="src\ast.h" />
     <ClInclude Include="src\ast_print.h" />
     <ClInclude Include="src\error.h" />
+    <ClInclude Include="src\id_def.h" />
     <ClInclude Include="src\parse.h" />
     <ClInclude Include="src\resolve_pass.h" />
     <ClInclude Include="src\scan.h" />

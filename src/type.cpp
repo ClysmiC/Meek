@@ -7,6 +7,13 @@
 extern const typid gc_typidUnresolved = 0;
 extern const typid gc_typidUnresolvedInferred = 1;
 
+// SYNC: Built in types should be inserted into the type table in the order that
+//  results in the following typids!
+
+extern const typid gc_typidInt      = 2;
+extern const typid gc_typidFloat    = 3;
+extern const typid gc_typidBool     = 4;
+
 void init(Type * pType, bool isFuncType)
 {
 	pType->isFuncType = isFuncType;
@@ -284,6 +291,79 @@ void init(TypeTable * pTable)
 	init(&pTable->typesPendingResolution);
 }
 
+void insertBuiltInTypes(TypeTable * pTable)
+{
+    Stack<Scope> scopeStack;
+    init(&scopeStack);
+    Defer(dispose(&scopeStack));
+
+    Scope builtInScope;
+    builtInScope.id = gc_builtInScopeid;
+    builtInScope.scopek = SCOPEK_BuiltIn;
+
+    push(&scopeStack, builtInScope);
+
+    // int
+    {
+        static Token intToken;
+        intToken.id = -1;
+        intToken.line = -1;
+        intToken.column = -1;
+        intToken.tokenk = TOKENK_Identifier;
+        intToken.lexeme = "int";
+
+        ScopedIdentifier intIdent;
+        setIdent(&intIdent, &intToken, gc_builtInScopeid);
+
+        Type intType;
+        init(&intType, false /* isFuncType */);
+        intType.ident = intIdent;
+
+        Verify(isTypeResolved(intType));
+        Verify(ensureInTypeTable(pTable, intType) == gc_typidInt);
+    }
+
+    // float
+    {
+        static Token floatToken;
+        floatToken.id = -1;
+        floatToken.line = -1;
+        floatToken.column = -1;
+        floatToken.tokenk = TOKENK_Identifier;
+        floatToken.lexeme = "float";
+
+        ScopedIdentifier floatIdent;
+        setIdent(&floatIdent, &floatToken, gc_builtInScopeid);
+
+        Type floatType;
+        init(&floatType, false /* isFuncType */);
+        floatType.ident = floatIdent;
+
+        Verify(isTypeResolved(floatType));
+        Verify(ensureInTypeTable(pTable, floatType) == gc_typidFloat);
+    }
+
+    // bool
+    {
+        static Token boolToken;
+        boolToken.id = -1;
+        boolToken.line = -1;
+        boolToken.column = -1;
+        boolToken.tokenk = TOKENK_Identifier;
+        boolToken.lexeme = "bool";
+
+        ScopedIdentifier boolIdent;
+        setIdent(&boolIdent, &boolToken, gc_builtInScopeid);
+
+        Type boolType;
+        init(&boolType, false /* isFuncType */);
+        boolType.ident = boolIdent;
+
+        Verify(isTypeResolved(boolType));
+        Verify(ensureInTypeTable(pTable, boolType) == gc_typidBool);
+    }
+}
+
 const Type * lookupType(TypeTable * pTable, typid typid)
 {
     return lookupByKey(pTable->table, typid);
@@ -382,18 +462,7 @@ typid resolveIntoTypeTableOrSetPending(
         TypePendingResolution * pTypePending = appendNew(&pParser->typeTable.typesPendingResolution);
         pTypePending->pType = pType;
         pTypePending->pTypidUpdateWhenResolved = nullptr;    // NOTE: Caller sets this value via the pointer that we return in an out param
-
-		init(&pTypePending->scopeStack);
-
-		// TODO: Deep copy function for stack/array
-
-		for (int i = count(pParser->scopeStack) - 1; i >= 0; i--)
-		{
-            Scope scope;
-            Verify(peekFar(pParser->scopeStack, i, &scope));
-
-			push(&pTypePending->scopeStack, scope);
-		}
+		initCopy(&pTypePending->scopeStack, pParser->scopeStack);
 
         *ppoTypePendingResolution = pTypePending;
 
