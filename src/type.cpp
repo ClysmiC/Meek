@@ -364,9 +364,9 @@ void insertBuiltInTypes(TypeTable * pTable)
     }
 }
 
-const Type * lookupType(TypeTable * pTable, typid typid)
+const Type * lookupType(const TypeTable & table, typid typid)
 {
-    return lookupByKey(pTable->table, typid);
+    return lookupByKey(table.table, typid);
 }
 
 typid ensureInTypeTable(TypeTable * pTable, const Type & type, bool debugAssertIfAlreadyInTable)
@@ -405,7 +405,7 @@ bool tryResolveType(Type * pType, const SymbolTable & symbolTable, const Stack<S
             candidate.defnclScopeid = candidateScope.id;
             candidate.hash = scopedIdentHash(candidate);
 
-			if (lookupType(symbolTable, candidate))
+			if (lookupTypeSymb(symbolTable, candidate))
 			{
 				pType->ident = candidate;
 				return true;
@@ -446,7 +446,7 @@ typid resolveIntoTypeTableOrSetPending(
 	Assert(!isTypeResolved(*pType));
     AssertInfo(ppoTypePendingResolution, "You must have a plan for handling types that are pending resolution if you call this function!");
 
-	if (tryResolveType(pType, pParser->symbolTable, pParser->scopeStack))
+	if (tryResolveType(pType, pParser->symbTable, pParser->scopeStack))
 	{
 		typid typid = ensureInTypeTable(&pParser->typeTable, *pType);
         Assert(isTypeResolved(typid));
@@ -483,7 +483,7 @@ bool tryResolveAllPendingTypesIntoTypeTable(Parser * pParser)
 		{
 			TypePendingResolution * pTypePending = &pParser->typeTable.typesPendingResolution[i];
 
-			if (tryResolveType(pTypePending->pType, pParser->symbolTable, pTypePending->scopeStack))
+			if (tryResolveType(pTypePending->pType, pParser->symbTable, pTypePending->scopeStack))
 			{
 				madeProgress = true;
 

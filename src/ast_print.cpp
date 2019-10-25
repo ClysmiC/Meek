@@ -131,7 +131,7 @@ void debugPrintType(DebugPrintCtx * pCtx, typid typid, int level, bool skipAfter
         return;
     }
 
-    const Type * pType = lookupType(pCtx->pTypeTable, typid);
+    const Type * pType = lookupType(*pCtx->pTypeTable, typid);
     Assert(pType);
 
     for (int i = 0; i < pType->aTypemods.cItem; i++)

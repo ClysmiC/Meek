@@ -108,9 +108,9 @@ void dispose(SymbolTable * pSymbTable);
 
 void insertBuiltInSymbols(SymbolTable * pSymbolTable);
 
-SymbolInfo * lookupVar(const SymbolTable & symbTable, const ScopedIdentifier & ident);
-SymbolInfo * lookupType(const SymbolTable & symbTable, const ScopedIdentifier & ident);
-DynamicArray<SymbolInfo> * lookupFunc(const SymbolTable & symbTable, const ScopedIdentifier & ident);
+SymbolInfo * lookupVarSymb(const SymbolTable & symbTable, const ScopedIdentifier & ident);
+SymbolInfo * lookupTypeSymb(const SymbolTable & symbTable, const ScopedIdentifier & ident);
+DynamicArray<SymbolInfo> * lookupFuncSymb(const SymbolTable & symbTable, const ScopedIdentifier & ident);
 
 bool tryInsert(SymbolTable * pSymbolTable, const ScopedIdentifier & ident, const SymbolInfo & symbInfo);
 bool tryResolvePendingFuncSymbolsAfterTypesResolved(SymbolTable * pSymbTable);

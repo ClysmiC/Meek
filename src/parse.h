@@ -42,7 +42,7 @@ struct Parser
 
 	// Symbol Table
 
-	SymbolTable symbolTable;
+	SymbolTable symbTable;
 
 	// Type Table
 

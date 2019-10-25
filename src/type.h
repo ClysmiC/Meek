@@ -124,7 +124,7 @@ struct TypeTable
 
 void init(TypeTable * pTable);
 void insertBuiltInTypes(TypeTable * pTable);
-const Type * lookupType(TypeTable * pTable, typid typid);
+const Type * lookupType(const TypeTable & table, typid typid);
 
 // NOTE: This function releases pType
 typid ensureInTypeTable(TypeTable * pTable, const Type & type, bool debugAssertIfAlreadyInTable=false);

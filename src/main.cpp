@@ -72,7 +72,7 @@ int main()
     // TODO: Check for parse error
 
     bool allTypesResolved = tryResolveAllPendingTypesIntoTypeTable(&parser);
-	bool allFuncSymbolsResolved = tryResolvePendingFuncSymbolsAfterTypesResolved(&parser.symbolTable);
+	bool allFuncSymbolsResolved = tryResolvePendingFuncSymbolsAfterTypesResolved(&parser.symbTable);
 
     if (!allTypesResolved)
     {
@@ -102,8 +102,11 @@ int main()
 
     debugPrintAst(&debugPrintCtx, *pAst);
 
-    // ResolvePass resolvePass;
-    // doResolvePass(&resolvePass, pAst);
+    ResolvePass resolvePass;
+    init(&resolvePass);
+    resolvePass.pSymbTable = &parser.symbTable;
+    resolvePass.pTypeTable = &parser.typeTable;
+    doResolvePass(&resolvePass, pAst);
 
     printf("\n");
     if (parser.hadError)
@@ -116,7 +119,7 @@ int main()
     }
 
     printf("\n\n");
-    debugPrintSymbolTable(parser.symbolTable);
+    debugPrintSymbolTable(parser.symbTable);
 #endif
 
 	/*Token token;

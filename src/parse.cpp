@@ -43,7 +43,7 @@ bool init(Parser * pParser, Scanner * pScanner)
 	init(&pParser->typeAlloc);
 	init(&pParser->astNodes);
 	init(&pParser->scopeStack);
-	init(&pParser->symbolTable);
+	init(&pParser->symbTable);
 	init(&pParser->typeTable);
 
 	return true;
@@ -58,7 +58,7 @@ AstNode * parseProgram(Parser * pParser, bool * poSuccess)
 	Assert(peekScope(pParser).id == gc_builtInScopeid);
 
     insertBuiltInTypes(&pParser->typeTable);
-    insertBuiltInSymbols(&pParser->symbolTable);
+    insertBuiltInSymbols(&pParser->symbTable);
 
 	pushScope(pParser, SCOPEK_Global);
 	Assert(peekScope(pParser).id == gc_globalScopeid);
@@ -395,7 +395,7 @@ finishStruct:
 
 	SymbolInfo structDefnInfo;
 	setSymbolInfo(&structDefnInfo, pNode->ident, SYMBOLK_Struct, Up(pNode));
-	tryInsert(&pParser->symbolTable, pNode->ident, structDefnInfo);
+	tryInsert(&pParser->symbTable, pNode->ident, structDefnInfo);
 
 	// Insert into type table
 
@@ -493,7 +493,7 @@ bool tryParseFuncDefnStmtOrLiteralExpr(Parser * pParser, FUNCHEADERK funcheaderk
 
 		SymbolInfo funcDefnInfo;
 		setSymbolInfo(&funcDefnInfo, pNode->ident, SYMBOLK_Func, Up(pNode));
-		tryInsert(&pParser->symbolTable, identDefn, funcDefnInfo);
+		tryInsert(&pParser->symbTable, identDefn, funcDefnInfo);
 
 		*ppoNode = Up(pNode);
 		return success = true;
@@ -663,7 +663,7 @@ AstNode * parseVarDeclStmt(Parser * pParser, EXPECTK expectkName, EXPECTK expect
     {
         SymbolInfo varDeclInfo;
         setSymbolInfo(&varDeclInfo, pNode->ident, SYMBOLK_Var, Up(pNode));
-        tryInsert(&pParser->symbolTable, pNode->ident, varDeclInfo);
+        tryInsert(&pParser->symbTable, pNode->ident, varDeclInfo);
     }
 
 	return Up(pNode);

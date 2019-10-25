@@ -4,15 +4,14 @@
 #include "symbol.h"
 
 struct AstNode;
-
-// Resolve identifiers
-
+struct TypeTable;
 
 struct ResolvePass
 {
     symbseqid lastSymbseqid = 0;
 	Stack<scopeid> scopeidStack;
 	SymbolTable * pSymbTable;
+    TypeTable * pTypeTable;
 
 	DynamicArray<ScopedIdentifier> unresolvedIdents;
 
