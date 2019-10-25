@@ -11,12 +11,7 @@ struct AstStructDefnStmt;
 struct Token;
 struct Type;
 
-extern const scopeid gc_unresolvedScopeid;
-extern const scopeid gc_builtInScopeid;
-extern const scopeid gc_globalScopeid;
-
-
-extern const symbseqid gc_unsetSymbseqid;
+extern const symbseqid gc_symbseqidUnset;
 
 enum SCOPEK : s8
 {
@@ -30,7 +25,7 @@ enum SCOPEK : s8
 
 struct Scope
 {
-	scopeid id = gc_unresolvedScopeid;
+	scopeid id = SCOPEID_Unresolved;
 	SCOPEK scopek = SCOPEK_Nil;
 };
 
@@ -54,7 +49,7 @@ bool scopedIdentEq(const ScopedIdentifier & i0, const ScopedIdentifier & i1);
 
 inline bool isScopeSet(const ScopedIdentifier & ident)
 {
-    return ident.defnclScopeid != gc_unresolvedScopeid;
+    return ident.defnclScopeid != SCOPEID_Unresolved;
 }
 
 enum SYMBOLK

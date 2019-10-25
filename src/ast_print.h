@@ -36,6 +36,6 @@ void printErrChildren(DebugPrintCtx * pCtx, const AstErr & node, int level);
 
 void debugPrintFuncHeader(DebugPrintCtx * pCtx, const DynamicArray<AstNode *> & apParamVarDecls, const DynamicArray<AstNode *> & apReturnVarDecls, int level, bool skipAfterArrow);
 
-void debugPrintType(DebugPrintCtx * pCtx, typid typid, int level, bool skipAfterArrow);
+void debugPrintType(DebugPrintCtx * pCtx, TYPID typid, int level, bool skipAfterArrow);
 
 #endif

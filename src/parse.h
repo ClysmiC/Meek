@@ -37,7 +37,7 @@ struct Parser
 
 	// Scope
 
-    scopeid scopeidNext = gc_globalScopeid + 1;
+    SCOPEID scopeidNext = SCOPEID_UserDefinedStart;
     Stack<Scope> scopeStack;
 
 	// Symbol Table
@@ -166,7 +166,7 @@ enum PARSETYPERESULT
 PARSETYPERESULT tryParseType(
     Parser * pParser,
     DynamicArray<AstNode *> * papNodeChildren,
-    typid * poTypidResolved,
+    TYPID * poTypidResolved,
     TypePendingResolution ** ppoTypePendingResolution);
 
 bool tryParseFuncDefnStmtOrLiteralExpr(Parser * pParser, FUNCHEADERK funcheaderk, AstNode ** ppoNode);

@@ -1,13 +1,17 @@
 #pragma once
 
 #include "als.h"
-#include "token.h"
+
+#include "literal.h"
 #include "symbol.h"
+#include "token.h"
+#include "token.h"
 #include "type.h"
 
 // Forward declarations
 
 struct AstNode;
+struct AstVarDeclStmt;
 struct Type;
 
 // The downside to using a union instead of inheritance is that I can't implicitly upcast. Since there is quite
@@ -94,16 +98,6 @@ enum ASTK : u8
 	// NOTE: If you add more misc ASTK's down here (i.e., not Stmt, Expr, Err), make sure to update
 	//	the ASTCATK functions
 };
-
-enum LITERALK : u8
-{
-	LITERALK_Int,
-	LITERALK_Float,
-	LITERALK_Bool,
-	LITERALK_String
-};
-
-
 
 // IMPORTANT: All AstNodes in the tree are the exact same struct (AstNode). Switch on the ASTK to
 //	get the kind of node, and then switch on the exprk or stmtk to get further details.
@@ -199,6 +193,8 @@ struct AstUnopExpr
 {
 	Token *	pOp;
 	AstNode * pExpr;
+
+    TYPID typid;
 };
 
 struct AstBinopExpr
@@ -206,6 +202,8 @@ struct AstBinopExpr
 	Token *	pOp;
 	AstNode * pLhsExpr;
 	AstNode * pRhsExpr;
+
+    TYPID typid;
 };
 
 struct AstLiteralExpr
@@ -223,11 +221,15 @@ struct AstLiteralExpr
 
 	bool isValueSet = false;
 	bool isValueErroneous = false;	// Things like integers that are too large, etc.
+
+    TYPID typid;        // HMM: Redundant with literalk?
 };
 
 struct AstGroupExpr
 {
 	AstNode * pExpr;
+
+    TYPID typid;
 };
 
 struct AstVarExpr
@@ -238,21 +240,25 @@ struct AstVarExpr
 	AstNode * pOwner;
     Token * pTokenIdent;
 
-	// Non-child
+	AstVarDeclStmt * pResolvedDecl;     // Cached (non-child)
 
-	AstVarDeclStmt * pResolvedDecl;
+    TYPID typid;
 };
 
 struct AstArrayAccessExpr
 {
-	AstNode * pArray;
-	AstNode * pSubscript;
+	AstNode * pArrayExpr;
+	AstNode * pSubscriptExpr;
+
+    TYPID typid;
 };
 
 struct AstFuncCallExpr
 {
 	AstNode * pFunc;
 	DynamicArray<AstNode *> apArgs;		// Args are EXPR
+
+    TYPID typid;
 };
 
 struct AstFuncLiteralExpr
@@ -261,8 +267,8 @@ struct AstFuncLiteralExpr
 	DynamicArray<AstNode *> apReturnVarDecls;		// A.k.a. output params
 	AstNode * pBodyStmt;
 
-    scopeid scopeid;
-	typid typid;
+    SCOPEID scopeid;
+	TYPID typid;
 };
 
 
@@ -289,16 +295,16 @@ struct AstVarDeclStmt
 	AstNode * pInitExpr;	// null means default init
 
     symbseqid symbseqid;
-	typid typid;
+	TYPID typid;
 };
 
 struct AstStructDefnStmt
 {
 	ScopedIdentifier ident;
 	DynamicArray<AstNode *> apVarDeclStmt;
-    scopeid scopeid;        // Scope introduced by this struct defn
+    SCOPEID scopeid;        // Scope introduced by this struct defn
     symbseqid symbseqid;
-	typid typidSelf;
+	TYPID typidSelf;
 };
 
 struct AstFuncDefnStmt
@@ -309,15 +315,15 @@ struct AstFuncDefnStmt
 	DynamicArray<AstNode *> apReturnVarDecls;		// A.k.a. output params
 
 	AstNode * pBodyStmt;
-    scopeid scopeid;        // Scope introduced by this func defn
-	typid typid;
+    SCOPEID scopeid;        // Scope introduced by this func defn
+	TYPID typid;
     symbseqid symbseqid;
 };
 
 struct AstBlockStmt
 {
 	DynamicArray<AstNode *> apStmts;
-    scopeid scopeid;
+    SCOPEID scopeid;
 };
 
 struct AstIfStmt

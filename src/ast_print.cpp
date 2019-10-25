@@ -116,7 +116,7 @@ void debugPrintFuncHeader(DebugPrintCtx * pCtx, const DynamicArray<AstNode *> & 
     }
 };
 
-void debugPrintType(DebugPrintCtx * pCtx, typid typid, int level, bool skipAfterArrow)
+void debugPrintType(DebugPrintCtx * pCtx, TYPID typid, int level, bool skipAfterArrow)
 {
     setSkip(pCtx, level, false);
     int levelNext = level + 1;
@@ -525,12 +525,12 @@ void debugPrintSubAst(DebugPrintCtx * pCtx, const AstNode & node, int level, boo
 
             printTabs(pCtx, levelNext, false, false);
             printf("(array):");
-            debugPrintSubAst(pCtx, *pExpr->pArray, levelNext, false);
+            debugPrintSubAst(pCtx, *pExpr->pArrayExpr, levelNext, false);
 
             printf("\n");
             printTabs(pCtx, levelNext, false, false);
             printf("(subscript):");
-            debugPrintSubAst(pCtx, *pExpr->pSubscript, levelNext, true);
+            debugPrintSubAst(pCtx, *pExpr->pSubscriptExpr, levelNext, true);
         } break;
 
         case ASTK_FuncCallExpr:

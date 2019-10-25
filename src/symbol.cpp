@@ -1,19 +1,16 @@
 #include "symbol.h"
 
 #include "ast.h"
+#include "literal.h"
 #include "token.h"
 #include "type.h"
 
-const scopeid gc_unresolvedScopeid = 0;
-const scopeid gc_builtInScopeid = 1;
-const scopeid gc_globalScopeid = 2;
-
-const symbseqid gc_unsetSymbseqid = 0;
+const symbseqid gc_symbseqidUnset = 0;
 
 //void init(ScopeStack * pScopeStack)
 //{
 //    init(&pScopeStack->stack);
-//    pScopeStack->scopeidNext = gc_builtInScopeid;
+//    pScopeStack->scopeidNext = SCOPEID_BuiltIn;
 //}
 //
 //void pushScope(ScopeStack * pScopeStack, SCOPEK scopek)
@@ -88,10 +85,10 @@ void insertBuiltInSymbols(SymbolTable * pSymbolTable)
         intToken.lexeme = "int";
 
         ScopedIdentifier intIdent;
-        setIdent(&intIdent, &intToken, gc_builtInScopeid);
+        setIdent(&intIdent, &intToken, SCOPEID_BuiltIn);
 
         SymbolInfo intInfo;
-        setBuiltinTypeSymbolInfo(&intInfo, intIdent, gc_typidInt);
+        setBuiltinTypeSymbolInfo(&intInfo, intIdent, TYPID_Int);
 
         Verify(tryInsert(pSymbolTable, intIdent, intInfo));
     }
@@ -106,10 +103,10 @@ void insertBuiltInSymbols(SymbolTable * pSymbolTable)
         floatToken.lexeme = "float";
 
         ScopedIdentifier floatIdent;
-        setIdent(&floatIdent, &floatToken, gc_builtInScopeid);
+        setIdent(&floatIdent, &floatToken, SCOPEID_BuiltIn);
 
         SymbolInfo floatInfo;
-        setBuiltinTypeSymbolInfo(&floatInfo, floatIdent, gc_typidFloat);
+        setBuiltinTypeSymbolInfo(&floatInfo, floatIdent, TYPID_Float);
 
         Verify(tryInsert(pSymbolTable, floatIdent, floatInfo));
     }
@@ -124,10 +121,10 @@ void insertBuiltInSymbols(SymbolTable * pSymbolTable)
         boolToken.lexeme = "bool";
 
         ScopedIdentifier boolIdent;
-        setIdent(&boolIdent, &boolToken, gc_builtInScopeid);
+        setIdent(&boolIdent, &boolToken, SCOPEID_BuiltIn);
 
         SymbolInfo boolInfo;
-        setBuiltinTypeSymbolInfo(&boolInfo, boolIdent, gc_typidBool);
+        setBuiltinTypeSymbolInfo(&boolInfo, boolIdent, TYPID_Bool);
 
         Verify(tryInsert(pSymbolTable, boolIdent, boolInfo));
     }
@@ -258,7 +255,7 @@ DynamicArray<SymbolInfo> * lookupFuncSymb(const SymbolTable & symbTable, const S
 void setSymbolInfo(SymbolInfo * pSymbInfo, const ScopedIdentifier & ident, SYMBOLK symbolk, AstNode * pNode)
 {
     AssertInfo(symbolk != SYMBOLK_BuiltInType, "Call setBuiltinTypeSymbolInfo for builtin types!");
-    Assert(ident.defnclScopeid != gc_builtInScopeid);
+    Assert(ident.defnclScopeid != SCOPEID_BuiltIn);
 
 	pSymbInfo->symbolk = symbolk;
     pSymbInfo->ident = ident;
@@ -290,7 +287,7 @@ void setSymbolInfo(SymbolInfo * pSymbInfo, const ScopedIdentifier & ident, SYMBO
 	}
 }
 
-void setBuiltinTypeSymbolInfo(SymbolInfo * pSymbInfo, const ScopedIdentifier & ident, typid typid)
+void setBuiltinTypeSymbolInfo(SymbolInfo * pSymbInfo, const ScopedIdentifier & ident, TYPID typid)
 {
     AssertInfo(isTypeResolved(typid), "Put built in types in the type table before the symbol table so that you can provide their typid");
 
@@ -299,15 +296,15 @@ void setBuiltinTypeSymbolInfo(SymbolInfo * pSymbInfo, const ScopedIdentifier & i
     pSymbInfo->typid = typid;
 }
 
-void setIdent(ScopedIdentifier * pIdentifier, Token * pToken, scopeid declScopeid)
+void setIdent(ScopedIdentifier * pIdentifier, Token * pToken, SCOPEID declScopeid)
 {
-    Assert(Implies(declScopeid == gc_builtInScopeid, pToken));
+    Assert(Implies(declScopeid == SCOPEID_BuiltIn, pToken));
 
     if (pToken)
     {
-        Assert(Iff(declScopeid == gc_builtInScopeid, pToken->id == -1));
-        Assert(Iff(declScopeid == gc_builtInScopeid, pToken->line == -1));
-        Assert(Iff(declScopeid == gc_builtInScopeid, pToken->column == -1));
+        Assert(Iff(declScopeid == SCOPEID_BuiltIn, pToken->id == -1));
+        Assert(Iff(declScopeid == SCOPEID_BuiltIn, pToken->line == -1));
+        Assert(Iff(declScopeid == SCOPEID_BuiltIn, pToken->column == -1));
     }
 
 	pIdentifier->pToken = pToken;
@@ -326,13 +323,13 @@ void setIdent(ScopedIdentifier * pIdentifier, Token * pToken, scopeid declScopei
 void setIdentNoScope(ScopedIdentifier * pIdentifier, Token * pToken)
 {
 	pIdentifier->pToken = pToken;
-	pIdentifier->defnclScopeid = gc_unresolvedScopeid;
+	pIdentifier->defnclScopeid = SCOPEID_Unresolved;
 }
 
-void resolveIdentScope(ScopedIdentifier * pIdentifier, scopeid declScopeid)
+void resolveIdentScope(ScopedIdentifier * pIdentifier, SCOPEID declScopeid)
 {
 	Assert(pIdentifier->pToken);
-	Assert(pIdentifier->defnclScopeid == gc_unresolvedScopeid);
+	Assert(pIdentifier->defnclScopeid == SCOPEID_Unresolved);
 	Assert(pIdentifier->hash == 0);
 
 	pIdentifier->defnclScopeid = declScopeid;

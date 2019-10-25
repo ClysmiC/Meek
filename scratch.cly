@@ -4,3 +4,13 @@ struct DynamicArray<T>
 	int cItem = 0;
 	int cCapacity = 0;
 }
+
+
+struct Foo
+{
+}
+
+[5]^Foo arrayPtrToFoo;
+
+
+arrayPtrToFoo[3];

@@ -55,13 +55,13 @@ AstNode * parseProgram(Parser * pParser, bool * poSuccess)
 	//	that is a semantic error.
 
 	pushScope(pParser, SCOPEK_BuiltIn);
-	Assert(peekScope(pParser).id == gc_builtInScopeid);
+	Assert(peekScope(pParser).id == SCOPEID_BuiltIn);
 
     insertBuiltInTypes(&pParser->typeTable);
     insertBuiltInSymbols(&pParser->symbTable);
 
 	pushScope(pParser, SCOPEK_Global);
-	Assert(peekScope(pParser).id == gc_globalScopeid);
+	Assert(peekScope(pParser).id == SCOPEID_Global);
 
 	auto * pNode = AstNew(pParser, Program, 0);
 	init(&pNode->apNodes);
@@ -299,7 +299,7 @@ AstNode * parseExprStmtOrAssignStmt(Parser * pParser)
 
 AstNode * parseStructDefnStmt(Parser * pParser)
 {
-	scopeid declScope = peekScope(pParser).id;
+	SCOPEID declScope = peekScope(pParser).id;
 
 	// Parse 'struct'
 
@@ -534,7 +534,7 @@ AstNode * parseVarDeclStmt(Parser * pParser, EXPECTK expectkName, EXPECTK expect
     //  with null typidToUpdate and we fill out the typidToUpdate once we create the AST node?
 
     TypePendingResolution * pTypePending;
-    typid typidResolved;
+    TYPID typidResolved;
     {
         PARSETYPERESULT parseTypeResult = tryParseType(pParser, &apNodeChildren, &typidResolved, &pTypePending);
         if (parseTypeResult == PARSETYPERESULT_ParseFailed)
@@ -643,7 +643,7 @@ AstNode * parseVarDeclStmt(Parser * pParser, EXPECTK expectkName, EXPECTK expect
 
 	// Success!
 
-	scopeid declScope = peekScope(pParser).id;
+	SCOPEID declScope = peekScope(pParser).id;
 
 	auto * pNode = AstNew(pParser, VarDeclStmt, line);
 	setIdent(&pNode->ident, pVarIdent, declScope);
@@ -1354,7 +1354,7 @@ bool tryParseFuncDefnOrLiteralHeaderParamList(
 PARSETYPERESULT tryParseType(
     Parser * pParser,
     DynamicArray<AstNode *> * papNodeChildren,
-    typid * poTypidResolved,
+    TYPID * poTypidResolved,
     TypePendingResolution ** ppoTypePendingResolution)
 {
     AssertInfo(ppoTypePendingResolution, "You must have a plan for handling types that are pending resolution if you call this function!");
@@ -1364,7 +1364,7 @@ PARSETYPERESULT tryParseType(
 	Defer(dispose(&aModifiers););
 
     *ppoTypePendingResolution = nullptr;
-    *poTypidResolved = gc_typidUnresolved;      // TODO: Might need to change this when I add type inference ?
+    *poTypidResolved = TYPID_Unresolved;      // TODO: Might need to change this when I add type inference ?
 
 	// NOTE; Since all nodes are stored in papNodeChildren, error nodes do not need to attach any children. It is the
 	//	responsibility of the caller to add papNodeChildren to a bubble error if we return false
@@ -1439,7 +1439,7 @@ PARSETYPERESULT tryParseType(
 		}
 	);
 
-    typid typid;
+    TYPID typid;
 	if (!pType->isFuncType)
 	{
 		Token * pTypeIdent = ensureAndClaimPendingToken(pParser);
@@ -1503,7 +1503,7 @@ bool tryParseFuncHeaderTypeOnly(Parser * pParser, FuncType * poFuncType, AstErr 
 	auto tryParseParameterTypes = [](
 		Parser * pParser,
 		PARAMK paramk,
-		DynamicArray<typid> * paTypids,			    // Value we are computing. We will set the typid's of the types we can resolve and set the others to pending
+		DynamicArray<TYPID> * paTypids,			    // Value we are computing. We will set the typid's of the types we can resolve and set the others to pending
 		DynamicArray<AstNode *> * papNodeChildren)	// Boookkeeping so caller can attach children to errors
 		-> bool
 	{
@@ -1544,7 +1544,7 @@ bool tryParseFuncHeaderTypeOnly(Parser * pParser, FuncType * poFuncType, AstErr 
 
             {
                 TypePendingResolution * pTypePending;
-                typid typidResolved;
+                TYPID typidResolved;
                 PARSETYPERESULT parseTypeResult = tryParseType(pParser, papNodeChildren, &typidResolved, &pTypePending);
                 if (parseTypeResult = PARSETYPERESULT_ParseFailed)
                 {
@@ -1566,8 +1566,8 @@ bool tryParseFuncHeaderTypeOnly(Parser * pParser, FuncType * poFuncType, AstErr 
                     Assert(parseTypeResult == PARSETYPERESULT_ParseSucceededTypeResolveFailed);
                     Assert(pTypePending);
 
-                    typid * pTypidPending = appendNew(paTypids);
-                    *pTypidPending = gc_typidUnresolved;
+                    TYPID * pTypidPending = appendNew(paTypids);
+                    *pTypidPending = TYPID_Unresolved;
 
                     pTypePending->pTypidUpdateWhenResolved = pTypidPending;
                 }
@@ -1681,8 +1681,8 @@ AstNode * finishParsePrimary(Parser * pParser, AstNode * pExpr)
 
 	finishArrayAccess:
 		auto * pNode = AstNew(pParser, ArrayAccessExpr, pExpr->startLine);
-		pNode->pArray = pExpr;
-		pNode->pSubscript = pSubscriptExpr;
+		pNode->pArrayExpr = pExpr;
+		pNode->pSubscriptExpr = pSubscriptExpr;
 
 		return finishParsePrimary(pParser, Up(pNode));
 	}
@@ -1838,24 +1838,24 @@ void pushScope(Parser * pParser, SCOPEK scopek)
     {
         for (int i = 0; i < pParser->scopeStack.a.cItem; i++)
         {
-            AssertInfo(pParser->scopeStack.a[i].id != gc_builtInScopeid, "Shouldn't contain built-in scope id twice!");
+            AssertInfo(pParser->scopeStack.a[i].id != SCOPEID_BuiltIn, "Shouldn't contain built-in scope id twice!");
         }
 
-	    s.id = gc_builtInScopeid;
+	    s.id = SCOPEID_BuiltIn;
     }
     else if (scopek == SCOPEK_Global)
     {
         for (int i = 0; i < pParser->scopeStack.a.cItem; i++)
         {
-            AssertInfo(pParser->scopeStack.a[i].id != gc_globalScopeid, "Shouldn't contain global scope id twice!");
+            AssertInfo(pParser->scopeStack.a[i].id != SCOPEID_Global, "Shouldn't contain global scope id twice!");
         }
 
-        s.id = gc_globalScopeid;
+        s.id = SCOPEID_Global;
     }
     else
     {
         s.id = pParser->scopeidNext;
-	    pParser->scopeidNext++;
+	    pParser->scopeidNext = static_cast<SCOPEID>(pParser->scopeidNext + 1);
     }
 
 

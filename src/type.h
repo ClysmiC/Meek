@@ -12,13 +12,6 @@ struct AstNode;
 struct Parser;
 struct Type;
 
-extern const typid gc_typidUnresolved;
-extern const typid gc_typidUnresolvedInferred;
-
-extern const typid gc_typidInt;
-extern const typid gc_typidFloat;
-extern const typid gc_typidBool;
-
 enum TYPEMODK : u8
 {
 	TYPEMODK_Array,
@@ -37,8 +30,8 @@ struct TypeModifier
 
 struct FuncType
 {
-    DynamicArray<typid> paramTypids;
-    DynamicArray<typid> returnTypids;		// A.k.a. output params
+    DynamicArray<TYPID> paramTypids;
+    DynamicArray<TYPID> returnTypids;		// A.k.a. output params
 };
 
 struct Type
@@ -63,9 +56,12 @@ bool isUnmodifiedType(const Type & type);
 
 bool isFuncTypeResolved(const FuncType & funcType);
 
-inline bool isTypeResolved(typid typid)
+inline bool isTypeResolved(TYPID typid)
 {
-    return typid != gc_typidUnresolved && typid != gc_typidUnresolvedInferred;
+    return
+		typid != TYPID_Unresolved &&
+		typid != TYPID_UnresolvedInferred &&
+		typid != TYPID_TypeError;
 }
 
 bool typeEq(const Type & t0, const Type & t1);
@@ -82,23 +78,24 @@ bool areVarDeclListTypesFullyResolved(const DynamicArray<AstNode *> & apVarDecls
 bool areVarDeclListTypesEq(const DynamicArray<AstNode *> & apVarDecls0, const DynamicArray<AstNode *> & apVarDecls1);
 
 
-inline uint typidHash(const typid & typid)
+inline uint typidHash(const TYPID & typid)
 {
 	// HMM: Is identity hash function a bad idea?
 
 	return typid;
 }
 
-inline bool typidEq(const typid & typid0, const typid & typid1)
+inline bool typidEq(const TYPID & typid0, const TYPID & typid1)
 {
 	return typid0 == typid1;
 }
+
 
 struct TypePendingResolution
 {
 	Stack<Scope> scopeStack;
 	Type * pType;
-	typid * pTypidUpdateWhenResolved;
+	TYPID * pTypidUpdateWhenResolved;
 };
 
 // Life-cycle of a type
@@ -112,27 +109,29 @@ struct TypePendingResolution
 struct TypeTable
 {
 	// Parser * pParser;		// HACK: Need to access parser to release Types once they get resolved, since the originals are pool allocated from the parser
-	BiHashMap<typid, Type> table;
+	BiHashMap<TYPID, Type> table;
 
 	// Due to order independence of certain types of declarations, unresolved types are put in
 	//	a "pending" list which gets resolved at a later time.
 
 	DynamicArray<TypePendingResolution> typesPendingResolution;
 
-    typid typidNext = gc_typidUnresolvedInferred + 1;
+    TYPID typidNext = TYPID_UserDefinedStart;
 };
 
 void init(TypeTable * pTable);
 void insertBuiltInTypes(TypeTable * pTable);
-const Type * lookupType(const TypeTable & table, typid typid);
+const Type * lookupType(const TypeTable & table, TYPID typid);
 
 // NOTE: This function releases pType
-typid ensureInTypeTable(TypeTable * pTable, const Type & type, bool debugAssertIfAlreadyInTable=false);
+TYPID ensureInTypeTable(TypeTable * pTable, const Type & type, bool debugAssertIfAlreadyInTable=false);
 
 bool tryResolveType(Type * pType, const SymbolTable & symbolTable, const Stack<Scope> & scopeStack);
-typid resolveIntoTypeTableOrSetPending(
+TYPID resolveIntoTypeTableOrSetPending(
 	Parser * pParser,
 	Type * pType,
 	TypePendingResolution ** ppoTypePendingResolution);
 
 bool tryResolveAllPendingTypesIntoTypeTable(Parser * pParser);
+
+TYPID typidFromLiteralk(LITERALK literalk);

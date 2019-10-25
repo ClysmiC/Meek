@@ -1,18 +1,10 @@
 #include "ast.h"
+#include "error.h"
+#include "literal.h"
 #include "parse.h"
 #include "type.h"
 
 #include <string.h>
-
-extern const typid gc_typidUnresolved = 0;
-extern const typid gc_typidUnresolvedInferred = 1;
-
-// SYNC: Built in types should be inserted into the type table in the order that
-//  results in the following typids!
-
-extern const typid gc_typidInt      = 2;
-extern const typid gc_typidFloat    = 3;
-extern const typid gc_typidBool     = 4;
 
 void init(Type * pType, bool isFuncType)
 {
@@ -222,13 +214,13 @@ uint funcTypeHash(const FuncType & f)
 
     for (int i = 0; i < f.paramTypids.cItem; i++)
     {
-        typid typid = f.paramTypids[i];
+        TYPID typid = f.paramTypids[i];
         hash = buildHash(&typid, sizeof(typid), hash);
     }
 
     for (int i = 0; i < f.returnTypids.cItem; i++)
     {
-        typid typid = f.returnTypids[i];
+        TYPID typid = f.returnTypids[i];
         hash = buildHash(&typid, sizeof(typid), hash);
     }
 
@@ -293,16 +285,6 @@ void init(TypeTable * pTable)
 
 void insertBuiltInTypes(TypeTable * pTable)
 {
-    Stack<Scope> scopeStack;
-    init(&scopeStack);
-    Defer(dispose(&scopeStack));
-
-    Scope builtInScope;
-    builtInScope.id = gc_builtInScopeid;
-    builtInScope.scopek = SCOPEK_BuiltIn;
-
-    push(&scopeStack, builtInScope);
-
     // int
     {
         static Token intToken;
@@ -313,14 +295,14 @@ void insertBuiltInTypes(TypeTable * pTable)
         intToken.lexeme = "int";
 
         ScopedIdentifier intIdent;
-        setIdent(&intIdent, &intToken, gc_builtInScopeid);
+        setIdent(&intIdent, &intToken, SCOPEID_BuiltIn);
 
         Type intType;
         init(&intType, false /* isFuncType */);
         intType.ident = intIdent;
 
         Verify(isTypeResolved(intType));
-        Verify(ensureInTypeTable(pTable, intType) == gc_typidInt);
+        Verify(ensureInTypeTable(pTable, intType) == TYPID_Int);
     }
 
     // float
@@ -333,14 +315,14 @@ void insertBuiltInTypes(TypeTable * pTable)
         floatToken.lexeme = "float";
 
         ScopedIdentifier floatIdent;
-        setIdent(&floatIdent, &floatToken, gc_builtInScopeid);
+        setIdent(&floatIdent, &floatToken, SCOPEID_BuiltIn);
 
         Type floatType;
         init(&floatType, false /* isFuncType */);
         floatType.ident = floatIdent;
 
         Verify(isTypeResolved(floatType));
-        Verify(ensureInTypeTable(pTable, floatType) == gc_typidFloat);
+        Verify(ensureInTypeTable(pTable, floatType) == TYPID_Float);
     }
 
     // bool
@@ -353,37 +335,57 @@ void insertBuiltInTypes(TypeTable * pTable)
         boolToken.lexeme = "bool";
 
         ScopedIdentifier boolIdent;
-        setIdent(&boolIdent, &boolToken, gc_builtInScopeid);
+        setIdent(&boolIdent, &boolToken, SCOPEID_BuiltIn);
 
         Type boolType;
         init(&boolType, false /* isFuncType */);
         boolType.ident = boolIdent;
 
         Verify(isTypeResolved(boolType));
-        Verify(ensureInTypeTable(pTable, boolType) == gc_typidBool);
+        Verify(ensureInTypeTable(pTable, boolType) == TYPID_Bool);
+    }
+
+	// string
+    {
+        static Token stringToken;
+        stringToken.id = -1;
+        stringToken.line = -1;
+        stringToken.column = -1;
+        stringToken.tokenk = TOKENK_Identifier;
+        stringToken.lexeme = "string";
+
+        ScopedIdentifier stringIdent;
+        setIdent(&stringIdent, &stringToken, SCOPEID_BuiltIn);
+
+        Type stringType;
+        init(&stringType, false /* isFuncType */);
+        stringType.ident = stringIdent;
+
+        Verify(isTypeResolved(stringType));
+        Verify(ensureInTypeTable(pTable, stringType) == TYPID_String);
     }
 }
 
-const Type * lookupType(const TypeTable & table, typid typid)
+const Type * lookupType(const TypeTable & table, TYPID typid)
 {
     return lookupByKey(table.table, typid);
 }
 
-typid ensureInTypeTable(TypeTable * pTable, const Type & type, bool debugAssertIfAlreadyInTable)
+TYPID ensureInTypeTable(TypeTable * pTable, const Type & type, bool debugAssertIfAlreadyInTable)
 {
 	AssertInfo(isTypeResolved(type), "Shouldn't be inserting an unresolved type into the type table...");
 
 	// SLOW: Could write a combined lookup + insertNew if not found query
 
-	const typid * pTypid = lookupByValue(pTable->table, type);
+	const TYPID * pTypid = lookupByValue(pTable->table, type);
 	if (pTypid)
 	{
 		Assert(!debugAssertIfAlreadyInTable);
 		return *pTypid;
 	}
 
-    typid typidInsert = pTable->typidNext;
-    pTable->typidNext++;
+    TYPID typidInsert = pTable->typidNext;
+    pTable->typidNext = static_cast<TYPID>(pTable->typidNext + 1);
 
 	Verify(insert(&pTable->table, typidInsert, type));
     return typidInsert;
@@ -438,7 +440,7 @@ bool tryResolveType(Type * pType, const SymbolTable & symbolTable, const Stack<S
 	}
 }
 
-typid resolveIntoTypeTableOrSetPending(
+TYPID resolveIntoTypeTableOrSetPending(
 	Parser * pParser,
 	Type * pType,
 	TypePendingResolution ** ppoTypePendingResolution)
@@ -448,7 +450,7 @@ typid resolveIntoTypeTableOrSetPending(
 
 	if (tryResolveType(pType, pParser->symbTable, pParser->scopeStack))
 	{
-		typid typid = ensureInTypeTable(&pParser->typeTable, *pType);
+		TYPID typid = ensureInTypeTable(&pParser->typeTable, *pType);
         Assert(isTypeResolved(typid));
 
         *ppoTypePendingResolution = nullptr;
@@ -466,7 +468,7 @@ typid resolveIntoTypeTableOrSetPending(
 
         *ppoTypePendingResolution = pTypePending;
 
-        return gc_typidUnresolved;
+        return TYPID_Unresolved;
 	}
 }
 
@@ -487,7 +489,7 @@ bool tryResolveAllPendingTypesIntoTypeTable(Parser * pParser)
 			{
 				madeProgress = true;
 
-				typid typid = ensureInTypeTable(&pParser->typeTable, *(pTypePending->pType));
+				TYPID typid = ensureInTypeTable(&pParser->typeTable, *(pTypePending->pType));
 				*(pTypePending->pTypidUpdateWhenResolved) = typid;
 
 				dispose(&pTypePending->scopeStack);
@@ -499,4 +501,23 @@ bool tryResolveAllPendingTypesIntoTypeTable(Parser * pParser)
 	}
 
 	return (pParser->typeTable.typesPendingResolution.cItem == 0);
+}
+
+TYPID typidFromLiteralk(LITERALK literalk)
+{
+	if (literalk < LITERALK_Min || literalk >= LITERALK_Max)
+	{
+		reportIceAndExit("Unexpected literalk value: %d", literalk);
+	}
+
+	const static TYPID s_mpLiteralkTypid[] =
+	{
+		TYPID_Int,
+		TYPID_Float,
+		TYPID_Bool,
+		TYPID_String
+	};
+	StaticAssert(ArrayLen(s_mpLiteralkTypid) == LITERALK_Max);
+
+	return s_mpLiteralkTypid[literalk];
 }

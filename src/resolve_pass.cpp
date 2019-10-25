@@ -5,107 +5,164 @@
 #include "symbol.h"
 #include "type.h"
 
-scopeid resolveVarExpr(ResolvePass * pPass, AstNode * pVarExpr)
-{
-	Assert(pVarExpr);
-
-	if (pVarExpr->astk != ASTK_VarExpr)
-	{
-		AssertInfo(false, "TODO: This is not correct. We need to be able to apply a member selection operator to ANY expression");
-		return gc_unresolvedScopeid;
-	}
-
-	auto * pExpr = Down(pVarExpr, VarExpr);
-	if (pExpr->pOwner)
-	{
-		// TODO: This is too simple. Owner can be more than a VarExr
-		scopeid ownerScopeid = resolveVarExpr(pPass, pExpr->pOwner);
-
-		AssertInfo(!pExpr->pResolvedDecl, "This shouldn't be resolved yet because this is the code that should resolve it!");
-
-		ScopedIdentifier candidate;
-        setIdent(&candidate, pExpr->pTokenIdent, ownerScopeid);
-		SymbolInfo * pSymbInfo = lookupVarSymb(*pPass->pSymbTable, candidate);
-
-		if (pSymbInfo)
-		{
-			// Resolve!
-
-            pExpr->pResolvedDecl = pSymbInfo->pVarDeclStmt;
-
-			// TODO: Look up type of the variable and return the type declaration's corresponding scopeid
-		}
-		else
-		{
-			// Unresolved
-
-			return gc_unresolvedScopeid;
-		}
-	}
-	else
-	{
-
-	}
-
-	// do lookup + resolve and then return scopeid?
-
-    AssertInfo(false, "TODO: finish writing this function");
-    return gc_unresolvedScopeid;
-}
-
-// TODO: Should probably return a type. Maybe I want to assign all types a typeid and register them in a table instead
-//	of storing Type's directly in the AST? Kind of a flyweight pattern? I also know I want typeid stuff for RTTI so might
-//	as well do that now...
-
-scopeid resolveExpr(ResolvePass * pPass, AstNode * pNode)
+TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 {
 	Assert(category(pNode->astk) == ASTCATK_Expr);
+
+	TYPID typidResult;
 
 	switch (pNode->astk)
 	{
         case ASTK_BinopExpr:
         {
-            auto * pExpr = DownConst(pNode, BinopExpr);
-            doResolvePass(pPass, pExpr->pLhsExpr);
-            doResolvePass(pPass, pExpr->pRhsExpr);
+			// NOTE: Assume that binops can only happen between
+			//	exact type matches, and the result becomes that type.
+			//	Will change later!
+
+            auto * pExpr = Down(pNode, BinopExpr);
+            TYPID typidLhs = resolveExpr(pPass, pExpr->pLhsExpr);
+            TYPID typidRhs = resolveExpr(pPass, pExpr->pRhsExpr);
+
+			if (typidLhs != typidRhs)
+			{
+				// TODO: report type error
+				return TYPID_TypeError;
+			}
+
+			typidResult = typidLhs;
+			pExpr->typid = typidResult;
         } break;
 
         case ASTK_GroupExpr:
         {
-            auto * pExpr = DownConst(pNode, GroupExpr);
-            doResolvePass(pPass, pExpr->pExpr);
+            auto * pExpr = Down(pNode, GroupExpr);
+            typidResult = resolveExpr(pPass, pExpr->pExpr);
+			pExpr->typid = typidResult;
         } break;
 
         case ASTK_LiteralExpr:
         {
+			auto * pExpr = Down(pNode, LiteralExpr);
+			typidResult = typidFromLiteralk(pExpr->literalk);
+			pExpr->typid = typidResult;
         } break;
 
         case ASTK_UnopExpr:
         {
-            auto * pExpr = DownConst(pNode, UnopExpr);
-            doResolvePass(pPass, pExpr->pExpr);
+            auto * pExpr = Down(pNode, UnopExpr);
+            typidResult = resolveExpr(pPass, pExpr->pExpr);
+			pExpr->typid = typidResult;
         } break;
 
         case ASTK_VarExpr:
         {
-            auto * pExpr = DownConst(pNode, VarExpr);
+            auto * pExpr = Down(pNode, VarExpr);
+			AssertInfo(!pExpr->pResolvedDecl, "This shouldn't be resolved yet because this is the code that should resolve it!");
 
-			// TODO: Need to look up variables in the owner struct's in the structs namespace....
-			//	we should probably recurse into the owner first, and maybe it will return the symbolid of the
-			//	scope that the owner's shit lives in?
+            if (pExpr->pOwner)
+            {
+                TYPID ownerTypid = resolveExpr(pPass, pExpr->pOwner);
+				SCOPEID ownerScopeid = SCOPEID_Nil;
 
+				if (!isTypeResolved(ownerTypid))
+				{
+					return ownerTypid;
+				}
+
+				const Type * pOwnerType = lookupType(*pPass->pTypeTable, ownerTypid);
+				Assert(pOwnerType);
+
+				SymbolInfo * pSymbInfo = lookupTypeSymb(*pPass->pSymbTable, pOwnerType->ident);
+				Assert(pSymbInfo);
+
+				if (pSymbInfo->symbolk == SYMBOLK_Struct)
+				{
+					ownerScopeid = pSymbInfo->pStructDefnStmt->scopeid;
+				}
+
+                ScopedIdentifier candidate;
+                setIdent(&candidate, pExpr->pTokenIdent, ownerScopeid);
+                SymbolInfo * pSymbInfo = lookupVarSymb(*pPass->pSymbTable, candidate);
+
+                if (pSymbInfo)
+                {
+                    // Resolve!
+
+                    pExpr->pResolvedDecl = pSymbInfo->pVarDeclStmt;
+					pExpr->typid = pSymbInfo->pVarDeclStmt->typid;
+					typidResult = pSymbInfo->pVarDeclStmt->typid;
+                }
+                else
+                {
+                    // Unresolved
+
+					// TODO: report unresolved member ident
+
+                    return TYPID_Unresolved;	// HMM: Is this the right return value?
+                }
+            }
+            else
+            {
+				bool found = false;
+				for (int i = 0; i < count(pPass->scopeidStack); i++)
+				{
+					scopeid scopeidCandidate;
+					Verify(peekFar(pPass->scopeidStack, i, &scopeidCandidate));
+
+					ScopedIdentifier candidate;
+					setIdent(&candidate, pExpr->pTokenIdent, scopeidCandidate);
+					SymbolInfo * pSymbInfo = lookupVarSymb(*pPass->pSymbTable, candidate);
+
+					if (pSymbInfo)
+					{
+						// Resolve!
+
+						pExpr->pResolvedDecl = pSymbInfo->pVarDeclStmt;
+						pExpr->typid = pSymbInfo->pVarDeclStmt->typid;
+						typidResult = pSymbInfo->pVarDeclStmt->typid;
+
+						found = true;
+						break;
+					}
+				}
+
+				if (!found)
+				{
+					// TODO: report unresolved member ident
+
+                    return TYPID_Unresolved;	// HMM: Is this the right return value?
+				}
+            }
         } break;
 
         case ASTK_ArrayAccessExpr:
         {
-            auto * pExpr = DownConst(pNode, ArrayAccessExpr);
-            doResolvePass(pPass, pExpr->pArray);
-            doResolvePass(pPass, pExpr->pSubscript);
+            auto * pExpr = Down(pNode, ArrayAccessExpr);
+            typidResult typidArray = resolveExpr(pPass, pExpr->pArray);
+            resolveExpr(pPass, pExpr->pSubscript);
+
+			if (!isTypeResolved(typidArray))
+			{
+				return typidArray;
+			}
+
+			// TODO:
+			// - get Type from typid
+			// - construct new type
+			// - copy old type into new type (don't "move"... don't want to destroy old type!)
+			// - check that first typemodifier is []
+			//		- else, error (can't subscript a non-array!)
+			// - remove first typemodifier from our copy
+			// - ensure this type in the type table! need to call ensure because it could be
+			//	possible for someone to take an array of a type that they otherwise don't
+			//	declare anywhere, but we still want to capture that type's existence in the
+			//	type table!
+
         } break;
 
         case ASTK_FuncCallExpr:
         {
-            auto * pExpr = DownConst(pNode, FuncCallExpr);
+            auto * pExpr = Down(pNode, FuncCallExpr);
             doResolvePass(pPass, pExpr->pFunc);
 
             for (int i = 0; i < pExpr->apArgs.cItem; i++)
@@ -116,7 +173,7 @@ scopeid resolveExpr(ResolvePass * pPass, AstNode * pNode)
 
         case ASTK_FuncLiteralExpr:
         {
-            auto * pExpr = DownConst(pNode, FuncLiteralExpr);
+            auto * pExpr = Down(pNode, FuncLiteralExpr);
 
 			push(&pPass->scopeidStack, pExpr->scopeid);
 			Defer(pop(&pPass->scopeidStack));
@@ -150,20 +207,20 @@ void resolveStmt(ResolvePass * pPass, AstNode * pNode)
 	{
 		case ASTK_ExprStmt:
 		{
-			auto * pStmt = DownConst(pNode, ExprStmt);
+			auto * pStmt = Down(pNode, ExprStmt);
 			doResolvePass(pPass, pStmt->pExpr);
 		} break;
 
 		case ASTK_AssignStmt:
 		{
-			auto * pStmt = DownConst(pNode, AssignStmt);
+			auto * pStmt = Down(pNode, AssignStmt);
 			doResolvePass(pPass, pStmt->pLhsExpr);
 			doResolvePass(pPass, pStmt->pRhsExpr);
 		} break;
 
 		case ASTK_VarDeclStmt:
 		{
-			auto * pStmt = DownConst(pNode, VarDeclStmt);
+			auto * pStmt = Down(pNode, VarDeclStmt);
 			AssertInfo(isScopeSet(pStmt->ident), "The name of the thing you are declaring should be resolved to itself...");
 
 			AssertInfo(isTypeResolved(pStmt->typid), "Inferred types are TODO");
@@ -242,7 +299,7 @@ void resolveStmt(ResolvePass * pPass, AstNode * pNode)
 
 		case ASTK_StructDefnStmt:
 		{
-			auto * pStmt = DownConst(pNode, StructDefnStmt);
+			auto * pStmt = Down(pNode, StructDefnStmt);
 
 #if DEBUG
 			// Verify assumptions
@@ -255,7 +312,7 @@ void resolveStmt(ResolvePass * pPass, AstNode * pNode)
 
 			// Record sequence id
 
-			Assert(pStmt->symbseqid != gc_unsetSymbseqid);
+			Assert(pStmt->symbseqid != gc_symbseqidUnset);
 			pPass->lastSymbseqid = pStmt->symbseqid;
 
 			// Record scope id
@@ -273,7 +330,7 @@ void resolveStmt(ResolvePass * pPass, AstNode * pNode)
 
 		case ASTK_FuncDefnStmt:
 		{
-			auto * pStmt = DownConst(pNode, FuncDefnStmt);
+			auto * pStmt = Down(pNode, FuncDefnStmt);
 
 #if DEBUG
             {
@@ -303,7 +360,7 @@ void resolveStmt(ResolvePass * pPass, AstNode * pNode)
 
 			// Record sequence id
 
-			Assert(pStmt->symbseqid != gc_unsetSymbseqid);
+			Assert(pStmt->symbseqid != gc_symbseqidUnset);
 			pPass->lastSymbseqid = pStmt->symbseqid;
 
 			// Record scope id
@@ -336,11 +393,11 @@ void resolveStmt(ResolvePass * pPass, AstNode * pNode)
 			//	the block scope should be the same as the scope of the params. That's why we only
 			//	push/pop if we are actually a different scope!
 
-			auto * pStmt = DownConst(pNode, BlockStmt);
+			auto * pStmt = Down(pNode, BlockStmt);
 
 			bool shouldPushPop = true;
 			{
-				scopeid scopeidPrev;
+				SCOPEID scopeidPrev;
 				if (peek(pPass->scopeidStack, &scopeidPrev))
 				{
 					shouldPushPop = (scopeidPrev != pStmt->scopeid);
@@ -358,14 +415,14 @@ void resolveStmt(ResolvePass * pPass, AstNode * pNode)
 
 		case ASTK_WhileStmt:
 		{
-			auto * pStmt = DownConst(pNode, WhileStmt);
+			auto * pStmt = Down(pNode, WhileStmt);
 			doResolvePass(pPass, pStmt->pCondExpr);
 			doResolvePass(pPass, pStmt->pBodyStmt);
 		} break;
 
 		case ASTK_IfStmt:
 		{
-			auto * pStmt = DownConst(pNode, IfStmt);
+			auto * pStmt = Down(pNode, IfStmt);
 			doResolvePass(pPass, pStmt->pCondExpr);
 			doResolvePass(pPass, pStmt->pThenStmt);
 			if (pStmt->pElseStmt) doResolvePass(pPass, pStmt->pElseStmt);
@@ -373,7 +430,7 @@ void resolveStmt(ResolvePass * pPass, AstNode * pNode)
 
 		case ASTK_ReturnStmt:
 		{
-			auto * pStmt = DownConst(pNode, ReturnStmt);
+			auto * pStmt = Down(pNode, ReturnStmt);
 			doResolvePass(pPass, pStmt->pExpr);
 		} break;
 
@@ -418,7 +475,7 @@ void doResolvePass(ResolvePass * pPass, AstNode * pNode) // TODO: rename this pa
 
         case ASTK_Program:
         {
-            auto * pProgram = DownConst(pNode, Program);
+            auto * pProgram = Down(pNode, Program);
             for (int i = 0; i < pProgram->apNodes.cItem; i++)
             {
                 doResolvePass(pPass, pProgram->apNodes[i]);
