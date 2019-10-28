@@ -291,10 +291,9 @@ struct AstVarDeclStmt
 {
 	ScopedIdentifier ident;
 
-	// Type * pType;			// null means inferred type that hasn't yet been inferred
 	AstNode * pInitExpr;	// null means default init
 
-    symbseqid symbseqid;
+    SYMBSEQID symbseqid;
 	TYPID typid;
 };
 
@@ -303,7 +302,7 @@ struct AstStructDefnStmt
 	ScopedIdentifier ident;
 	DynamicArray<AstNode *> apVarDeclStmt;
     SCOPEID scopeid;        // Scope introduced by this struct defn
-    symbseqid symbseqid;
+    SYMBSEQID symbseqid;
 	TYPID typidSelf;
 };
 
@@ -317,7 +316,7 @@ struct AstFuncDefnStmt
 	AstNode * pBodyStmt;
     SCOPEID scopeid;        // Scope introduced by this func defn
 	TYPID typid;
-    symbseqid symbseqid;
+    SYMBSEQID symbseqid;
 };
 
 struct AstBlockStmt

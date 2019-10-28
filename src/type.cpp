@@ -33,6 +33,26 @@ void initMove(Type * pType, Type * pTypeSrc)
 	}
 }
 
+void initCopy(Type * pType, const Type & typeSrc)
+{
+	pType->isFuncType = typeSrc.isFuncType;
+	initCopy(&pType->aTypemods, typeSrc.aTypemods);
+
+	if (pType->isFuncType)
+	{
+		initCopy(&pType->funcType, typeSrc.funcType);
+	}
+	else
+	{
+		// META: This assignment is fine since ScopedIdentifier doesn't own any resources. How would I make this more robust
+		//	if I wanted to change ScopedIdentifier to allow it to own resources in the future? Writing an initCopy for ident
+		//	that just does this assignment seems like too much boilerplate. I would also like to prefer avoiding C++ constructor
+		//	craziness. Is there a middle ground? How do I want to handle this in Meek?
+
+		pType->ident = typeSrc.ident;
+	}
+}
+
 void dispose(Type * pType)
 {
 	dispose(&pType->aTypemods);
@@ -171,6 +191,12 @@ void initMove(FuncType * pFuncType, FuncType * pFuncTypeSrc)
 	initMove(&pFuncType->returnTypids, &pFuncTypeSrc->returnTypids);
 }
 
+void initCopy(FuncType * pFuncType, const FuncType & funcTypeSrc)
+{
+	initCopy(&pFuncType->paramTypids, funcTypeSrc.paramTypids);
+	initCopy(&pFuncType->returnTypids, funcTypeSrc.returnTypids);
+}
+
 void dispose(FuncType * pFuncType)
 {
     dispose(&pFuncType->paramTypids);
@@ -227,6 +253,19 @@ uint funcTypeHash(const FuncType & f)
 	return hash;
 }
 
+bool areTypidListTypesFullyResolved(const DynamicArray<TYPID> & aTypid)
+{
+	for (int i = 0; i < aTypid.cItem; i++)
+    {
+        if (!isTypeResolved(aTypid[i]))
+        {
+            return false;
+        }
+    }
+
+    return true;
+}
+
 bool areVarDeclListTypesFullyResolved(const DynamicArray<AstNode*>& apVarDecls)
 {
     for (int i = 0; i < apVarDecls.cItem; i++)
@@ -272,6 +311,28 @@ bool areVarDeclListTypesEq(const DynamicArray<AstNode *> & apVarDecls0, const Dy
 	return true;
 }
 
+bool areTypidListAndVarDeclListTypesEq(const DynamicArray<TYPID> & aTypid, const DynamicArray<AstNode *> & apVarDecls)
+{
+	AssertInfo(areVarDeclListTypesFullyResolved(apVarDecls), "This shouldn't be called before types are resolved!");
+	AssertInfo(areTypidListTypesFullyResolved(aTypid), "This shouldn't be called before types are resolved!");
+
+	if (aTypid.cItem != apVarDecls.cItem) return false;
+
+	for (int i = 0; i < aTypid.cItem; i++)
+	{
+		TYPID typid0 = aTypid[i];
+
+		Assert(apVarDecls[i]->astk == ASTK_VarDeclStmt);
+		auto * pVarDeclStmt = Down(apVarDecls[i], VarDeclStmt);
+
+		TYPID typid1 = pVarDeclStmt->typid;
+
+		if (typid0 != typid1) return false;
+	}
+
+	return true;
+}
+
 void init(TypeTable * pTable)
 {
 	init(&pTable->table,
@@ -285,6 +346,26 @@ void init(TypeTable * pTable)
 
 void insertBuiltInTypes(TypeTable * pTable)
 {
+	// void
+    {
+        static Token voidToken;
+        voidToken.id = -1;
+        voidToken.line = -1;
+        voidToken.column = -1;
+        voidToken.tokenk = TOKENK_Identifier;
+        voidToken.lexeme = "void";
+
+        ScopedIdentifier voidIdent;
+        setIdent(&voidIdent, &voidToken, SCOPEID_BuiltIn);
+
+        Type voidType;
+        init(&voidType, false /* isFuncType */);
+        voidType.ident = voidIdent;
+
+        Verify(isTypeResolved(voidType));
+        Verify(ensureInTypeTable(pTable, voidType) == TYPID_Void);
+    }
+
     // int
     {
         static Token intToken;
@@ -401,8 +482,7 @@ bool tryResolveType(Type * pType, const SymbolTable & symbolTable, const Stack<S
 
 		for (int i = 0; i < count(scopeStack); i++)
 		{
-            Scope candidateScope;
-			Verify(peekFar(scopeStack, i, &candidateScope));
+            Scope candidateScope =peekFar(scopeStack, i);
 
             candidate.defnclScopeid = candidateScope.id;
             candidate.hash = scopedIdentHash(candidate);

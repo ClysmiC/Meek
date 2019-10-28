@@ -8,8 +8,9 @@ struct TypeTable;
 
 struct ResolvePass
 {
-    symbseqid lastSymbseqid = 0;
-	Stack<SCOPEID> scopeidStack;
+    SYMBSEQID lastSymbseqid = SYMBSEQID_Unset;      // TODO: USE THIS
+
+	Stack<Scope> scopeStack;
 	SymbolTable * pSymbTable;
     TypeTable * pTypeTable;
 
@@ -18,17 +19,12 @@ struct ResolvePass
 	bool hadError = false;
 };
 
-inline void init(ResolvePass * pPass)
-{
-	pPass->lastSymbseqid = 0;
-	init(&pPass->scopeidStack);
-	init(&pPass->unresolvedIdents);
-	pPass->hadError = false;
-}
+void init(ResolvePass * pPass);
+
 
 inline void dispose(ResolvePass * pResolvePass)
 {
-	dispose(&pResolvePass->scopeidStack);
+	dispose(&pResolvePass->scopeStack);
 	dispose(&pResolvePass->unresolvedIdents);
 }
 

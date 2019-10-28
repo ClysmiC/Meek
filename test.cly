@@ -1,31 +1,18 @@
-fn returnVoidImplicit (int a)
+fn get5() -> int
 {
+	return 5;
 }
 
-fn returnVoidImplicit (float j)
+fn main(int a)
 {
-}
+	int b = 5;
+	[3]int intArray;
 
-fn returnVoidImplicit (bool a, float b)
-{
-}
 
-fn returnVoidExplicit (int a) -> ()
-{
-}
+	b + intArray[0];
+	// b + intArray;
 
-fn returnSingleValue (float a) -> bool
-{
-}
+	float f = 12;
 
-fn returnSingleValueParenthesized (foo bar) -> (int a)
-{
-}
-
-fn returnMultipleValues (int a) -> (int, int)
-{
-}
-
-struct foo
-{
+	f + intArray[0];
 }

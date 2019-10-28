@@ -5,8 +5,6 @@
 #include "token.h"
 #include "type.h"
 
-const symbseqid gc_symbseqidUnset = 0;
-
 //void init(ScopeStack * pScopeStack)
 //{
 //    init(&pScopeStack->stack);
@@ -38,6 +36,12 @@ const symbseqid gc_symbseqidUnset = 0;
 //    return s;
 //}
 
+void init(FuncSymbolPendingResolution * pPending, const SymbolInfo & symbolInfo, const Stack<Scope> & scopeStack)
+{
+    pPending->symbolInfo = symbolInfo;
+    initCopy(&pPending->scopeStack, scopeStack);
+}
+
 void init(SymbolTable * pSymbTable)
 {
 	init(&pSymbTable->varTable, scopedIdentHashPrecomputed, scopedIdentEq);
@@ -49,7 +53,7 @@ void init(SymbolTable * pSymbTable)
 	init(&pSymbTable->redefinedVars);
     init(&pSymbTable->redefinedFuncs);
     init(&pSymbTable->redefinedTypes);
-    pSymbTable->sequenceIdNext = 0;
+    pSymbTable->symbseqidNext = SYMBSEQID_SetStart;
 }
 
 void dispose(SymbolTable * pSymbTable)
@@ -75,6 +79,14 @@ void dispose(SymbolTable * pSymbTable)
 
 void insertBuiltInSymbols(SymbolTable * pSymbolTable)
 {
+	Stack<Scope> scopeStack;
+	init(&scopeStack);
+	Defer(dispose(&scopeStack));
+	Scope builtInScope;
+	builtInScope.id = SCOPEID_BuiltIn;
+	builtInScope.scopek = SCOPEK_BuiltIn;
+	push(&scopeStack, builtInScope);
+
     // int
     {
         static Token intToken;
@@ -90,7 +102,7 @@ void insertBuiltInSymbols(SymbolTable * pSymbolTable)
         SymbolInfo intInfo;
         setBuiltinTypeSymbolInfo(&intInfo, intIdent, TYPID_Int);
 
-        Verify(tryInsert(pSymbolTable, intIdent, intInfo));
+        Verify(tryInsert(pSymbolTable, intIdent, intInfo, scopeStack));
     }
 
     // float
@@ -108,7 +120,7 @@ void insertBuiltInSymbols(SymbolTable * pSymbolTable)
         SymbolInfo floatInfo;
         setBuiltinTypeSymbolInfo(&floatInfo, floatIdent, TYPID_Float);
 
-        Verify(tryInsert(pSymbolTable, floatIdent, floatInfo));
+        Verify(tryInsert(pSymbolTable, floatIdent, floatInfo, scopeStack));
     }
 
     // bool
@@ -126,25 +138,27 @@ void insertBuiltInSymbols(SymbolTable * pSymbolTable)
         SymbolInfo boolInfo;
         setBuiltinTypeSymbolInfo(&boolInfo, boolIdent, TYPID_Bool);
 
-        Verify(tryInsert(pSymbolTable, boolIdent, boolInfo));
+        Verify(tryInsert(pSymbolTable, boolIdent, boolInfo, scopeStack));
     }
 }
 
 bool tryInsert(
 	SymbolTable * pSymbolTable,
 	const ScopedIdentifier & ident,
-	const SymbolInfo & symbInfo)
+	const SymbolInfo & symbInfo,
+	const Stack<Scope> & scopeStack)
 {
 	if (!ident.pToken) return false;
 
-    Assert(symbInfo.ident.hash == ident.hash);
+	Assert(ident.defnclScopeid == peek(scopeStack).id);
+    Assert(symbInfo.ident.hash == ident.hash);      // Ehh passing idents around is kind of redundant if it is already embedded in the symbol info
 
 	if (symbInfo.symbolk == SYMBOLK_Var || symbInfo.symbolk == SYMBOLK_Struct || symbInfo.symbolk == SYMBOLK_BuiltInType)
 	{
 		auto * pTable = (symbInfo.symbolk == SYMBOLK_Var) ? &pSymbolTable->varTable : &pSymbolTable->typeTable;
 		auto * pRedefinedArray = (symbInfo.symbolk == SYMBOLK_Var) ? &pSymbolTable->redefinedVars : &pSymbolTable->redefinedTypes;
 
-        // Check for duplicate
+        // Check for duplicate in own scope
 
 		if (lookup(*pTable, ident))
 		{
@@ -152,16 +166,35 @@ bool tryInsert(
 			return false;
 		}
 
+		// Check for shadowing of struct or builtin (only vars can be shadowed)
+		// NOTE: i = 1 because the top scope in the stack matches the ident's scope, which was just checked in the previous step
+
+		if (symbInfo.symbolk == SYMBOLK_Struct || symbInfo.symbolk == SYMBOLK_BuiltInType)
+		{
+			for (int i = 1; i < count(scopeStack); i++)
+			{
+				ScopedIdentifier candidateIdent;
+				setIdent(&candidateIdent, ident.pToken, peekFar(scopeStack, i).id);
+				if (lookup(*pTable, ident))
+				{
+					append(pRedefinedArray, symbInfo);
+					return false;
+				}
+			}
+		}
+
         // Add sequence id to AST node
 
         if (symbInfo.symbolk == SYMBOLK_Var)
         {
-            symbInfo.pVarDeclStmt->symbseqid = pSymbolTable->sequenceIdNext;
+            symbInfo.pVarDeclStmt->symbseqid = pSymbolTable->symbseqidNext;
         }
         else if (symbInfo.symbolk == SYMBOLK_Struct)
         {
-            symbInfo.pStructDefnStmt->symbseqid = pSymbolTable->sequenceIdNext;
+            symbInfo.pStructDefnStmt->symbseqid = pSymbolTable->symbseqidNext;
         }
+
+        pSymbolTable->symbseqidNext = static_cast<SYMBSEQID>(pSymbolTable->symbseqidNext + 1);
 
         // Insert into table
 
@@ -178,9 +211,36 @@ bool tryInsert(
 
         if (!areVarDeclListTypesFullyResolved(pFuncDefnStmt->apParamVarDecls))
         {
-			append(&pSymbolTable->funcSymbolsPendingResolution, symbInfo);
+            FuncSymbolPendingResolution * pPending = appendNew(&pSymbolTable->funcSymbolsPendingResolution);
+            init(pPending, symbInfo, scopeStack);
             return false;
         }
+
+        // Check for duplicate w/ same parameter signature
+
+		{
+			DynamicArray<SymbolInfo> aFuncsWithSameName;
+			init(&aFuncsWithSameName);
+			Defer(dispose(&aFuncsWithSameName));
+
+			lookupFuncSymb(*pSymbolTable, symbInfo.ident.pToken, scopeStack, &aFuncsWithSameName);
+
+			for (int i = 0; i < aFuncsWithSameName.cItem; i++)
+			{
+				SymbolInfo * pSymbInfoCandidate = &aFuncsWithSameName[i];
+				Assert(pSymbInfoCandidate->symbolk == SYMBOLK_Func);
+
+				AstFuncDefnStmt * pFuncDefnStmtOther = pSymbInfoCandidate->pFuncDefnStmt;
+
+				if (areVarDeclListTypesEq(pFuncDefnStmt->apParamVarDecls, pFuncDefnStmtOther->apParamVarDecls))
+				{
+					// Duplicate
+
+					append(&pSymbolTable->redefinedFuncs, symbInfo);
+					return false;
+				}
+			}
+		}
 
         // Get array of entries or create new one
 
@@ -191,29 +251,10 @@ bool tryInsert(
 			init(pEntries);
 		}
 
-        // Check for duplicate w/ same parameter signature
-
-		for (int i = 0; i < pEntries->cItem; i++)
-		{
-			SymbolInfo * pSymbInfoCandidate = &(*pEntries)[i];
-			Assert(pSymbInfoCandidate->symbolk == SYMBOLK_Func);
-
-			AstFuncDefnStmt * pFuncDefnStmtOther = pSymbInfoCandidate->pFuncDefnStmt;
-
-			if (areVarDeclListTypesEq(pFuncDefnStmt->apParamVarDecls, pFuncDefnStmtOther->apParamVarDecls))
-			{
-				// Duplicate
-
-				append(&pSymbolTable->redefinedFuncs, symbInfo);
-				return false;
-			}
-		}
-
-
         // Add sequence id to AST node
 
-        symbInfo.pFuncDefnStmt->symbseqid = pSymbolTable->sequenceIdNext;
-        pSymbolTable->sequenceIdNext++;
+        symbInfo.pFuncDefnStmt->symbseqid = pSymbolTable->symbseqidNext;
+        pSymbolTable->symbseqidNext = static_cast<SYMBSEQID>(pSymbolTable->symbseqidNext + 1);
 
 
         // Insert into table
@@ -227,8 +268,8 @@ bool tryResolvePendingFuncSymbolsAfterTypesResolved(SymbolTable * pSymbTable)
 {
 	for (int i = pSymbTable->funcSymbolsPendingResolution.cItem - 1; i >= 0; i--)
 	{
-		const SymbolInfo * pSymbInfo = &pSymbTable->funcSymbolsPendingResolution[i];
-		if (tryInsert(pSymbTable, pSymbInfo->ident, *pSymbInfo))
+		auto * pPending = &pSymbTable->funcSymbolsPendingResolution[i];
+		if (tryInsert(pSymbTable, pPending->symbolInfo.ident, pPending->symbolInfo, pPending->scopeStack))
 		{
 			unorderedRemove(&pSymbTable->funcSymbolsPendingResolution, i);
 		}
@@ -250,6 +291,22 @@ SymbolInfo * lookupTypeSymb(const SymbolTable & symbTable, const ScopedIdentifie
 DynamicArray<SymbolInfo> * lookupFuncSymb(const SymbolTable & symbTable, const ScopedIdentifier & ident)
 {
     return lookup(symbTable.funcTable, ident);
+}
+
+void lookupFuncSymb(const SymbolTable & symbTable, Token * pFuncToken, const Stack<Scope> scopeStack, DynamicArray<SymbolInfo> * poResults)
+{
+	for (int i = 0; i < count(scopeStack); i++)
+	{
+		ScopedIdentifier candidateIdent;
+		setIdent(&candidateIdent, pFuncToken, peekFar(scopeStack, i).id);
+
+		auto * pArray = lookupFuncSymb(symbTable, candidateIdent);
+
+        if (pArray)
+        {
+            appendMultiple(poResults, pArray->pBuffer, pArray->cItem);
+        }
+	}
 }
 
 void setSymbolInfo(SymbolInfo * pSymbInfo, const ScopedIdentifier & ident, SYMBOLK symbolk, AstNode * pNode)
@@ -298,15 +355,6 @@ void setBuiltinTypeSymbolInfo(SymbolInfo * pSymbInfo, const ScopedIdentifier & i
 
 void setIdent(ScopedIdentifier * pIdentifier, Token * pToken, SCOPEID declScopeid)
 {
-    Assert(Implies(declScopeid == SCOPEID_BuiltIn, pToken));
-
-    if (pToken)
-    {
-        Assert(Iff(declScopeid == SCOPEID_BuiltIn, pToken->id == -1));
-        Assert(Iff(declScopeid == SCOPEID_BuiltIn, pToken->line == -1));
-        Assert(Iff(declScopeid == SCOPEID_BuiltIn, pToken->column == -1));
-    }
-
 	pIdentifier->pToken = pToken;
 	pIdentifier->defnclScopeid = declScopeid;
 

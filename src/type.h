@@ -3,6 +3,7 @@
 #include "als.h"
 
 #include "id_def.h"
+#include "literal.h"
 #include "symbol.h"
 #include "token.h"
 
@@ -48,6 +49,7 @@ struct Type
 
 void init(Type * pType, bool isFuncType);
 void initMove(Type * pType, Type * pTypeSrc);
+void initCopy(Type * pType, const Type & typeSrc);
 void dispose(Type * pType);
 
 bool isTypeResolved(const Type & type);
@@ -59,9 +61,7 @@ bool isFuncTypeResolved(const FuncType & funcType);
 inline bool isTypeResolved(TYPID typid)
 {
     return
-		typid != TYPID_Unresolved &&
-		typid != TYPID_UnresolvedInferred &&
-		typid != TYPID_TypeError;
+        typid >= TYPID_ActualTypesStart;
 }
 
 bool typeEq(const Type & t0, const Type & t1);
@@ -72,11 +72,15 @@ uint funcTypeHash(const FuncType & f);
 
 void init(FuncType * pFuncType);
 void initMove(FuncType * pFuncType, FuncType * pFuncTypeSrc);
+void initCopy(FuncType * pFuncType, const FuncType & funcTypeSrc);
 void dispose(FuncType * pFuncType);
+
+bool areTypidListTypesFullyResolved(const DynamicArray<TYPID> & aTypid);
 
 bool areVarDeclListTypesFullyResolved(const DynamicArray<AstNode *> & apVarDecls);
 bool areVarDeclListTypesEq(const DynamicArray<AstNode *> & apVarDecls0, const DynamicArray<AstNode *> & apVarDecls1);
 
+bool areTypidListAndVarDeclListTypesEq(const DynamicArray<TYPID> & aTypid, const DynamicArray<AstNode *> & apVarDecls);
 
 inline uint typidHash(const TYPID & typid)
 {
@@ -116,7 +120,7 @@ struct TypeTable
 
 	DynamicArray<TypePendingResolution> typesPendingResolution;
 
-    TYPID typidNext = TYPID_UserDefinedStart;
+    TYPID typidNext = TYPID_ActualTypesStart;
 };
 
 void init(TypeTable * pTable);

@@ -2,6 +2,8 @@
 
 #include <stdio.h>
 
+// TODO: should probably make these globals "const" for good measure.
+
 TOKENK g_aTokenkLiteral[] = {
 	TOKENK_IntLiteral,
 	TOKENK_FloatLiteral,
@@ -15,16 +17,9 @@ TOKENK g_aTokenkUnopPre[] = {
 	TOKENK_Minus,
 	TOKENK_Bang,
 	TOKENK_Carat,		// Address-of
-	TOKENK_Greater,		// Dereference... I kinda like this but hope it doesn't lead to ambiguity! Also it needs ot be able to stack, i.e., >> could be confused with bit shift?
+	// TOKENK_Greater,		// Dereference... I kinda like this but hope it doesn't lead to ambiguity! Also it needs ot be able to stack, i.e., >> could be confused with bit shift?
 };
 int g_cTokenkUnopPre = ArrayLen(g_aTokenkUnopPre);
-
-// Not sure it is worth supporting this. If anything, maybe just make these pre-ops to make it easier to parse?
-
-// TOKENK g_aTokenkUnopPost[] = {
-// 	TOKENK_PlusPlus,
-// 	TOKENK_MinusMinus,
-// };
 
 ReservedWord g_aReservedWord[] = {
 	{ "if",			TOKENK_If },
@@ -35,19 +30,21 @@ ReservedWord g_aReservedWord[] = {
 	{ "continue",	TOKENK_Continue },
 	{ "return",		TOKENK_Return },
 	{ "do",			TOKENK_Do },
+	{ "void",		TOKENK_Identifier },
 	{ "bool",		TOKENK_Identifier },
-	{ "byte",		TOKENK_Identifier },
+	// { "byte",		TOKENK_Identifier },
 	{ "int",		TOKENK_Identifier },
-	{ "s16",		TOKENK_Identifier },
-	{ "s32",		TOKENK_Identifier },
-	{ "s64",		TOKENK_Identifier },
-	{ "uint",		TOKENK_Identifier },
-	{ "u16",		TOKENK_Identifier },
-	{ "u32",		TOKENK_Identifier },
-	{ "u64",		TOKENK_Identifier },
+	// { "s16",		TOKENK_Identifier },
+	// { "s32",		TOKENK_Identifier },
+	// { "s64",		TOKENK_Identifier },
+	// { "uint",		TOKENK_Identifier },
+	// { "u16",		TOKENK_Identifier },
+	// { "u32",		TOKENK_Identifier },
+	// { "u64",		TOKENK_Identifier },
 	{ "float",		TOKENK_Identifier },
-	{ "f32",		TOKENK_Identifier },
-	{ "f64",		TOKENK_Identifier },
+	// { "f32",		TOKENK_Identifier },
+	// { "f64",		TOKENK_Identifier },
+	{ "string",		TOKENK_Identifier },
 	{ "struct",		TOKENK_Struct },
 	{ "enum",		TOKENK_Enum },
     { "fn",         TOKENK_Fn },

@@ -11,8 +11,6 @@ struct AstStructDefnStmt;
 struct Token;
 struct Type;
 
-extern const symbseqid gc_symbseqidUnset;
-
 enum SCOPEK : s8
 {
 	SCOPEK_BuiltIn,
@@ -25,23 +23,23 @@ enum SCOPEK : s8
 
 struct Scope
 {
-	scopeid id = SCOPEID_Unresolved;
+	SCOPEID id = SCOPEID_Unresolved;
 	SCOPEK scopek = SCOPEK_Nil;
 };
 
 struct ScopedIdentifier
 {
 	Token * pToken;
-	scopeid defnclScopeid;
+	SCOPEID defnclScopeid;
 
 	// Cached
 
 	u32 hash;
 };
 
-void setIdent(ScopedIdentifier * pIdentifier, Token * pToken, scopeid declScopeid);
+void setIdent(ScopedIdentifier * pIdentifier, Token * pToken, SCOPEID declScopeid);
 void setIdentNoScope(ScopedIdentifier * pIdentifier, Token * pToken);
-void resolveIdentScope(ScopedIdentifier * pIdentifier, scopeid declScopeid);
+void resolveIdentScope(ScopedIdentifier * pIdentifier, SCOPEID declScopeid);
 
 u32 scopedIdentHash(const ScopedIdentifier & ident);
 u32 scopedIdentHashPrecomputed(const ScopedIdentifier & ident);
@@ -73,15 +71,24 @@ struct SymbolInfo
 		AstVarDeclStmt * pVarDeclStmt;		    // SYMBOLK_Var
 		AstFuncDefnStmt * pFuncDefnStmt;		// SYMBOLK_Func
 		AstStructDefnStmt * pStructDefnStmt;	// SYMBOLK_Struct
-        typid typid;                            // SYMBOLK_BuiltInType
+        TYPID typid;                            // SYMBOLK_BuiltInType
 	};
 };
 
 void setSymbolInfo(SymbolInfo * pSymbInfo, const ScopedIdentifier & ident, SYMBOLK symbolk, AstNode * pDefncl);
-void setBuiltinTypeSymbolInfo(SymbolInfo * pSymbInfo, const ScopedIdentifier & ident, typid typid);
+void setBuiltinTypeSymbolInfo(SymbolInfo * pSymbInfo, const ScopedIdentifier & ident, TYPID typid);
 
 bool isDeclarationOrderIndependent(const SymbolInfo & info);
 bool isDeclarationOrderIndependent(SYMBOLK symbolk);
+
+struct FuncSymbolPendingResolution
+{
+    Stack<Scope> scopeStack;
+    SymbolInfo symbolInfo;
+};
+
+void init(FuncSymbolPendingResolution * pPending, const SymbolInfo & symbolInfo, const Stack<Scope> & scopeStack);
+
 
 struct SymbolTable
 {
@@ -89,13 +96,13 @@ struct SymbolTable
 	HashMap<ScopedIdentifier, SymbolInfo> typeTable;
 	HashMap<ScopedIdentifier, DynamicArray<SymbolInfo>> funcTable;
 
-    DynamicArray<SymbolInfo> funcSymbolsPendingResolution;
+    DynamicArray<FuncSymbolPendingResolution> funcSymbolsPendingResolution;
 
 	DynamicArray<SymbolInfo> redefinedVars;
 	DynamicArray<SymbolInfo> redefinedTypes;
 	DynamicArray<SymbolInfo> redefinedFuncs;
 
-    int sequenceIdNext = 0;
+    SYMBSEQID symbseqidNext = SYMBSEQID_SetStart;
 };
 
 void init(SymbolTable * pSymbTable);
@@ -105,9 +112,14 @@ void insertBuiltInSymbols(SymbolTable * pSymbolTable);
 
 SymbolInfo * lookupVarSymb(const SymbolTable & symbTable, const ScopedIdentifier & ident);
 SymbolInfo * lookupTypeSymb(const SymbolTable & symbTable, const ScopedIdentifier & ident);
+
+// Look up all matching funcs if you already know it's scopeid
 DynamicArray<SymbolInfo> * lookupFuncSymb(const SymbolTable & symbTable, const ScopedIdentifier & ident);
 
-bool tryInsert(SymbolTable * pSymbolTable, const ScopedIdentifier & ident, const SymbolInfo & symbInfo);
+// Look up all matching funcs for a given scope stack
+void lookupFuncSymb(const SymbolTable & symbTable, Token * pFuncToken, const Stack<Scope> scopeStack, DynamicArray<SymbolInfo> * poResults);
+
+bool tryInsert(SymbolTable * pSymbolTable, const ScopedIdentifier & ident, const SymbolInfo & symbInfo, const Stack<Scope> & scopeStack);
 bool tryResolvePendingFuncSymbolsAfterTypesResolved(SymbolTable * pSymbTable);
 
 #if DEBUG

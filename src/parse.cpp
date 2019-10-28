@@ -395,7 +395,7 @@ finishStruct:
 
 	SymbolInfo structDefnInfo;
 	setSymbolInfo(&structDefnInfo, pNode->ident, SYMBOLK_Struct, Up(pNode));
-	tryInsert(&pParser->symbTable, pNode->ident, structDefnInfo);
+	tryInsert(&pParser->symbTable, pNode->ident, structDefnInfo, pParser->scopeStack);
 
 	// Insert into type table
 
@@ -423,7 +423,7 @@ bool tryParseFuncDefnStmtOrLiteralExpr(Parser * pParser, FUNCHEADERK funcheaderk
 	//	are subsumed by the function's scope.
 
 	pushScope(pParser, SCOPEK_CodeBlock);
-	Defer(popScope(pParser));
+	Defer(if (!success) popScope(pParser));     // NOTE: In success case we pop it manually before inserting into symbol table
 
 	ScopedIdentifier identDefn;		// Only valid if isDefn
 	DynamicArray<AstNode *> apParamVarDecl;
@@ -489,11 +489,13 @@ bool tryParseFuncDefnStmtOrLiteralExpr(Parser * pParser, FUNCHEADERK funcheaderk
 		initMove(&pNode->apParamVarDecls, &apParamVarDecl);
 		initMove(&pNode->apReturnVarDecls, &apReturnVarDecl);
 
-		// Insert into symbol table
+		// Insert into symbol table (pop first so the scope stack doesn't include the scope that the function itself pushed)
+
+        popScope(pParser);
 
 		SymbolInfo funcDefnInfo;
 		setSymbolInfo(&funcDefnInfo, pNode->ident, SYMBOLK_Func, Up(pNode));
-		tryInsert(&pParser->symbTable, identDefn, funcDefnInfo);
+		tryInsert(&pParser->symbTable, identDefn, funcDefnInfo, pParser->scopeStack);
 
 		*ppoNode = Up(pNode);
 		return success = true;
@@ -663,7 +665,7 @@ AstNode * parseVarDeclStmt(Parser * pParser, EXPECTK expectkName, EXPECTK expect
     {
         SymbolInfo varDeclInfo;
         setSymbolInfo(&varDeclInfo, pNode->ident, SYMBOLK_Var, Up(pNode));
-        tryInsert(&pParser->symbTable, pNode->ident, varDeclInfo);
+        tryInsert(&pParser->symbTable, pNode->ident, varDeclInfo, pParser->scopeStack);
     }
 
 	return Up(pNode);
@@ -1864,23 +1866,25 @@ void pushScope(Parser * pParser, SCOPEK scopek)
 
 Scope peekScope(Parser * pParser)
 {
-	Scope s;
-	peek(pParser->scopeStack, &s);
-
-	return s;
+    bool success;
+    Scope s = peek(pParser->scopeStack, &success);
+    Assert(success);
+    return s;
 }
 
 Scope peekScopePrev(Parser * pParser)
 {
-    Scope s;
-    Verify(peekFar(pParser->scopeStack, 1, &s));
+    bool success;
+    Scope s = peekFar(pParser->scopeStack, 1, &success);
+    Assert(success);
     return s;
 }
 
 Scope popScope(Parser * pParser)
 {
-	Scope s;
-	pop(&pParser->scopeStack, &s);
+    bool success;
+	Scope s = pop(&pParser->scopeStack, &success);
+    Assert(success);
 
 	return s;
 }

@@ -88,25 +88,36 @@ int main()
             }
             else
             {
-                printf("%s", pType->ident.pToken->lexeme);
+                printf("%s\n", pType->ident.pToken->lexeme);
             }
         }
+
+        return -1;
     }
 
-    // TODO: resolve function symbols (function overload stuff needs types to be all resolved to work)
-
-#if DEBUG
-    DebugPrintCtx debugPrintCtx;
-    init(&debugPrintCtx.mpLevelSkip);
-    debugPrintCtx.pTypeTable = &parser.typeTable;
-
-    debugPrintAst(&debugPrintCtx, *pAst);
+    if (!allFuncSymbolsResolved)
+    {
+        printf("Couldn't resolve all func symbols\n");
+        return -1;
+    }
 
     ResolvePass resolvePass;
     init(&resolvePass);
     resolvePass.pSymbTable = &parser.symbTable;
     resolvePass.pTypeTable = &parser.typeTable;
     doResolvePass(&resolvePass, pAst);
+
+    printf("Resolve pass all done\n");
+
+    printf("\n\n");
+    debugPrintSymbolTable(parser.symbTable);
+#if DEBUG && 0
+    /*DebugPrintCtx debugPrintCtx;
+    init(&debugPrintCtx.mpLevelSkip);
+    debugPrintCtx.pTypeTable = &parser.typeTable;
+
+    debugPrintAst(&debugPrintCtx, *pAst);*/
+
 
     printf("\n");
     if (parser.hadError)
@@ -118,22 +129,7 @@ int main()
         printf("No parse errors :)\n");
     }
 
-    printf("\n\n");
-    debugPrintSymbolTable(parser.symbTable);
 #endif
-
-	/*Token token;
-	while (nextToken(&scanner, &token) != TOKENK_Eof)
-	{
-		if (token.tokenk == TOKENK_Error)
-		{
-			fprintf(stderr, "Error token\n");
-		}
-		else
-		{
-			fprintf(stdout, "%s : %d\n", token.lexeme, token.tokenk);
-		}
-	}*/
 
 	getchar();
 }

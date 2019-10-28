@@ -181,6 +181,16 @@ void reinitMove(DynamicArray<T> * pArray, DynamicArray<T> * pArraySrc)
 }
 
 template <typename T>
+void initCopy(DynamicArray<T> * pArray, const DynamicArray<T> & arraySrc)
+{
+	init(pArray);
+	for (int i = 0; i < arraySrc.cItem; i++)
+	{
+		append(pArray, arraySrc[i]);
+	}
+}
+
+template <typename T>
 void dispose(DynamicArray<T> * pArray)
 {
 	if (pArray->pBuffer)
@@ -198,7 +208,8 @@ void ensureCapacity(DynamicArray<T> * pArray, unsigned int requestedCapacity)
 
 	if (requestedCapacity <= pArray->capacity) return;
 
-	unsigned int newCapacity = (pArray->capacity > 0) ? pArray->capacity : 1;
+    static const unsigned int s_minCapacity = 8;
+	unsigned int newCapacity = (pArray->capacity > s_minCapacity) ? pArray->capacity : 8;
 
 	while (newCapacity < requestedCapacity)
 	{
@@ -413,29 +424,51 @@ bool contains(const Stack<T> & stack, const T & item)
 }
 
 template<typename T>
-bool peekFar(const Stack<T> & stack, int peekIndex, T * poItem)
+T peekFar(const Stack<T> & stack, int peekIndex, bool * poSuccess=nullptr)
 {
-	if (count(stack) <= peekIndex) return false;
+	T result;
+	if (count(stack) <= peekIndex)
+	{
+        ALS_COMMON_ARRAY_Assert(false);
+		if (poSuccess) *poSuccess = false;
+	}
+	else
+	{
+		// META: This requires copy constructor for the general case. Maybe have an "owned memory" notation that disallows
+		//	direct assignment unless you have annotated something as the copy routine?
 
-	*poItem = stack.a[stack.a.cItem - 1 - peekIndex];
-	return true;
+		if (poSuccess) *poSuccess = true;
+		result = stack.a[stack.a.cItem - 1 - peekIndex];
+	}
+
+	return result;
 }
 
 template<typename T>
-bool peek(const Stack<T> & stack, T * poItem)
+T peek(const Stack<T> & stack, bool * poSuccess=nullptr)
 {
-	return peekFar(stack, 0, poItem);
+	return peekFar(stack, 0, poSuccess);
 }
 
 template<typename T>
-bool pop(Stack<T> * pStack, T * poItem=nullptr)
+T pop(Stack<T> * pStack, bool * poSuccess=nullptr)
 {
-	if (isEmpty(*pStack)) return false;
+    T result;
 
-	if (poItem) *poItem = pStack->a[pStack->a.cItem - 1];
+    if (isEmpty(*pStack))
+    {
+        ALS_COMMON_ARRAY_Assert(false);
+        if (poSuccess) *poSuccess = false;
+    }
+    else
+    {
+        result = pStack->a[pStack->a.cItem - 1];
+	    pStack->a.cItem--;
 
-	pStack->a.cItem--;
-	return true;
+        if (poSuccess) *poSuccess = true;
+    }
+
+	return result;
 }
 
 template<typename T>
