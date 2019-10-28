@@ -236,6 +236,14 @@ TOKENK produceNextToken(Scanner * pScanner, Token * poToken)
 				makeToken(pScanner, TOKENK_Colon, poToken);
 			} break;
 
+            case '#':
+            {
+                if      (tryConsumeCharSequenceThenSpace(pScanner, "and"))  makeToken(pScanner, TOKENK_HashAnd, poToken);
+                else if (tryConsumeCharSequenceThenSpace(pScanner, "or"))   makeToken(pScanner, TOKENK_HashOr, poToken);
+                else if (tryConsumeCharSequenceThenSpace(pScanner, "xor"))  makeToken(pScanner, TOKENK_HashXor, poToken);
+                else                                                        makeErrorToken(pScanner, FERRTOK_UnknownHashToken, poToken);
+            } break;
+
 			case '"':
 			{
 				GRFERRTOK grferrtok = FERRTOK_UnterminatedString;
@@ -824,6 +832,41 @@ bool tryConsumeChar(Scanner * pScanner, char rangeMin, char rangeMax, char * poM
 	if (poMatch) *poMatch = c;
 
 	return true;
+}
+
+bool tryConsumeCharSequenceThenSpace(Scanner * pScanner, const char * sequence)
+{
+    int lookahead = 0;
+    const char * character = sequence;
+    while (*character)
+    {
+        Assert(isLetter(*character));
+
+        if (!tryPeekChar(pScanner, *character, lookahead))
+        {
+            return false;
+        }
+
+        character++;
+        lookahead++;
+    }
+
+    if (!isWhitespace(peekChar(pScanner, lookahead)))
+    {
+        return false;
+    }
+
+    // All peeks checked out. Now just consume through them.
+
+    for (int i = 0; i < lookahead; i++) consumeChar(pScanner);
+
+    return true;
+}
+
+char peekChar(Scanner * pScanner, int lookahead)
+{
+    if (checkEndOfFile(pScanner, lookahead)) return '\0';
+    return pScanner->pText[pScanner->iText + lookahead];
 }
 
 bool tryPeekChar(Scanner * pScanner, char expected, int lookahead)

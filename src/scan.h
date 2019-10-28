@@ -76,9 +76,11 @@ bool isFinished(Scanner * pScanner);
 TOKENK produceNextToken(Scanner * pScanner, Token * poToken);
 bool tryConsumeChar(Scanner * pScanner, char expected);
 bool tryConsumeChar(Scanner * pScanner, char rangeMin, char rangeMax, char * poMatch=nullptr);
+bool tryConsumeCharSequenceThenSpace(Scanner * pScanner, const char * sequence);
+char consumeChar(Scanner * pScanner);
 bool tryPeekChar(Scanner * pScanner, char expected, int lookahead=0);
 bool tryPeekChar(Scanner * pScanner, char rangeMin, char rangeMax, char * poMatch=nullptr, int lookahead=0);
-char consumeChar(Scanner * pScanner);
+char peekChar(Scanner * pScanner, int lookahead=0);
 
 void onStartToken(Scanner * pScanner);
 void writeCurrentLexemeIntoBuffer(Scanner * pScanner);
@@ -97,9 +99,20 @@ inline bool isDigit(char c)
 	return c >= '0' && c <= '9';
 }
 
+inline bool isLetter(char c)
+{
+    return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z');
+}
+
 inline bool isLetterOrUnderscore(char c)
 {
-	return c == '_' || (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z');
+	return c == '_' || isLetter(c);
+}
+
+// SYNC: Switch statement in scanner
+inline bool isWhitespace(char c)
+{
+    return c == ' ' || c == '\n' || c == '\t' || c == '\r';
 }
 
 inline bool isDigitOrLetterOrUnderscore(char c)

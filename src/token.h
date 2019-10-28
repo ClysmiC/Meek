@@ -65,6 +65,12 @@ enum TOKENK
 	TOKENK_LesserEqual,
 	TOKENK_GreaterEqual,
 
+    // #words
+
+    TOKENK_HashAnd,
+    TOKENK_HashOr,
+    TOKENK_HashXor,
+
 	// Reserved words (control flow)
 
 	TOKENK_If,
@@ -112,6 +118,8 @@ enum FERRTOK : u32
 	FERRTOK_UnterminatedString					= 1 << 6,
 
 	FERRTOK_UnterminatedBlockComment			= 1 << 7,
+
+    FERRTOK_UnknownHashToken                    = 1 << 8,
 
 	// TODO: Report these kinds of errors at semantic analysis
 

@@ -101,6 +101,9 @@ const char * g_mpTokenkDisplay[] = {
 	"'!='",					// TOKENK_BangEqual
 	"'<='",					// TOKENK_LesserEqual
 	"'>='",					// TOKENK_GreaterEqual
+    "'#and'",               // TOKENK_HashAnd
+    "'#or'",                // TOKENK_HashOr
+    "'#xor'",               // TOKENK_HashXor,
 	"'if'",					// TOKENK_If
     "'else'",               // TOKENK_Else
 	"'for'",				// TOKENK_For

@@ -5,6 +5,8 @@ fn get5() -> int
 
 fn main(int a)
 {
+	3 #xor 6;
+
 	int b = 5;
 	[3]int intArray;
 

@@ -26,10 +26,11 @@ static const BinopInfo s_aParseOp[] = {
 	{ 1, { TOKENK_Plus, TOKENK_Minus }, 2 },
 	{ 2, { TOKENK_Lesser, TOKENK_Greater, TOKENK_LesserEqual, TOKENK_GreaterEqual }, 4 },
 	{ 3, { TOKENK_EqualEqual, TOKENK_BangEqual }, 2 },
-	{ 4, { TOKENK_Amp }, 1 },
-	{ 5, { TOKENK_Pipe }, 1 },
-	{ 6, { TOKENK_AmpAmp }, 1 },
-	{ 7, { TOKENK_PipePipe }, 1 },
+	{ 4, { TOKENK_HashAnd }, 1 },
+    { 5, { TOKENK_HashXor }, 1 },
+	{ 6, { TOKENK_HashOr }, 1 },
+	{ 7, { TOKENK_AmpAmp }, 1 },
+	{ 8, { TOKENK_PipePipe }, 1 },
 };
 static constexpr int s_iParseOpMax = ArrayLen(s_aParseOp);
 
@@ -68,7 +69,7 @@ AstNode * parseProgram(Parser * pParser, bool * poSuccess)
 
 	parseStmts(pParser, &pNode->apNodes);
 
-	*poSuccess = pParser->hadError;
+	*poSuccess = !pParser->hadError;
 	return Up(pNode);
 }
 

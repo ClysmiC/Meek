@@ -10,6 +10,8 @@
 
 int main()
 {
+    Defer(getchar());   // Hack to see output at end
+
 #if 1
 	// Desktop setup
 
@@ -69,7 +71,11 @@ int main()
     bool success;
     AstNode * pAst = parseProgram(&parser, &success);
 
-    // TODO: Check for parse error
+    if (!success)
+    {
+        printf("Exiting with parse error(s)...");
+        return 1;
+    }
 
     bool allTypesResolved = tryResolveAllPendingTypesIntoTypeTable(&parser);
 	bool allFuncSymbolsResolved = tryResolvePendingFuncSymbolsAfterTypesResolved(&parser.symbTable);
@@ -92,13 +98,13 @@ int main()
             }
         }
 
-        return -1;
+        return 1;
     }
 
     if (!allFuncSymbolsResolved)
     {
         printf("Couldn't resolve all func symbols\n");
-        return -1;
+        return 1;
     }
 
     ResolvePass resolvePass;
@@ -130,6 +136,4 @@ int main()
     }
 
 #endif
-
-	getchar();
 }
