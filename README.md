@@ -3,4 +3,5 @@ Compiler for some unnamed unspecified language that I work on whenever I feel li
 
 Currently working on...
 
-- Scanner and parser
+- ~Scanner and parser~
+- Type checking
