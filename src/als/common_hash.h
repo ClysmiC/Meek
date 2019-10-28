@@ -193,7 +193,14 @@ V * insertNew(
 
 	// i is the ideal index for the key
 
-	uint32_t i = hash % pHashmap->cCapacity;
+    ALS_COMMON_HASH_Assert(
+        pHashmap->cCapacity != 0 &&
+        (pHashmap->cCapacity & (pHashmap->cCapacity - 1)) == 0);  // Test that it is a power of 2
+
+    // Mask out lower bits instead of modulus since we know capacity is power of 2
+
+	uint32_t i = hash & (pHashmap->cCapacity - 1);
+
 	hm::Bucket * pBucketIdeal = pHashmap->pBuffer + i;
 
 	// j is the pre-modulo index of the empty bucket slot we are tracking
