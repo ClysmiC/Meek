@@ -1633,6 +1633,8 @@ bool tryParseFuncHeaderTypeOnly(Parser * pParser, FuncType * poFuncType, AstErr 
 
 AstNode * finishParsePrimary(Parser * pParser, AstNode * pExpr)
 {
+	// This is basically all of the postfix operations
+
 	switch (pExpr->astk)
 	{
 		case ASTK_GroupExpr:
@@ -1654,6 +1656,15 @@ AstNode * finishParsePrimary(Parser * pParser, AstNode * pExpr)
 		// Member access
 
 		return parseVarExpr(pParser, pExpr);
+	}
+	else if (tryConsumeToken(pParser->pScanner, TOKENK_Carat, ensurePendingToken(pParser)))
+	{
+		// Pointer dereference
+
+		auto * pNode = AstNew(pParser, PointerDereferenceExpr, pExpr->startLine);
+		pNode->pPointerExpr = pExpr;
+
+		return finishParsePrimary(pParser, Up(pNode));
 	}
 	else if (tryConsumeToken(pParser->pScanner, TOKENK_OpenBracket, ensurePendingToken(pParser)))
 	{

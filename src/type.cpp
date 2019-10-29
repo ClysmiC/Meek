@@ -98,6 +98,11 @@ bool isUnmodifiedType(const Type & type)
 	return type.aTypemods.cItem == 0;
 }
 
+bool isPointerType(const Type & type)
+{
+	return type.aTypemods.cItem > 0 && type.aTypemods[0].typemodk == TYPEMODK_Pointer;
+}
+
 bool typeEq(const Type & t0, const Type & t1)
 {
 	if (t0.isFuncType != t1.isFuncType) return false;

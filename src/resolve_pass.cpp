@@ -79,14 +79,53 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 			auto * pExpr = Down(pNode, LiteralExpr);
 			typidResult = typidFromLiteralk(pExpr->literalk);
 			SetBubbleIfUnresolved(typidResult);
+
 			pExpr->typid = typidResult;
         } break;
 
         case ASTK_UnopExpr:
         {
             auto * pExpr = Down(pNode, UnopExpr);
-            typidResult = resolveExpr(pPass, pExpr->pExpr);
-			SetBubbleIfUnresolved(typidResult);
+            TYPID typidExpr = resolveExpr(pPass, pExpr->pExpr);
+
+            if (!isTypeResolved(typidExpr))
+            {
+                typidResult = TYPID_BubbleError;
+            }
+            else
+            {
+                switch (pExpr->pOp->tokenk)
+                {
+                    case TOKENK_Plus:
+                    case TOKENK_Minus:
+                    case TOKENK_Bang:
+                    {
+                        typidResult = typidExpr;
+                    } break;
+
+                    case TOKENK_Carat:
+                    {
+                        const Type * pTypeExpr = lookupType(*pPass->pTypeTable, typidExpr);
+                        Assert(pTypeExpr);
+
+                        Type typePtr;
+                        initCopy(&typePtr, *pTypeExpr);
+                        Defer(dispose(&typePtr));
+
+                        TypeModifier typemodPtr;
+                        typemodPtr.typemodk = TYPEMODK_Pointer;
+
+                        prepend(&typePtr.aTypemods, typemodPtr);
+                        typidResult = ensureInTypeTable(pPass->pTypeTable, typePtr);
+                    } break;
+
+                    default:
+                    {
+                        reportIceAndExit("Unknown binary operator: %d", pExpr->pOp->tokenk);
+                    } break;
+                }
+            }
+
 			pExpr->typid = typidResult;
         } break;
 
@@ -183,11 +222,44 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 			pExpr->typid = typidResult;
         } break;
 
+		case ASTK_PointerDereferenceExpr:
+		{
+			auto * pExpr = Down(pNode, PointerDereferenceExpr);
+			TYPID typidPtr = resolveExpr(pPass, pExpr->pPointerExpr);
+
+			if (!isTypeResolved(typidPtr))
+			{
+				typidResult = TYPID_BubbleError;
+			}
+			else
+			{
+				const Type * pTypePtr = lookupType(*pPass->pTypeTable, typidPtr);
+				Assert(pTypePtr);
+
+				if (!isPointerType(*pTypePtr))
+				{
+					printf("Trying to dereferenec a non-pointer\n");
+					typidResult = TYPID_TypeError;
+				}
+				else
+				{
+					Type typeDereferenced;
+					initCopy(&typeDereferenced, *pTypePtr);
+					Defer(dispose(&typeDereferenced));
+
+					remove(&typeDereferenced.aTypemods, 0);
+
+					typidResult = ensureInTypeTable(pPass->pTypeTable, typeDereferenced);
+				}
+			}
+
+			pExpr->typid = typidResult;
+		} break;
+
         case ASTK_ArrayAccessExpr:
         {
             auto * pExpr = Down(pNode, ArrayAccessExpr);
             TYPID typidArray = resolveExpr(pPass, pExpr->pArrayExpr);
-            resolveExpr(pPass, pExpr->pSubscriptExpr);
 
 			if (!isTypeResolved(typidArray))
 			{
@@ -195,6 +267,18 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 			}
 			else
 			{
+				TYPID typidSubscript = resolveExpr(pPass, pExpr->pSubscriptExpr);
+				if (typidSubscript != TYPID_Int)
+				{
+					// TODO: support uint, etc.
+					// TODO: catch negative compile time constants
+
+					// TODO: report error here, but keep on chugging with the resolve... despite the incorrect subscript, we still
+					//	know what type an array access will end up as.
+
+					printf("Trying to access array with a non integer\n");
+				}
+
 				const Type * pTypeArray = lookupType(*pPass->pTypeTable, typidArray);
 				Assert(pTypeArray);
 

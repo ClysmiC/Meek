@@ -66,6 +66,7 @@ enum ASTK : u8
 	ASTK_LiteralExpr,
 	ASTK_GroupExpr,
 	ASTK_VarExpr,
+	ASTK_PointerDereferenceExpr,
 	ASTK_ArrayAccessExpr,
 	ASTK_FuncCallExpr,
 	ASTK_FuncLiteralExpr,
@@ -245,6 +246,13 @@ struct AstVarExpr
     TYPID typid;
 };
 
+struct AstPointerDereferenceExpr
+{
+	AstNode * pPointerExpr;
+
+    TYPID typid;
+};
+
 struct AstArrayAccessExpr
 {
 	AstNode * pArrayExpr;
@@ -383,13 +391,14 @@ struct AstNode
 
 				// EXPR
 
-				AstUnopExpr			unopExpr;
-				AstBinopExpr		binopExpr;
-				AstLiteralExpr		literalExpr;
-				AstGroupExpr		groupExpr;
-				AstVarExpr			varExpr;
-				AstArrayAccessExpr	arrayAccessExpr;
-				AstFuncCallExpr		funcCallExpr;
+				AstUnopExpr					unopExpr;
+				AstBinopExpr				binopExpr;
+				AstLiteralExpr				literalExpr;
+				AstGroupExpr				groupExpr;
+				AstVarExpr					varExpr;
+				AstPointerDereferenceExpr	pointerDereferenceExpr;
+				AstArrayAccessExpr			arrayAccessExpr;
+				AstFuncCallExpr				funcCallExpr;
 
 				// STMT
 

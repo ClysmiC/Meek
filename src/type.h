@@ -55,6 +55,7 @@ void dispose(Type * pType);
 bool isTypeResolved(const Type & type);
 bool isTypeInferred(const Type & type);
 bool isUnmodifiedType(const Type & type);
+bool isPointerType(const Type & type);
 
 bool isFuncTypeResolved(const FuncType & funcType);
 

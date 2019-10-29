@@ -514,6 +514,20 @@ void debugPrintSubAst(DebugPrintCtx * pCtx, const AstNode & node, int level, boo
             }
         } break;
 
+		case ASTK_PointerDereferenceExpr:
+		{
+			auto * pExpr = DownConst(&node, PointerDereferenceExpr);
+			printf("<dereference>");
+			printf("\n");
+
+			printTabs(pCtx, levelNext, false, false);
+            printf("\n");
+
+			printTabs(pCtx, levelNext, false, false);
+            printf("(pointer):");
+            debugPrintSubAst(pCtx, *pExpr->pPointerExpr, levelNext, true);
+		} break;
+
         case ASTK_ArrayAccessExpr:
         {
             auto * pExpr = DownConst(&node, ArrayAccessExpr);
