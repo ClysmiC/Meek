@@ -1,5 +1,10 @@
-# clylang
-Compiler for some unnamed unspecified language that I work on whenever I feel like it
+# Meek
+
+Meek is currently under development.
+
+Meek is a statically typed, imperative, procedural programming language.
+
+It looks a lot like C right now, but I have plenty of ideas to try out once development is further along.
 
 Currently working on...
 
