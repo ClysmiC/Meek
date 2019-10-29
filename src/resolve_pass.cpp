@@ -50,20 +50,19 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 			if (!isTypeResolved(typidLhs) || !isTypeResolved(typidRhs))
 			{
 				typidResult = TYPID_BubbleError;
+				goto end;
 			}
-			else if (typidLhs != typidRhs)
+
+			if (typidLhs != typidRhs)
 			{
 				// TODO: report error
 
 				printf("Binary operator type mismatch. L: %d, R: %d\n", typidLhs, typidRhs);
 				typidResult = TYPID_TypeError;
-			}
-			else
-			{
-				typidResult = typidLhs;
+				goto end;
 			}
 
-			pExpr->typid = typidResult;
+			typidResult = typidLhs;
         } break;
 
         case ASTK_GroupExpr:
@@ -71,7 +70,6 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
             auto * pExpr = Down(pNode, GroupExpr);
             typidResult = resolveExpr(pPass, pExpr->pExpr);
 			SetBubbleIfUnresolved(typidResult);
-			pExpr->typid = typidResult;
         } break;
 
         case ASTK_LiteralExpr:
@@ -79,8 +77,6 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 			auto * pExpr = Down(pNode, LiteralExpr);
 			typidResult = typidFromLiteralk(pExpr->literalk);
 			SetBubbleIfUnresolved(typidResult);
-
-			pExpr->typid = typidResult;
         } break;
 
         case ASTK_UnopExpr:
@@ -91,42 +87,39 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
             if (!isTypeResolved(typidExpr))
             {
                 typidResult = TYPID_BubbleError;
-            }
-            else
-            {
-                switch (pExpr->pOp->tokenk)
-                {
-                    case TOKENK_Plus:
-                    case TOKENK_Minus:
-                    case TOKENK_Bang:
-                    {
-                        typidResult = typidExpr;
-                    } break;
-
-                    case TOKENK_Carat:
-                    {
-                        const Type * pTypeExpr = lookupType(*pPass->pTypeTable, typidExpr);
-                        Assert(pTypeExpr);
-
-                        Type typePtr;
-                        initCopy(&typePtr, *pTypeExpr);
-                        Defer(dispose(&typePtr));
-
-                        TypeModifier typemodPtr;
-                        typemodPtr.typemodk = TYPEMODK_Pointer;
-
-                        prepend(&typePtr.aTypemods, typemodPtr);
-                        typidResult = ensureInTypeTable(pPass->pTypeTable, typePtr);
-                    } break;
-
-                    default:
-                    {
-                        reportIceAndExit("Unknown binary operator: %d", pExpr->pOp->tokenk);
-                    } break;
-                }
+				goto end;
             }
 
-			pExpr->typid = typidResult;
+			switch (pExpr->pOp->tokenk)
+			{
+				case TOKENK_Plus:
+				case TOKENK_Minus:
+				case TOKENK_Bang:
+				{
+					typidResult = typidExpr;
+				} break;
+
+				case TOKENK_Carat:
+				{
+					const Type * pTypeExpr = lookupType(*pPass->pTypeTable, typidExpr);
+					Assert(pTypeExpr);
+
+					Type typePtr;
+					initCopy(&typePtr, *pTypeExpr);
+					Defer(dispose(&typePtr));
+
+					TypeModifier typemodPtr;
+					typemodPtr.typemodk = TYPEMODK_Pointer;
+
+					prepend(&typePtr.aTypemods, typemodPtr);
+					typidResult = ensureInTypeTable(pPass->pTypeTable, typePtr);
+				} break;
+
+				default:
+				{
+					reportIceAndExit("Unknown binary operator: %d", pExpr->pOp->tokenk);
+				} break;
+			}
         } break;
 
         case ASTK_VarExpr:
@@ -147,41 +140,39 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 				if (!isTypeResolved(ownerTypid))
 				{
 					typidResult = TYPID_BubbleError;
+                    goto end;
 				}
-				else
+
+				const Type * pOwnerType = lookupType(*pPass->pTypeTable, ownerTypid);
+				Assert(pOwnerType);
+
+				SymbolInfo * pSymbInfoOwner = lookupTypeSymb(*pPass->pSymbTable, pOwnerType->ident);
+				Assert(pSymbInfoOwner);
+
+				if (pSymbInfoOwner->symbolk == SYMBOLK_Struct)
 				{
-					const Type * pOwnerType = lookupType(*pPass->pTypeTable, ownerTypid);
-					Assert(pOwnerType);
-
-					SymbolInfo * pSymbInfoOwner = lookupTypeSymb(*pPass->pSymbTable, pOwnerType->ident);
-					Assert(pSymbInfoOwner);
-
-					if (pSymbInfoOwner->symbolk == SYMBOLK_Struct)
-					{
-						ownerScopeid = pSymbInfoOwner->pStructDefnStmt->scopeid;
-					}
-
-					ScopedIdentifier candidate;
-					setIdent(&candidate, pExpr->pTokenIdent, ownerScopeid);
-					SymbolInfo * pSymbInfo = lookupVarSymb(*pPass->pSymbTable, candidate);
-
-					if (pSymbInfo)
-					{
-						// Resolve!
-
-						pExpr->pResolvedDecl = pSymbInfo->pVarDeclStmt;
-						typidResult = pSymbInfo->pVarDeclStmt->typid;
-					}
-					else
-					{
-						// Unresolved
-
-						// TODO: report unresolved member ident
-						printf("Unresolved member variable %s\n", pExpr->pTokenIdent->lexeme);
-
-						typidResult = TYPID_Unresolved;
-					}
+					ownerScopeid = pSymbInfoOwner->pStructDefnStmt->scopeid;
 				}
+
+				ScopedIdentifier candidate;
+				setIdent(&candidate, pExpr->pTokenIdent, ownerScopeid);
+				SymbolInfo * pSymbInfo = lookupVarSymb(*pPass->pSymbTable, candidate);
+
+				if (!pSymbInfo)
+				{
+					// Unresolved
+
+					// TODO: report unresolved member ident
+					printf("Unresolved member variable %s\n", pExpr->pTokenIdent->lexeme);
+
+					typidResult = TYPID_Unresolved;
+					goto end;
+				}
+
+				// Resolve!
+
+				pExpr->pResolvedDecl = pSymbInfo->pVarDeclStmt;
+				typidResult = pSymbInfo->pVarDeclStmt->typid;
             }
             else
             {
@@ -218,8 +209,6 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 					typidResult = TYPID_Unresolved;
 				}
             }
-
-			pExpr->typid = typidResult;
         } break;
 
 		case ASTK_PointerDereferenceExpr:
@@ -230,30 +219,26 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 			if (!isTypeResolved(typidPtr))
 			{
 				typidResult = TYPID_BubbleError;
+				goto end;
 			}
-			else
+
+			const Type * pTypePtr = lookupType(*pPass->pTypeTable, typidPtr);
+			Assert(pTypePtr);
+
+			if (!isPointerType(*pTypePtr))
 			{
-				const Type * pTypePtr = lookupType(*pPass->pTypeTable, typidPtr);
-				Assert(pTypePtr);
-
-				if (!isPointerType(*pTypePtr))
-				{
-					printf("Trying to dereferenec a non-pointer\n");
-					typidResult = TYPID_TypeError;
-				}
-				else
-				{
-					Type typeDereferenced;
-					initCopy(&typeDereferenced, *pTypePtr);
-					Defer(dispose(&typeDereferenced));
-
-					remove(&typeDereferenced.aTypemods, 0);
-
-					typidResult = ensureInTypeTable(pPass->pTypeTable, typeDereferenced);
-				}
+				printf("Trying to dereferenec a non-pointer\n");
+				typidResult = TYPID_TypeError;
+				goto end;
 			}
 
-			pExpr->typid = typidResult;
+			Type typeDereferenced;
+			initCopy(&typeDereferenced, *pTypePtr);
+			Defer(dispose(&typeDereferenced));
+
+			remove(&typeDereferenced.aTypemods, 0);
+
+			typidResult = ensureInTypeTable(pPass->pTypeTable, typeDereferenced);
 		} break;
 
         case ASTK_ArrayAccessExpr:
@@ -264,47 +249,42 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 			if (!isTypeResolved(typidArray))
 			{
 				typidResult = TYPID_BubbleError;
+				goto end;
 			}
-			else
+
+			TYPID typidSubscript = resolveExpr(pPass, pExpr->pSubscriptExpr);
+			if (typidSubscript != TYPID_Int)
 			{
-				TYPID typidSubscript = resolveExpr(pPass, pExpr->pSubscriptExpr);
-				if (typidSubscript != TYPID_Int)
-				{
-					// TODO: support uint, etc.
-					// TODO: catch negative compile time constants
+				// TODO: support uint, etc.
+				// TODO: catch negative compile time constants
 
-					// TODO: report error here, but keep on chugging with the resolve... despite the incorrect subscript, we still
-					//	know what type an array access will end up as.
+				// TODO: report error here, but keep on chugging with the resolve... despite the incorrect subscript, we still
+				//	know what type an array access will end up as.
 
-					printf("Trying to access array with a non integer\n");
-				}
-
-				const Type * pTypeArray = lookupType(*pPass->pTypeTable, typidArray);
-				Assert(pTypeArray);
-
-				if (pTypeArray->aTypemods.cItem == 0 || pTypeArray->aTypemods[0].typemodk != TYPEMODK_Array)
-				{
-					// TODO: More specific type error. (trying to access non-array <identifier> as if it were an array)
-					//	How am I going to report these errors? Should I just maintain a list separate from the
-					//	fact that I am returning error TYPID's?
-
-					printf("Trying to access non-array as if it were an array...\n");
-
-					typidResult = TYPID_TypeError;
-				}
-				else
-				{
-					Type typeElement;
-					initCopy(&typeElement, *pTypeArray);
-					Defer(dispose(&typeElement));
-
-					remove(&typeElement.aTypemods, 0);
-
-					typidResult = ensureInTypeTable(pPass->pTypeTable, typeElement);
-				}
+				printf("Trying to access array with a non integer\n");
 			}
 
-			pExpr->typid = typidResult;
+			const Type * pTypeArray = lookupType(*pPass->pTypeTable, typidArray);
+			Assert(pTypeArray);
+
+			if (pTypeArray->aTypemods.cItem == 0 || pTypeArray->aTypemods[0].typemodk != TYPEMODK_Array)
+			{
+				// TODO: More specific type error. (trying to access non-array <identifier> as if it were an array)
+				//	How am I going to report these errors? Should I just maintain a list separate from the
+				//	fact that I am returning error TYPID's?
+
+				printf("Trying to access non-array as if it were an array...\n");
+				typidResult = TYPID_TypeError;
+				goto end;
+			}
+
+			Type typeElement;
+			initCopy(&typeElement, *pTypeArray);
+			Defer(dispose(&typeElement));
+
+			remove(&typeElement.aTypemods, 0);
+
+			typidResult = ensureInTypeTable(pPass->pTypeTable, typeElement);
         } break;
 
         case ASTK_FuncCallExpr:
@@ -314,88 +294,94 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 			//	more general concept of "tuple" values that MRV leverages, or do I want MRV to be something that is just
 			//	baked in as a special case to things like assignment and parameter lists.
 
+
             auto * pExpr = Down(pNode, FuncCallExpr);
 
 			if (pExpr->pFunc->astk == ASTK_VarExpr)
 			{
-				// Special case here, since the normal VarExpr resolve doesn't look up function names...
-
 				auto * pFuncExpr = Down(pExpr->pFunc, VarExpr);
+
+				// NOTE: For now I am resolving the VarExpr directly in-line, since the var expr case of this switch assumes a var
+				//	and not a func. This is pretty much a hack until I think of a better way to model this.
+
+				Defer(UpExpr(pFuncExpr)->typid = typidResult);		// This is pretty gross
 
 				if (pFuncExpr->pOwner)
 				{
 					// TODO: This is where I would handle UFCS
 					// TODO: report error here while I don't support UFCS
+					// NOTE: We aren't ever visiting the parent(s) here or setting their typids to unresolved.... bleh.
 
 					printf("Member function looking thingy... not supported\n");
 
 					typidResult = TYPID_Unresolved;	// Is this right?
+					goto end;
 				}
-				else
+
+				// Resolve args
+
+				// TODO: implement reserve(..) for dynamic array, since we already know ahead of time
+				//	how many typids we will have in it.
+				DynamicArray<TYPID> aTypidArg;
+				init(&aTypidArg);
+				Defer(dispose(&aTypidArg));
+
+				for (int i = 0; i < pExpr->apArgs.cItem; i++)
 				{
-					// Resolve args
+					TYPID typidArg = resolveExpr(pPass, pExpr->apArgs[i]);
+					append(&aTypidArg, typidArg);
+				}
 
-					// TODO: implement reserve(..) for dynamic array, since we already know ahead of time
-					//	how many typids we will have in it.
-					DynamicArray<TYPID> aTypidArg;
-					init(&aTypidArg);
-					Defer(dispose(&aTypidArg));
+				// Find func with matching ident and param types
 
-					for (int i = 0; i < pExpr->apArgs.cItem; i++)
+				{
+					DynamicArray<SymbolInfo> aFuncCandidates;
+					init(&aFuncCandidates);
+					Defer(dispose(&aFuncCandidates));
+
+					lookupFuncSymb(*pPass->pSymbTable, pFuncExpr->pTokenIdent, pPass->scopeStack, &aFuncCandidates);
+
+					AstFuncDefnStmt * pFuncDefnStmtMatch = nullptr;
+					for (int i = 0; i < aFuncCandidates.cItem; i++)
 					{
-						TYPID typidArg = resolveExpr(pPass, pExpr->apArgs[i]);
-						append(&aTypidArg, typidArg);
+						SymbolInfo * pSymbInfoCandidate = &aFuncCandidates[i];
+						Assert(pSymbInfoCandidate->symbolk == SYMBOLK_Func);
+
+						AstFuncDefnStmt * pFuncDefnStmt = pSymbInfoCandidate->pFuncDefnStmt;
+
+						if (areTypidListAndVarDeclListTypesEq(aTypidArg, pFuncDefnStmt->apParamVarDecls))
+						{
+							pFuncDefnStmtMatch = pFuncDefnStmt;
+							break;
+						}
 					}
 
-					// Find func with matching ident and param types
-
+					if (!pFuncDefnStmtMatch)
 					{
-						DynamicArray<SymbolInfo> aFuncCandidates;
-						init(&aFuncCandidates);
-						Defer(dispose(&aFuncCandidates));
+						// TODO: report error
 
-						lookupFuncSymb(*pPass->pSymbTable, pFuncExpr->pTokenIdent, pPass->scopeStack, &aFuncCandidates);
+						printf("Could not find function definition for %s that had expected types\n", pFuncExpr->pTokenIdent->lexeme);
+						typidResult = TYPID_Unresolved;
+						goto end;
+					}
 
-						AstFuncDefnStmt * pFuncDefnStmtMatch = nullptr;
-						for (int i = 0; i < aFuncCandidates.cItem; i++)
-						{
-							SymbolInfo * pSymbInfoCandidate = &aFuncCandidates[i];
-							Assert(pSymbInfoCandidate->symbolk == SYMBOLK_Func);
-
-							AstFuncDefnStmt * pFuncDefnStmt = pSymbInfoCandidate->pFuncDefnStmt;
-
-							if (areTypidListAndVarDeclListTypesEq(aTypidArg, pFuncDefnStmt->apParamVarDecls))
-							{
-								pFuncDefnStmtMatch = pFuncDefnStmt;
-								break;
-							}
-						}
-
-						if (!pFuncDefnStmtMatch)
-						{
-							// TODO: report error
-
-                            printf("Could not find function definition for %s that had expected types\n", pFuncExpr->pTokenIdent->lexeme);
-							typidResult = TYPID_Unresolved;
-						}
-						else
-						{
-							if (pFuncDefnStmtMatch->apReturnVarDecls.cItem == 0)
-							{
-								typidResult = TYPID_Void;
-							}
-							else
-							{
-								AssertInfo(pFuncDefnStmtMatch->apReturnVarDecls.cItem == 1, "TODO: figure out semantics for multiple return values.... for now I will just assert that there is only 1");
-								Assert(pFuncDefnStmtMatch->apReturnVarDecls[0]->astk == ASTK_VarDeclStmt);
-								typidResult = Down(pFuncDefnStmtMatch->apReturnVarDecls[0], VarDeclStmt)->typid;
-							}
-						}
+					if (pFuncDefnStmtMatch->apReturnVarDecls.cItem == 0)
+					{
+						typidResult = TYPID_Void;
+					}
+					else
+					{
+						AssertInfo(pFuncDefnStmtMatch->apReturnVarDecls.cItem == 1, "TODO: figure out semantics for multiple return values.... for now I will just assert that there is only 1");
+						Assert(pFuncDefnStmtMatch->apReturnVarDecls[0]->astk == ASTK_VarDeclStmt);
+						typidResult = Down(pFuncDefnStmtMatch->apReturnVarDecls[0], VarDeclStmt)->typid;
 					}
 				}
 			}
-
-			pExpr->typid = typidResult;
+			else
+			{
+				// TODO: It's a non-var being called as a function. Resolve the calling expr,
+				//	make sure it is a function type, then make sure our params match
+			}
         } break;
 
         case ASTK_FuncLiteralExpr:
@@ -405,8 +391,8 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 			// NOTE: Func literal expressions define a type that we should have already put into the type table when parsing,
 			//	so we just need to make sure we resolve the children here.
 
-			Assert(isTypeResolved(pExpr->typid));
-			typidResult = pExpr->typid;
+			Assert(isTypeResolved(UpExpr(pExpr)->typid));
+			typidResult = UpExpr(pExpr)->typid;
 
 			// Push scope and resolve children
 
@@ -428,9 +414,6 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 			}
 
 			doResolvePass(pPass, pExpr->pBodyStmt);
-
-			// Noticably missing is the below line... See note above
-			// pExpr->typid = typidResult;
         } break;
 
 		default:
@@ -439,6 +422,9 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 		} break;
 	}
 
+end:
+    AstExpr * pExpr = DownExpr(pNode);
+    pExpr->typid = typidResult;
     return typidResult;
 }
 

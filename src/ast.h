@@ -19,12 +19,22 @@ struct Type;
 
 #define Up(pNode) reinterpret_cast<AstNode *>(pNode)
 #define UpConst(pNode) reinterpret_cast<const AstNode *>(pNode)
-#define UpErr(pNode) reinterpret_cast<AstErr *>(pNode)
-#define UpErrConst(pNode) reinterpret_cast<const AstErr *>(pNode)
 #define Down(pNode, astk) reinterpret_cast<Ast##astk *>(pNode)
 #define DownConst(pNode, astk) reinterpret_cast<const Ast##astk *>(pNode)
+
+// NOTE: Since everything is type punned, there is really no difference between up-casting and
+//  down-casting to Err, Expr, etc. It is helpful, however to think of it in terms of up/down casts.
+
+#define UpErr(pNode) reinterpret_cast<AstErr *>(pNode)
+#define UpErrConst(pNode) reinterpret_cast<const AstErr *>(pNode)
 #define DownErr(pNode) reinterpret_cast<AstErr *>(pNode)
 #define DownErrConst(pNode) reinterpret_cast<const AstErr *>(pNode)
+
+#define UpExpr(pNode) reinterpret_cast<AstExpr *>(pNode)
+#define UpExprConst(pNode) reinterpret_cast<const AstExpr *>(pNode)
+#define DownExpr(pNode) reinterpret_cast<AstExpr *>(pNode)
+#define DownExprConst(pNode) reinterpret_cast<const AstExpr *>(pNode)
+
 #define AstNew(pParser, astk, line) reinterpret_cast<Ast##astk *>(astNew(pParser, ASTK_##astk, line))
 
 enum ASTCATK
@@ -162,7 +172,6 @@ struct AstInvokeFuncLiteralErr {};
 struct AstErr
 {
 	// NOTE: Error kind is encoded in ASTK
-	// NOTE: Using same union trick for upcasting/downcasting that AstNode uses
 
 	union
 	{
@@ -194,8 +203,6 @@ struct AstUnopExpr
 {
 	Token *	pOp;
 	AstNode * pExpr;
-
-    TYPID typid;
 };
 
 struct AstBinopExpr
@@ -203,8 +210,6 @@ struct AstBinopExpr
 	Token *	pOp;
 	AstNode * pLhsExpr;
 	AstNode * pRhsExpr;
-
-    TYPID typid;
 };
 
 struct AstLiteralExpr
@@ -222,15 +227,11 @@ struct AstLiteralExpr
 
 	bool isValueSet = false;
 	bool isValueErroneous = false;	// Things like integers that are too large, etc.
-
-    TYPID typid;        // HMM: Redundant with literalk?
 };
 
 struct AstGroupExpr
 {
 	AstNode * pExpr;
-
-    TYPID typid;
 };
 
 struct AstVarExpr
@@ -242,31 +243,23 @@ struct AstVarExpr
     Token * pTokenIdent;
 
 	AstVarDeclStmt * pResolvedDecl;     // Cached (non-child)
-
-    TYPID typid;
 };
 
 struct AstPointerDereferenceExpr
 {
 	AstNode * pPointerExpr;
-
-    TYPID typid;
 };
 
 struct AstArrayAccessExpr
 {
 	AstNode * pArrayExpr;
 	AstNode * pSubscriptExpr;
-
-    TYPID typid;
 };
 
 struct AstFuncCallExpr
 {
 	AstNode * pFunc;
 	DynamicArray<AstNode *> apArgs;		// Args are EXPR
-
-    TYPID typid;
 };
 
 struct AstFuncLiteralExpr
@@ -276,9 +269,27 @@ struct AstFuncLiteralExpr
 	AstNode * pBodyStmt;
 
     SCOPEID scopeid;
-	TYPID typid;
 };
 
+struct AstExpr
+{
+    // NOTE: Error kind is encoded in ASTK
+
+    union
+    {
+        AstUnopExpr					unopExpr;
+        AstBinopExpr				binopExpr;
+        AstLiteralExpr				literalExpr;
+        AstGroupExpr				groupExpr;
+        AstVarExpr					varExpr;
+        AstPointerDereferenceExpr	pointerDereferenceExpr;
+        AstArrayAccessExpr			arrayAccessExpr;
+        AstFuncCallExpr				funcCallExpr;
+    };
+
+    TYPID typid = TYPID_Unresolved;
+    bool isLValue = false;
+};
 
 
 // Statements
@@ -391,14 +402,7 @@ struct AstNode
 
 				// EXPR
 
-				AstUnopExpr					unopExpr;
-				AstBinopExpr				binopExpr;
-				AstLiteralExpr				literalExpr;
-				AstGroupExpr				groupExpr;
-				AstVarExpr					varExpr;
-				AstPointerDereferenceExpr	pointerDereferenceExpr;
-				AstArrayAccessExpr			arrayAccessExpr;
-				AstFuncCallExpr				funcCallExpr;
+                AstExpr             expr;
 
 				// STMT
 
