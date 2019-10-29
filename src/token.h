@@ -136,14 +136,6 @@ typedef u32 GRFERRTOK;
 
 void errMessagesFromGrferrtok(GRFERRTOK grferrtok, DynamicArray<StringBox<256>> * poMessages);
 
-enum INTLITERALK
-{
-	INTLITERALK_Binary,
-	INTLITERALK_Octal,
-	INTLITERALK_Decimal,
-	INTLITERALK_Hexadecimal
-};
-
 struct Token
 {
 	int			id = 0;

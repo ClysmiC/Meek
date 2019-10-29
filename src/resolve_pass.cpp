@@ -44,6 +44,7 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 			//	Will change later!
 
             auto * pExpr = Down(pNode, BinopExpr);
+
             TYPID typidLhs = resolveExpr(pPass, pExpr->pLhsExpr);
             TYPID typidRhs = resolveExpr(pPass, pExpr->pRhsExpr);
 
@@ -67,7 +68,14 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 
         case ASTK_GroupExpr:
         {
+			// This could technically still be an lvalue, but it would let you do stuff like this:
+			//	(a) = 15;
+			// This is semantically equivalent to:
+			//	a = 15;
+			// But it's kind of dumb, so I'm just going to say that groups are NOT lvalues.
+
             auto * pExpr = Down(pNode, GroupExpr);
+
             typidResult = resolveExpr(pPass, pExpr->pExpr);
 			SetBubbleIfUnresolved(typidResult);
         } break;
@@ -75,6 +83,7 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
         case ASTK_LiteralExpr:
         {
 			auto * pExpr = Down(pNode, LiteralExpr);
+
 			typidResult = typidFromLiteralk(pExpr->literalk);
 			SetBubbleIfUnresolved(typidResult);
         } break;
@@ -82,6 +91,7 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
         case ASTK_UnopExpr:
         {
             auto * pExpr = Down(pNode, UnopExpr);
+
             TYPID typidExpr = resolveExpr(pPass, pExpr->pExpr);
 
             if (!isTypeResolved(typidExpr))
@@ -130,6 +140,7 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 			//	to properly handle overloaded function names...
 
             auto * pExpr = Down(pNode, VarExpr);
+
 			AssertInfo(!pExpr->pResolvedDecl, "This shouldn't be resolved yet because this is the code that should resolve it!");
 
             if (pExpr->pOwner)
@@ -185,7 +196,7 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 					setIdent(&candidate, pExpr->pTokenIdent, scopeidCandidate);
 					SymbolInfo * pSymbInfo = lookupVarSymb(*pPass->pSymbTable, candidate);
 
-					if (pSymbInfo)
+					if (pSymbInfo && pSymbInfo->pVarDeclStmt->symbseqid <= pPass->lastSymbseqid)
 					{
 						// Resolve!
 
@@ -214,6 +225,7 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 		case ASTK_PointerDereferenceExpr:
 		{
 			auto * pExpr = Down(pNode, PointerDereferenceExpr);
+
 			TYPID typidPtr = resolveExpr(pPass, pExpr->pPointerExpr);
 
 			if (!isTypeResolved(typidPtr))
@@ -244,6 +256,7 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
         case ASTK_ArrayAccessExpr:
         {
             auto * pExpr = Down(pNode, ArrayAccessExpr);
+
             TYPID typidArray = resolveExpr(pPass, pExpr->pArrayExpr);
 
 			if (!isTypeResolved(typidArray))
@@ -447,14 +460,22 @@ void resolveStmt(ResolvePass * pPass, AstNode * pNode)
 
 			auto * pStmt = Down(pNode, AssignStmt);
 			TYPID typidLhs = resolveExpr(pPass, pStmt->pLhsExpr);
-			TYPID typidRhs = resolveExpr(pPass, pStmt->pLhsExpr);
+			TYPID typidRhs = resolveExpr(pPass, pStmt->pRhsExpr);
 
-			if (isTypeResolved(typidLhs) && isTypeResolved(typidRhs))
+			if (!isLValue(pStmt->pLhsExpr->astk))
 			{
-				if (typidLhs != typidRhs)
+				// TOOD: report error
+				printf("Assigning to non-lvalue\n");
+			}
+			else
+			{
+				if (isTypeResolved(typidLhs) && isTypeResolved(typidRhs))
 				{
-					// TODO: report error
-					printf("Assignment type error. L: %d, R: %d\n", typidLhs, typidRhs);
+					if (typidLhs != typidRhs)
+					{
+						// TODO: report error
+						printf("Assignment type error. L: %d, R: %d\n", typidLhs, typidRhs);
+					}
 				}
 			}
 		} break;
@@ -466,58 +487,6 @@ void resolveStmt(ResolvePass * pPass, AstNode * pNode)
 
 			AssertInfo(isTypeResolved(pStmt->typid), "Inferred types are TODO");
             const Type * pType = lookupType(*pPass->pTypeTable, pStmt->typid);
-
-			if (pType->isFuncType)
-			{
-				// Resolve types of params
-
-                // I think this is unnecessarry? This is just a type declaration, so the parameters/return values have optional,
-                //  unbound names. The only names that matter are the type identifiers which should already be resolved.
-
-				/*for (uint i = 0; i < pType->funcType.apParamVarDecls.cItem; i++)
-				{
-					doResolvePass(pPass, pType->pFuncType->apParamVarDecls[i]);
-				}
-
-				for (uint i = 0; i < pStmt->pType->pFuncType->apReturnVarDecls.cItem; i++)
-				{
-					doResolvePass(pPass, pStmt->pType->pFuncType->apReturnVarDecls[i]);
-				}*/
-			}
-			else
-			{
-                // DITTO for above comment....
-
-				//// Resolve type
-
-				//AssertInfo(!isScopeSet(pStmt->pType->ident), "This shouldn't be resolved yet because this is the code that should resolve it!");
-
-				//ScopedIdentifier candidate = pStmt->pType->ident;
-
-				//for (uint i = 0; i < count(pPass->scopeidStack); i++)
-				//{
-				//	scopeid scopeid;
-				//	Verify(peekFar(pPass->scopeidStack, i, &scopeid));
-				//	resolveIdentScope(&candidate, scopeid);
-
-				//	SymbolInfo * pSymbInfo = lookupStruct(pPass->pSymbTable, candidate);
-
-				//	if(pSymbInfo)
-				//	{
-				//		// Resolve it!
-
-				//		resolveIdentScope(&pStmt->pType->ident, scopeid);
-				//		break;
-				//	}
-				//}
-
-				//if (!isScopeSet(pStmt->pType->ident))
-				//{
-				//	reportUnresolvedIdentError(pPass, pStmt->pType->ident);
-				//}
-			}
-
-			// Record symbseqid for variable
 
 			if (pStmt->ident.pToken)
 			{
@@ -533,6 +502,8 @@ void resolveStmt(ResolvePass * pPass, AstNode * pNode)
 
 				// AssertInfo(pSymbInfo->pVarDeclStmt == pStmt, "At var declaration we should be able to look up the var in the symbol table and find ourselves...");
 #endif
+				// Record symbseqid for variable
+
 				pPass->lastSymbseqid = pStmt->symbseqid;
 			}
 
@@ -543,7 +514,13 @@ void resolveStmt(ResolvePass * pPass, AstNode * pNode)
 
             if (pStmt->pInitExpr)
             {
-                doResolvePass(pPass, pStmt->pInitExpr);
+                TYPID typidInit = resolveExpr(pPass, pStmt->pInitExpr);
+
+				if (isTypeResolved(typidInit) && typidInit != pStmt->typid)
+				{
+					// TODO: report better error
+					printf("Cannot initialize variable of type %d with expression of type %d\n", pStmt->typid, typidInit);
+				}
             }
 		} break;
 
@@ -692,17 +669,23 @@ void resolveStmt(ResolvePass * pPass, AstNode * pNode)
 			//	need some way to track the current "context" (i.e., expected return value)
 
 			auto * pStmt = Down(pNode, ReturnStmt);
-			doResolvePass(pPass, pStmt->pExpr);
+
+			if (pStmt->pExpr)
+			{
+				TYPID typidReturn = resolveExpr(pPass, pStmt->pExpr);
+			}
 		} break;
 
 		case ASTK_BreakStmt:
 		{
 			// Nothing
+			// TODO: make sure we are in a breakable context
 		} break;
 
 		case ASTK_ContinueStmt:
 		{
 			// Nothing
+			// TODO: make sure we are in a continueable context
 		} break;
 
 	    default:

@@ -46,6 +46,7 @@
   <ItemGroup>
     <ClCompile Include="src\ast.cpp" />
     <ClCompile Include="src\ast_print.cpp" />
+    <ClCompile Include="src\literal.cpp" />
     <ClCompile Include="src\main.cpp" />
     <ClCompile Include="src\parse.cpp" />
     <ClCompile Include="src\resolve_pass.cpp" />

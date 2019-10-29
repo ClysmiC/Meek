@@ -341,8 +341,9 @@ AstNode * parseStructDefnStmt(Parser * pParser)
 		return Up(pErr);
 	}
 
+    bool success = false;
 	pushScope(pParser, SCOPEK_StructDefn);
-	Defer(popScope(pParser));
+    Defer(if (!success) popScope(pParser));     // NOTE: In success case we pop it manually before inserting into symbol table
 
 	// Parse vardeclstmt list, then '}'
 
@@ -359,40 +360,23 @@ AstNode * parseStructDefnStmt(Parser * pParser)
 
 		if (isErrorNode(*pVarDeclStmt))
 		{
-			static const TOKENK s_aTokenkRecoverable[] = { TOKENK_Semicolon, TOKENK_CloseBrace };
+			Assert(apVarDeclStmt.cItem > 0);
 
-			// NOTE: Panic recovery needs reworking! See comment @ tryRecoverFromPanic
-
-			TOKENK tokenkMatch;
-			tryRecoverFromPanic(pParser, s_aTokenkRecoverable, ArrayLen(s_aTokenkRecoverable), &tokenkMatch);
-
-			if (tokenkMatch == TOKENK_CloseParen)
-			{
-				goto finishStruct;
-			}
-			else if (tokenkMatch == TOKENK_Semicolon)
-			{
-				// No action needed
-			}
-			else
-			{
-				Assert(tokenkMatch == TOKENK_Nil);
-				Assert(apVarDeclStmt.cItem > 0);
-
-				auto * pErr = AstNewErrListChildMove(pParser, BubbleErr, apVarDeclStmt[0]->startLine, &apVarDeclStmt);
-				return Up(pErr);
-			}
+			auto * pErr = AstNewErrListChildMove(pParser, BubbleErr, apVarDeclStmt[0]->startLine, &apVarDeclStmt);
+			return Up(pErr);
 		}
 	}
 
-finishStruct:
+    success = true;
 
 	auto * pNode = AstNew(pParser, StructDefnStmt, pIdentTok->line);
 	setIdent(&pNode->ident, pIdentTok, declScope);
 	initMove(&pNode->apVarDeclStmt, &apVarDeclStmt);
 	pNode->scopeid = peekScope(pParser).id;
 
-	// Insert into symbol table
+	// Insert into symbol table of enclosing scope
+
+    popScope(pParser);
 
 	SymbolInfo structDefnInfo;
 	setSymbolInfo(&structDefnInfo, pNode->ident, SYMBOLK_Struct, Up(pNode));
@@ -1042,30 +1026,19 @@ AstNode * parsePrimary(Parser * pParser)
 
 		if (isErrorNode(*pExpr))
 		{
-			// Panic recovery
-			// NOTE: Panic recovery needs reworking! See comment @ tryRecoverFromPanic
-
-			if (tryRecoverFromPanic(pParser, TOKENK_CloseParen))
-			{
-				goto finishGroup;
-			}
-
 			return pExpr;
 		}
-		else
-		{
-			if (!tryConsumeToken(pParser->pScanner, TOKENK_CloseParen, ensurePendingToken(pParser)))
-			{
-				// IDEA: Better error line message if we walk pExpr and find line of the highest AST node child it has.
-				//	We could easily cache that when constructing an AST node...
 
-				auto * pErr = AstNewErr1Child(pParser, ExpectedTokenkErr, pExpr->startLine, pExpr);
-				append(&pErr->aTokenkValid, TOKENK_CloseParen);
-				return Up(pErr);
-			}
+		if (!tryConsumeToken(pParser->pScanner, TOKENK_CloseParen, ensurePendingToken(pParser)))
+		{
+			// IDEA: Better error line message if we walk pExpr and find line of the highest AST node child it has.
+			//	We could easily cache that when constructing an AST node...
+
+			auto * pErr = AstNewErr1Child(pParser, ExpectedTokenkErr, pExpr->startLine, pExpr);
+			append(&pErr->aTokenkValid, TOKENK_CloseParen);
+			return Up(pErr);
 		}
 
-	finishGroup:
 		auto * pNode = AstNew(pParser, GroupExpr, pOpenParen->line);
 		pNode->pExpr = pExpr;
 
@@ -1141,6 +1114,7 @@ AstNode * parseLiteralExpr(Parser * pParser, bool mustBeIntLiteralk)
 
 	auto * pExpr = AstNew(pParser, LiteralExpr, pToken->line);
 	pExpr->pToken = pToken;
+    pExpr->literalk = literalkFromTokenk(pExpr->pToken->tokenk);
 	pExpr->isValueSet = false;
 	pExpr->isValueErroneous = false;
 
@@ -1633,23 +1607,7 @@ bool tryParseFuncHeaderTypeOnly(Parser * pParser, FuncType * poFuncType, AstErr 
 
 AstNode * finishParsePrimary(Parser * pParser, AstNode * pExpr)
 {
-	// This is basically all of the postfix operations
-
-	switch (pExpr->astk)
-	{
-		case ASTK_GroupExpr:
-		case ASTK_FuncCallExpr:
-		case ASTK_ArrayAccessExpr:
-			break;
-
-		case ASTK_VarExpr:
-		{
-			Assert(Down(pExpr, VarExpr)->pTokenIdent->tokenk == TOKENK_Identifier);
-		} break;
-
-		default:
-			Assert(false);
-	}
+	// Parse post-fix operations and allow them to chain
 
 	if (tryConsumeToken(pParser->pScanner, TOKENK_Dot, ensurePendingToken(pParser)))
 	{
@@ -1674,14 +1632,6 @@ AstNode * finishParsePrimary(Parser * pParser, AstNode * pExpr)
 		AstNode * pSubscriptExpr = parseLiteralExpr(pParser, s_mustBeIntLiteral);
 		if (isErrorNode(*pSubscriptExpr))
 		{
-			// Panic recovery
-			// NOTE: Panic recovery needs reworking! See comment @ tryRecoverFromPanic
-
-			if (tryRecoverFromPanic(pParser, TOKENK_CloseBracket))
-			{
-				goto finishArrayAccess;
-			}
-
 			auto * pErr = AstNewErr2Child(pParser, BubbleErr, pExpr->startLine, pExpr, pSubscriptExpr);
 			return Up(pErr);
 		}
@@ -1693,7 +1643,6 @@ AstNode * finishParsePrimary(Parser * pParser, AstNode * pExpr)
 			return Up(pErr);
 		}
 
-	finishArrayAccess:
 		auto * pNode = AstNew(pParser, ArrayAccessExpr, pExpr->startLine);
 		pNode->pArrayExpr = pExpr;
 		pNode->pSubscriptExpr = pSubscriptExpr;
@@ -1720,37 +1669,12 @@ AstNode * finishParsePrimary(Parser * pParser, AstNode * pExpr)
 			if (!isFirstArg && !tryConsumeToken(pParser->pScanner, TOKENK_Comma))
 			{
 				int line = peekTokenLine(pParser->pScanner);
+				prepend(&apArgs, pExpr);
 
-				// NOTE: Panic recovery needs reworking! See comment @ tryRecoverFromPanic
+				auto * pErr = AstNewErrListChildMove(pParser, ExpectedTokenkErr, line, &apArgs);
+				append(&pErr->aTokenkValid, TOKENK_Comma);
 
-				TOKENK tokenkMatch;
-				bool recovered = tryRecoverFromPanic(pParser, s_aTokenkRecoverable, ArrayLen(s_aTokenkRecoverable), &tokenkMatch);
-
-				if (recovered)
-				{
-					auto * pErr = AstNewErr0Child(pParser, ExpectedTokenkErr, line);
-					append(&pErr->aTokenkValid, TOKENK_Comma);
-
-					append(&apArgs, Up(pErr));
-
-					// NOTE: We slot the error into the argument list. If we matched a ',',
-					//	we can keep parsing the next arguments. If we matched a ')' we
-					//	can jump to the end logic.
-
-					if (tokenkMatch == TOKENK_CloseParen)
-					{
-						goto finishFuncCall;
-					}
-				}
-				else
-				{
-					prepend(&apArgs, pExpr);
-
-					auto * pErr = AstNewErrListChildMove(pParser, ExpectedTokenkErr, line, &apArgs);
-					append(&pErr->aTokenkValid, TOKENK_Comma);
-
-					return Up(pErr);
-				}
+				return Up(pErr);
 			}
 
 			skipCommaCheck = false;
@@ -1760,36 +1684,15 @@ AstNode * finishParsePrimary(Parser * pParser, AstNode * pExpr)
 
 			if (isErrorNode(*pExprArg))
 			{
-				// NOTE: Panic recovery needs reworking! See comment @ tryRecoverFromPanic
+				prepend(&apArgs, pExpr);
 
-				TOKENK tokenkMatch;
-				tryRecoverFromPanic(pParser, s_aTokenkRecoverable, ArrayLen(s_aTokenkRecoverable), &tokenkMatch);
-
-				if (tokenkMatch == TOKENK_CloseParen)
-				{
-					goto finishFuncCall;
-				}
-				else if (tokenkMatch == TOKENK_Comma)
-				{
-					// We already consumed the comma for the next argument
-
-					skipCommaCheck = true;
-				}
-				else
-				{
-					Assert(tokenkMatch == TOKENK_Nil);
-
-					prepend(&apArgs, pExpr);
-
-					auto * pErrNode = AstNewErrListChildMove(pParser, BubbleErr, pExprArg->startLine, &apArgs);
-					return Up(pErrNode);
-				}
+				auto * pErrNode = AstNewErrListChildMove(pParser, BubbleErr, pExprArg->startLine, &apArgs);
+				return Up(pErrNode);
 			}
 
 			isFirstArg = false;
 		}
 
-	finishFuncCall:
 		auto * pNode = AstNew(pParser, FuncCallExpr, pExpr->startLine);
 		pNode->pFunc = pExpr;
 		initMove(&pNode->apArgs, &apArgs);

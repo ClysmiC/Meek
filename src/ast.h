@@ -216,7 +216,7 @@ struct AstLiteralExpr
 {
 	Token *	pToken;
 
-	LITERALK literalk;
+	LITERALK literalk;      // Kind of redundant with pToken->tokenk
 	union
 	{
 		int intValue;
@@ -288,8 +288,8 @@ struct AstExpr
     };
 
     TYPID typid = TYPID_Unresolved;
-    bool isLValue = false;
 };
+
 
 
 // Statements
@@ -444,6 +444,8 @@ StaticAssert(sizeof(AstNode) <= 64);		// Goal: Make it so each AstNode fits in a
 // TODO: other "value" functions
 
 int intValue(AstLiteralExpr * pLiteralExpr);
+
+bool isLValue(ASTK astk);
 
 inline ASTCATK category(ASTK astk)
 {

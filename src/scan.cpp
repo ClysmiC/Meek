@@ -722,59 +722,6 @@ void makeTokenWithLexeme(Scanner * pScanner, TOKENK tokenk, char * lexeme, Token
 	poToken->lexeme = lexeme;
     poToken->grferrtok = 0;
 
-	// TODO: Move this to semantic analysis because these are semantic errors.
-
-	// if (tokenk == TOKENK_BoolLiteral)
-	// {
-	// 	if (lexeme[0] == 't')	poToken->literalBool = true;
-	// 	else					poToken->literalBool = false;
-	// }
-	// else if (tokenk == TOKENK_IntLiteral)
-	// {
-	// 	int base = pScanner->currentIntLiteralBase;
-	// 	char * end;
-	// 	long value = strtol(lexeme, &end, base);
-
-	// 	if (errno == ERANGE || value > S32_MAX || value < S32_MIN)
-	// 	{
-	// 		poToken->tokenk = TOKENK_Error;
-	// 		poToken->grferrtok |= FERRTOK_NumberLiteralOutOfRange;
-	// 	}
-	// 	else if (errno || lexeme == end)
-	// 	{
-	// 		poToken->tokenk = TOKENK_Error;
-	// 		poToken->grferrtok = FERRTOK_Unspecified;
-	// 	}
-	// 	else
-	// 	{
-	// 		poToken->intliteralk = (base == 10) ? INTLITERALK_Decimal : (base == 16) ? INTLITERALK_Hexadecimal : (base == 8) ? INTLITERALK_Octal : INTLITERALK_Binary;
-	// 		poToken->literalInt = (int)value;
-	// 	}
-	// }
-	// else if (tokenk == TOKENK_FloatLiteral)
-	// {
-	// 	// TODO:
-	// 	//	-Support literals of float types other than f32
-
-	// 	char * end;
-	// 	float value = strtof(lexeme, &end);
-
-	// 	if (errno == ERANGE)
-	// 	{
-	// 		poToken->tokenk = TOKENK_Error;
-	// 		poToken->grferrtok = FERRTOK_NumberLiteralOutOfRange;
-	// 	}
-	// 	else if (errno || lexeme == end)
-	// 	{
-	// 		poToken->tokenk = TOKENK_Error;
-	// 		poToken->grferrtok = FERRTOK_Unspecified;
-	// 	}
-	// 	else
-	// 	{
-	// 		poToken->literalFloat = (float)value;
-	// 	}
-	// }
-
     forceWrite(&pScanner->prevBuffer, *poToken);
 	pScanner->madeToken = true;
 	pScanner->iToken++;

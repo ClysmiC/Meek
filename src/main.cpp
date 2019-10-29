@@ -15,14 +15,14 @@ int main()
 #if 1
 	// Desktop setup
 
-	char * filename = "C:/Users/Andrew/Desktop/lang/lang/test.cly";		// TODO: Read this in from command line
+	char * filename = "C:/Users/Andrew/Desktop/lang/lang/test.meek";	// TODO: Read this in from command line
 #else
 	// Laptop setup
 
-	char * filename = "C:/Users/Andrew/Desktop/clylang/test.cly";		// TODO: Read this in from command line
+	char * filename = "C:/Users/Andrew/Desktop/clylang/test.meek";		// TODO: Read this in from command line
 #endif
 
-	int bufferSize = 1024 * 1024;										// TODO: Support files bigger than 1 mb. Maybe have scanner return a special value when its buffer is full and it will ask you to pass it a new one
+	int bufferSize = 1024 * 1024;										// TODO: Support files bigger than 1 mb. Maybe have scanner return a special value when its buffer is full and it will ask you to pass it a new buffer?
 
 	char * buffer = new char[bufferSize];
 	Defer(delete[] buffer);

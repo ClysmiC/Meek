@@ -56,6 +56,26 @@ int intValue(AstLiteralExpr * pLiteralExpr)
 	return pLiteralExpr->intValue;
 }
 
+bool isLValue(ASTK astk)
+{
+	if (category(astk) != ASTCATK_Expr)
+	{
+		AssertInfo(false, "Only care about lvalue vs rvalue when dealing with expressions. Why call this with a non-expr node?");
+		return false;
+	}
+
+	switch (astk)
+	{
+		case ASTK_VarExpr:
+		case ASTK_PointerDereferenceExpr:
+		case ASTK_ArrayAccessExpr:
+			return true;
+
+		default:
+			return false;
+	}
+}
+
 bool containsErrorNode(const DynamicArray<AstNode *> & apNodes)
 {
 	for (int i = 0; i < apNodes.cItem; i++)
