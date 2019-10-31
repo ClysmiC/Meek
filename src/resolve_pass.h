@@ -8,6 +8,11 @@ struct TypeTable;
 
 struct ResolvePass
 {
+	struct FnCtx
+	{
+		DynamicArray<TYPID> aTypidReturn;
+	};
+
     SYMBSEQID lastSymbseqid = SYMBSEQID_Unset;      // TODO: USE THIS
 
 	Stack<Scope> scopeStack;
@@ -15,6 +20,9 @@ struct ResolvePass
     TypeTable * pTypeTable;
 
 	DynamicArray<ScopedIdentifier> unresolvedIdents;
+	Stack<FnCtx> fnCtxStack;
+
+	int cNestedBreakable = 0;		// TODO: Support labeled break?
 
 	bool hadError = false;
 };

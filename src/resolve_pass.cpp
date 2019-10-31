@@ -12,7 +12,10 @@ void init(ResolvePass * pPass)
 	pPass->lastSymbseqid = SYMBSEQID_Unset;
 	init(&pPass->scopeStack);
 	init(&pPass->unresolvedIdents);
+	init(&pPass->fnCtxStack);
+
 	pPass->hadError = false;
+	pPass->cNestedBreakable = 0;
 
     // HMM: Does this belong in init?
 
@@ -41,7 +44,7 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
         {
 			// NOTE: Assume that binops can only happen between
 			//	exact type matches, and the result becomes that type.
-			//	Will change later!
+			//	Will change later?
 
             auto * pExpr = Down(pNode, BinopExpr);
 
@@ -426,7 +429,19 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 				doResolvePass(pPass, pExpr->apReturnVarDecls[i]);
 			}
 
+			// Push ctx
+
+			auto * pFnCtx = pushNew(&pPass->fnCtxStack);
+			initExtract(&pFnCtx->aTypidReturn, pExpr->apReturnVarDecls, offsetof(AstVarDeclStmt, typid));
+			Defer(dispose(&pFnCtx->aTypidReturn));
+
+			// Resolve body
+
 			doResolvePass(pPass, pExpr->pBodyStmt);
+
+			// Pop ctx
+
+			pop(&pPass->fnCtxStack);
         } break;
 
 		default:
@@ -617,9 +632,19 @@ void resolveStmt(ResolvePass * pPass, AstNode * pNode)
 				doResolvePass(pPass, pStmt->apReturnVarDecls[i]);
 			}
 
+			// Push ctx
+
+			auto * pFnCtx = pushNew(&pPass->fnCtxStack);
+			initExtract(&pFnCtx->aTypidReturn, pStmt->apReturnVarDecls, offsetof(AstVarDeclStmt, typid));
+			Defer(dispose(&pFnCtx->aTypidReturn));
+
 			// Resolve body
 
 			doResolvePass(pPass, pStmt->pBodyStmt);
+
+			// Pop ctx
+
+			pop(&pPass->fnCtxStack);
 		} break;
 
 		case ASTK_BlockStmt:
@@ -652,7 +677,13 @@ void resolveStmt(ResolvePass * pPass, AstNode * pNode)
 		{
 			auto * pStmt = Down(pNode, WhileStmt);
 			doResolvePass(pPass, pStmt->pCondExpr);
+
+			bool isBodyBlock = pStmt->pBodyStmt->astk == ASTK_BlockStmt;
+			if (isBodyBlock) pPass->cNestedBreakable++;
+
 			doResolvePass(pPass, pStmt->pBodyStmt);
+
+			if (isBodyBlock) pPass->cNestedBreakable--;
 		} break;
 
 		case ASTK_IfStmt:
@@ -665,27 +696,55 @@ void resolveStmt(ResolvePass * pPass, AstNode * pNode)
 
 		case ASTK_ReturnStmt:
 		{
-			// TODO: Check that this matches the return type of the function...
-			//	need some way to track the current "context" (i.e., expected return value)
-
 			auto * pStmt = Down(pNode, ReturnStmt);
+
+			AssertInfo(count(pPass->fnCtxStack) > 0, "I don't think I allow this statement to parse unless in a function body?");
+			auto * pFnCtx = peekPtr(pPass->fnCtxStack);
+
+			if (pFnCtx->aTypidReturn.cItem == 0 && pStmt->pExpr)
+			{
+				printf("Cannot return value from function expecting void\n");
+			}
+			else if (pFnCtx->aTypidReturn.cItem != 0 && !pStmt->pExpr)
+			{
+				printf("Function expecting a return value\n");
+			}
 
 			if (pStmt->pExpr)
 			{
 				TYPID typidReturn = resolveExpr(pPass, pStmt->pExpr);
+
+				// TODO: Handle multiple return values
+
+				if (typidReturn != pFnCtx->aTypidReturn[0])
+				{
+					printf("Return type mismatch\n");
+				}
 			}
 		} break;
 
 		case ASTK_BreakStmt:
 		{
-			// Nothing
-			// TODO: make sure we are in a breakable context
+			if (pPass->cNestedBreakable == 0)
+			{
+				printf("Cannot break from current context");
+			}
+			else
+			{
+				Assert(pPass->cNestedBreakable > 0);
+			}
 		} break;
 
 		case ASTK_ContinueStmt:
 		{
-			// Nothing
-			// TODO: make sure we are in a continueable context
+			if (pPass->cNestedBreakable == 0)
+			{
+				printf("Cannot continue from current context");
+			}
+			else
+			{
+				Assert(pPass->cNestedBreakable > 0);
+			}
 		} break;
 
 	    default:

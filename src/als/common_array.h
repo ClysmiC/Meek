@@ -190,6 +190,32 @@ void initCopy(DynamicArray<T> * pArray, const DynamicArray<T> & arraySrc)
 	}
 }
 
+// These extract functions feel a bit too clever/unsafe... if they bite me once or twice I might just delete them.
+
+template <typename T, typename E>
+void initExtract(DynamicArray<T> * pArray, const DynamicArray<E> & arrayExtractee, int byteOffset)
+{
+	init(pArray);
+	for (int i = 0; i < arrayExtractee.cItem; i++)
+	{
+		T * pItem = reinterpret_cast<T *>(reinterpret_cast<char *>(arrayExtractee.pBuffer + i) + byteOffset);
+		append(pArray, *pItem);
+	}
+}
+
+// This version dereferences the pointer then applies the byte offset... 
+
+ template <typename T, typename E>
+ void initExtract(DynamicArray<T> * pArray, const DynamicArray<E *> & arrayExtractee, int byteOffset)
+ {
+ 	init(pArray);
+ 	for (int i = 0; i < arrayExtractee.cItem; i++)
+ 	{
+ 		T * pItem = reinterpret_cast<T *>(reinterpret_cast<char *>(*(arrayExtractee.pBuffer + i)) + byteOffset);
+ 		append(pArray, *pItem);
+ 	}
+ }
+
 template <typename T>
 void dispose(DynamicArray<T> * pArray)
 {
@@ -412,6 +438,12 @@ void push(Stack<T> * pStack, const T & item)
 }
 
 template<typename T>
+T * pushNew(Stack<T> * pStack)
+{
+	return appendNew(&pStack->a);
+}
+
+template<typename T>
 bool isEmpty(const Stack<T> & stack)
 {
 	return stack.a.cItem == 0;
@@ -445,9 +477,35 @@ T peekFar(const Stack<T> & stack, int peekIndex, bool * poSuccess=nullptr)
 }
 
 template<typename T>
+T * peekFarPtr(const Stack<T> & stack, int peekIndex)
+{
+    T * result = nullptr;
+    if (count(stack) <= peekIndex)
+    {
+        ALS_COMMON_ARRAY_Assert(false);
+    }
+    else
+    {
+        // const ref is just a convenient way to pass argument immutably by value. I'm not modifying the value
+        //  here, but I would like to let the caller modify the value through the pointer I return to them (if
+        //  they so choose)... I am not really a const correct zealot so this doesn't bother me.
+
+        result = const_cast<T*>(&stack.a[stack.a.cItem - 1 - peekIndex]);
+    }
+
+    return result;
+}
+
+template<typename T>
 T peek(const Stack<T> & stack, bool * poSuccess=nullptr)
 {
 	return peekFar(stack, 0, poSuccess);
+}
+
+template<typename T>
+T * peekPtr(const Stack<T> & stack)
+{
+    return peekFarPtr(stack, 0);
 }
 
 template<typename T>
