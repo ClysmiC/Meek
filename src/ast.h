@@ -62,8 +62,8 @@ enum ASTK : u8
 	ASTK_IllegalInitErr,
 	ASTK_ChainedAssignErr,
 	ASTK_IllegalDoStmtErr,
+	ASTK_IllegalTopLevelStmtErr,
 	ASTK_InvokeFuncLiteralErr,
-	// ASTK_SymbolRedefinitionErr,
 
 	ASTK_ErrMax,
 
@@ -161,13 +161,12 @@ struct AstIllegalDoStmtErr
 	ASTK astkStmt;
 };
 
-struct AstInvokeFuncLiteralErr {};
+struct AstIllegalTopLevelStmtErr
+{
+	ASTK astkStmt;
+};
 
-// struct AstSymbolRedefinitionErr
-// {
-// 	Token * pDefnToken;
-// 	Token * pRedefnToken;
-// };
+struct AstInvokeFuncLiteralErr {};
 
 struct AstErr
 {
@@ -184,8 +183,8 @@ struct AstErr
 		AstIllegalInitErr illegalInitErr;
 		AstChainedAssignErr chainedAssignErr;
         AstIllegalDoStmtErr illegalDoStmtErr;
+		AstIllegalTopLevelStmtErr illegalTopLevelStmt;
 		AstInvokeFuncLiteralErr invokeFuncLiteralErr;
-		// AstSymbolRedefinitionErr symbolRedefinitionErr;
 	};
 
 	// Errors propogate up the AST, but still hang on to their child nodes so that

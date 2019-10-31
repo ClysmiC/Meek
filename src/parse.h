@@ -100,9 +100,6 @@ AstNode * parseProgram(Parser * pParser, bool * poSuccess);
 
 // HMM: Are these really public?
 
-void parseStmts(Parser * pParser, DynamicArray<AstNode *> * poAPNodes); // TODO: I think this is only called in one place so just inline it.
-AstNode * parseStmt(Parser * pParser, bool isDoStmt=false);
-AstNode * parseExpr(Parser * pParser);
 
 
 // Internal
@@ -127,8 +124,17 @@ AstNode * astNewErrMoveChildren(Parser * pParser, ASTK astkErr, int line, Dynami
 bool tryRecoverFromPanic(Parser * pParser, TOKENK tokenkRecover);
 bool tryRecoverFromPanic(Parser * pParser, const TOKENK * aTokenkRecover, int cTokenkRecover, TOKENK * poTokenkMatched=nullptr);
 
+
 // STMT
 
+enum PARSESTMTK
+{
+	PARSESTMTK_DoStmt,
+	PARSESTMTK_TopLevelStmt,
+	PARSESTMTK_Stmt
+};
+
+AstNode * parseStmt(Parser * pParser, PARSESTMTK parsestmtk=PARSESTMTK_Stmt);
 AstNode * parseExprStmtOrAssignStmt(Parser * pParser);
 AstNode * parseStructDefnStmt(Parser * pParser);
 AstNode * parseVarDeclStmt(Parser * pParser, EXPECTK expectkName=EXPECTK_Required, EXPECTK expectkInit=EXPECTK_Optional, EXPECTK expectkSemicolon=EXPECTK_Required);
@@ -142,6 +148,7 @@ AstNode * parseContinueStmt(Parser * pParser);
 
 // EXPR
 
+AstNode * parseExpr(Parser * pParser);
 AstNode * parseExpr(Parser * pParser);
 AstNode * parseBinop(Parser * pParser, const BinopInfo & op);
 AstNode * parseUnopPre(Parser * pParser);
@@ -168,6 +175,10 @@ PARSETYPERESULT tryParseType(
     DynamicArray<AstNode *> * papNodeChildren,
     TYPID * poTypidResolved,
     TypePendingResolution ** ppoTypePendingResolution);
+
+// HMM: Is there any reason why this is "tryParse" and returning the node via out-param instead of just being
+//	like the rest of the parse functions? I guess because it can return a stmt or an expr so it's a little
+//	bit different?
 
 bool tryParseFuncDefnStmtOrLiteralExpr(Parser * pParser, FUNCHEADERK funcheaderk, AstNode ** ppoNode);
 

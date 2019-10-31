@@ -1,0 +1,53 @@
+fn newVector() -> ^Vector
+{
+	^Vector v;		// Some kind of heap allocation a la 'new'... just pretend with me.
+	return v;
+}
+
+fn add(Vector v1, Vector v2) -> Vector
+{
+	Vector v3;
+	v3.x = add(v1.x, v2.x);
+	v3.y = add(v1.y, v2.y);
+	v3.z = add(v1.z, v2.z);
+	return v3;
+
+	// Totally dumb overkill, but hey it's a test... also notice how this is defined after it
+	//	is used? Struct and function definitions are order independent.
+
+	fn add(float i1, float i2) -> float
+	{
+		return i1 + i2;
+	}
+}
+
+// struct defined way after used... order doesn't matter!
+
+struct Vector
+{
+	float x;
+	float y;
+	float z;
+}
+
+fn main(int a)
+{
+	Vector v1;
+	v1.x = 1.0;
+	v1.y = 3.0;
+	v1.z = 5.0;
+
+	Vector v2;
+	v2.x = 2.0;
+	v2.y = 4.0;
+	v2.z = 6.0;
+
+
+
+	float a = 3.0;
+	float b = 4.0;
+
+	// float c = add(a, b);		// This would be an error since the float add(..) function is scoped inside the vector add(..) function
+
+	newVector()^ = add(v1, v2);
+}

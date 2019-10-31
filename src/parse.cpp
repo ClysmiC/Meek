@@ -67,17 +67,9 @@ AstNode * parseProgram(Parser * pParser, bool * poSuccess)
 	auto * pNode = AstNew(pParser, Program, 0);
 	init(&pNode->apNodes);
 
-	parseStmts(pParser, &pNode->apNodes);
-
-	*poSuccess = !pParser->hadError;
-	return Up(pNode);
-}
-
-void parseStmts(Parser * pParser, DynamicArray<AstNode *> * poAPNodes)
-{
 	while (!isFinished(pParser->pScanner) && peekToken(pParser->pScanner) != TOKENK_Eof)
 	{
-		AstNode * pNode = parseStmt(pParser);
+		AstNode * pNode = parseTopLevelStmt(pParser, PARSESTMTK_TopLevelStmt);
 
 		if (isErrorNode(*pNode))
 		{
@@ -90,11 +82,14 @@ void parseStmts(Parser * pParser, DynamicArray<AstNode *> * poAPNodes)
 			Assert(Implies(!recovered, isFinished(pParser->pScanner)));
 		}
 
-		append(poAPNodes, pNode);
+		append(&pNode->apNodes, pNode);
 	}
+
+	*poSuccess = !pParser->hadError;
+	return Up(pNode);
 }
 
-AstNode * parseStmt(Parser * pParser, bool isDoStmt)
+AstNode * parseStmt(Parser * pParser, PARSESTMTK parsestmtk)
 {
 	// HMM: Need different syntax for const and compile time const vardecls. for struct defn's and
 	//	top-level fun defn's they want to be compile time const. But maybe we can aggressively infer
@@ -116,36 +111,46 @@ AstNode * parseStmt(Parser * pParser, bool isDoStmt)
 	{
 		// Struct defn
 
-		if (!isDoStmt) return parseStructDefnStmt(pParser);
-		else
+		auto * pNode = parseStructDefnStmt(pParser);
+
+		if (isErrorNode(*pNode)) return pNode;
+
+		Assert(pNode->astk == ASTK_StructDefnStmt);
+
+		if (parsestmtk == PARSESTMTK_DoStmt)
 		{
-			auto * pErr = AstNewErr0Child(pParser, IllegalDoStmtErr, peekTokenLine(pParser->pScanner));
-			pErr->astkStmt = ASTK_StructDefnStmt;
+			auto * pErr = AstNewErr1Child(pParser, IllegalDoStmtErr, peekTokenLine(pParser->pScanner), pNode);
+			pErr->astkStmt = pNode->astk;
 			return Up(pErr);
 		}
+
+		return pNode;
 	}
 	else if (tokenkNext == TOKENK_Fn && tokenkNextNext == TOKENK_Identifier)
 	{
+		AstNode * pNode;
+		tryParseFuncDefnStmtOrLiteralExpr(pParser, FUNCHEADERK_Defn, &pNode);
+
+		if (isErrorNode(*pNode)) return pNode;
+
+		Assert(pNode->astk == ASTK_FuncDefnStmt);
+
 		// Func defn
 
-		if (!isDoStmt)
+		if (parsestmtk == PARSESTMTK_DoStmt)
 		{
-			AstNode * pNode;
-			tryParseFuncDefnStmtOrLiteralExpr(pParser, FUNCHEADERK_Defn, &pNode);
-			return pNode;
-		}
-		else
-		{
-			auto * pErr = AstNewErr0Child(pParser, IllegalDoStmtErr, peekTokenLine(pParser->pScanner));
-			pErr->astkStmt = ASTK_FuncDefnStmt;
+			auto * pErr = AstNewErr1Child(pParser, IllegalDoStmtErr, peekTokenLine(pParser->pScanner), pNode);
+			pErr->astkStmt = pNode->astk;
 			return Up(pErr);
 		}
+
+		return pNode;
 	}
 	else if (tokenkNext == TOKENK_Enum && tokenkNextNext == TOKENK_Identifier)
 	{
 		// Enum defn
 
-		// TODO
+		Assert(false);		// TODO
 	}
 	//else if (tokenkNext == TOKENK_Union && tokenkNextNext == TOKENK_Identifier)
 	//{
@@ -155,21 +160,59 @@ AstNode * parseStmt(Parser * pParser, bool isDoStmt)
 	//}
 	else if (tokenkNext == TOKENK_If)
 	{
-		return parseIfStmt(pParser);
+		auto * pNode = parseIfStmt(pParser);
+
+		if (isErrorNode(*pNode)) return pNode;
+
+		Assert(pNode->astk == ASTK_IfStmt);
+
+		if (parsestmtk == PARSESTMTK_TopLevelStmt)
+		{
+			auto * pErr = AstNewErr1Child(pParser, IllegalTopLevelStmtErr, peekTokenLine(pParser->pScanner), pNode);
+			pErr->astkStm = pNode->astk;
+			return Up(pErr);
+		}
 	}
 	else if (tokenkNext == TOKENK_While)
 	{
-		return parseWhileStmt(pParser);
+		auto * pNode = parseWhileStmt(pParser);
+
+		if (isErrorNode(*pNode)) return pNode;
+
+		Assert(pNode->astk == ASTK_WhileStmt);
+
+		if (parsestmtk == PARSESTMTK_TopLevelStmt)
+		{
+			auto * pErr = AstNewErr1Child(pParser, IllegalTopLevelStmtErr, peekTokenLine(pParser->pScanner), pNode);
+			pErr->astkStm = pNode->astk;
+			return Up(pErr);
+		}
 	}
 	else if (tokenkNext == TOKENK_OpenBrace)
 	{
-		if (!isDoStmt) return parseBlockStmt(pParser);
-		else
+		// Block
+
+		auto * pNode = parseBlockStmt(pParser);
+
+		if (isErrorNode(*pNode)) return pNode;
+
+		Assert(pNode->astk == ASTK_BlockStmt);
+
+		if (parsestmtk == PARSESTMTK_DoStmt)
 		{
-			auto * pErr = AstNewErr0Child(pParser, IllegalDoStmtErr, peekTokenLine(pParser->pScanner));
-			pErr->astkStmt = ASTK_BlockStmt;
+			auto * pErr = AstNewErr1Child(pParser, IllegalDoStmtErr, peekTokenLine(pParser->pScanner), pNode);
+			pErr->astkStmt = pNode->astk;
 			return Up(pErr);
 		}
+
+		if (parsestmtk == PARSESTMTK_TopLevelStmt)
+		{
+			auto * pErr = AstNewErr1Child(pParser, IllegalTopLevelStmtErr, peekTokenLine(pParser->pScanner), pNode);
+			pErr->astkStmt = pNode->astk;
+			return Up(pErr);
+		}
+
+		return pNode;
 	}
 	else if (tokenkNext == TOKENK_OpenBracket ||
 			 tokenkNext == TOKENK_Carat ||
@@ -178,33 +221,101 @@ AstNode * parseStmt(Parser * pParser, bool isDoStmt)
 	{
 		// HMM: Should I put this earlier since var decls are so common?
 		//	I have to have it at least after func defn so I can be assured
-		//	that if we peek "func" that it isn't part of a func defn
+		//	that if we peek "fn" that it isn't part of a func defn
 
 		// Var decl
 
-		if (!isDoStmt) return parseVarDeclStmt(pParser);
-		else
+		auto * pNode = parseVarDeclStmt(pParser);
+
+		if (isErrorNode(*pNode)) return pNode;
+
+		Assert(pNode->astk == ASTK_VarDeclStmt);
+
+		if (parsestmtk == PARSESTMTK_DoStmt)
 		{
-			auto * pErr = AstNewErr0Child(pParser, IllegalDoStmtErr, peekTokenLine(pParser->pScanner));
-			pErr->astkStmt = ASTK_VarDeclStmt;
+			auto * pErr = AstNewErr1Child(pParser, IllegalDoStmtErr, peekTokenLine(pParser->pScanner), pNode);
+			pErr->astkStmt = pNode->astk;
 			return Up(pErr);
 		}
+
+		return pNode;
 	}
 	else if (tokenkNext == TOKENK_Return)
 	{
-		return parseReturnStmt(pParser);
+		// Return
+
+		auto * pNode = parseReturnStmt(pParser);
+
+		if (isErrorNode(*pNode)) return pNode;
+
+		Assert(pNode->astk == ASTK_ReturnStmt);
+
+		if (parsestmtk == PARSESTMTK_TopLevelStmt)
+		{
+			auto * pErr = AstNewErr1Child(pParser, IllegalTopLevelStmtErr, peekTokenLine(pParser->pScanner), pNode);
+			pErr->astkStmt = pNode->astk;
+			return Up(pErr);
+		}
+
+		return pNode;
 	}
 	else if (tokenkNext == TOKENK_Break)
 	{
-		return parseBreakStmt(pParser);
+		// Break
+
+		auto * pNode = parseBreakStmt(pParser);
+
+		if (isErrorNode(*pNode)) return pNode;
+
+		Assert(pNode->astk == ASTK_BreakStmt);
+
+		if (parsestmtk == PARSESTMTK_TopLevelStmt)
+		{
+			auto * pErr = AstNewErr1Child(pParser, IllegalTopLevelStmtErr, peekTokenLine(pParser->pScanner), pNode);
+			pErr->astkStmt = pNode->astk;
+			return Up(pErr);
+		}
+
+		return pNode;
 	}
 	else if (tokenkNext == TOKENK_Continue)
 	{
-		return parseContinueStmt(pParser);
+		// Continue
+
+		auto * pNode = parseContinueStmt(pParser);
+
+		if (isErrorNode(*pNode)) return pNode;
+
+		Assert(pNode->astk == ASTK_ContinueStmt);
+
+		if (parsestmtk == PARSESTMTK_TopLevelStmt)
+		{
+			auto * pErr = AstNewErr1Child(pParser, IllegalTopLevelStmtErr, peekTokenLine(pParser->pScanner), pNode);
+			pErr->astkStmt = pNode->astk;
+			return Up(pErr);
+		}
+
+		return pNode;
 	}
+	else
+	{
+		// Expr stmt or Assignment stmt
 
+		auto * pNode = parseExprStmtOrAssignStmt(pParser);
 
-	return parseExprStmtOrAssignStmt(pParser);
+		if (isErrorNode(*pNode)) return pNode;
+
+		Assert(pNode->astk == ASTK_AssignmentStmt || pNode->astk == ASTK_ExprStmt);
+
+		if (parsestmtk == PARSESTMTK_TopLevelStmt)
+		{
+			auto * pErr = AstNewErr1Child(pParser, IllegalTopLevelStmtErr, peekTokenLine(pParser->pScanner), pNode);
+			pErr->astkStmt = pNode->astk;
+			return Up(pErr);
+		}
+
+		return pNode;
+	}
 }
 
 AstNode * parseExprStmtOrAssignStmt(Parser * pParser)

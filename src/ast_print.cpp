@@ -425,6 +425,25 @@ void debugPrintSubAst(DebugPrintCtx * pCtx, const AstNode & node, int level, boo
             }
         } break;
 
+		case ASTK_IllegalTopLevelStmtErr:
+        {
+            auto * pErr = DownConst(&node, IllegalDoStmtErr);
+            auto * pErrCasted = UpErrConst(pErr);
+
+            printf("%s %s is not permitted as a top level statement", parseErrorString, displayString(pErr->astkStmt));
+
+            if (pErrCasted->apChildren.cItem > 0)
+            {
+                // Sloppy... printChildren should probably handle the new line spacing so that if you pass
+                //	it an empty array of children it will still just work.
+
+                printf("\n");
+
+                printTabs(pCtx, levelNext, false, false);
+                printErrChildren(pCtx, *pErrCasted, levelNext);
+            }
+        } break;
+
         case ASTK_InvokeFuncLiteralErr:
         {
             auto * pErr = DownConst(&node, InvokeFuncLiteralErr);
