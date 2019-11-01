@@ -133,9 +133,9 @@ struct DynamicArray
 {
 	T * pBuffer;
 	int cItem;
-	unsigned int capacity;
+	int capacity;
 
-	static constexpr float s_growthFactor = 1.5f;
+	constexpr static float gc_growthFactor = 1.5f;
 
 	const T& operator[] (unsigned int i) const
 	{
@@ -203,7 +203,7 @@ void initExtract(DynamicArray<T> * pArray, const DynamicArray<E> & arrayExtracte
 	}
 }
 
-// This version dereferences the pointer then applies the byte offset... 
+// This version dereferences the pointer then applies the byte offset...
 
  template <typename T, typename E>
  void initExtract(DynamicArray<T> * pArray, const DynamicArray<E *> & arrayExtractee, int byteOffset)
@@ -228,19 +228,19 @@ void dispose(DynamicArray<T> * pArray)
 
 
 template <typename T>
-void ensureCapacity(DynamicArray<T> * pArray, unsigned int requestedCapacity)
+void ensureCapacity(DynamicArray<T> * pArray, int requestedCapacity)
 {
     typedef DynamicArray<T> da;
 
 	if (requestedCapacity <= pArray->capacity) return;
 
-    static const unsigned int s_minCapacity = 8;
-	unsigned int newCapacity = (pArray->capacity > s_minCapacity) ? pArray->capacity : 8;
+    static const int s_minCapacity = 8;
+	int newCapacity = (pArray->capacity > s_minCapacity) ? pArray->capacity : s_minCapacity;
 
 	while (newCapacity < requestedCapacity)
 	{
-		unsigned int prevNewCapacity = newCapacity;
-		newCapacity = static_cast<unsigned int>(newCapacity * da::s_growthFactor + 1.0f);       // + 1 to force round up
+		int prevNewCapacity = newCapacity;
+		newCapacity = static_cast<int>((newCapacity * da::gc_growthFactor) + 1.0f);       // + 1 to force round up
 
 		// Overflow check... probably overkill
 
@@ -534,3 +534,7 @@ int count(const Stack<T> & stack)
 {
 	return stack.a.cItem;
 }
+
+#undef ALS_COMMON_ARRAY_StaticAssert
+#undef ALS_COMMON_ARRAY_Assert
+#undef ALS_COMMON_ARRAY_Verify

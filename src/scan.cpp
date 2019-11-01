@@ -13,10 +13,7 @@ bool init(Scanner * pScanner, char * pText, uint textSize, char * pLexemeBuffer,
 	pScanner->pLexemeBuffer = pLexemeBuffer;
 	pScanner->lexemeBufferSize = lexemeBufferSize;
 	pScanner->scanexitk = SCANEXITK_Nil;
-	pScanner->line = 1;
-	pScanner->lineTokenStart = 1;
-	pScanner->column = 1;
-	pScanner->columnTokenStart = 1;
+	init(&pScanner->newLineIndices);
 
 	return true;
 }
@@ -105,18 +102,18 @@ TOKENK prevToken(Scanner * pScanner, Token * poToken, uint lookbehind)
 //     return true;
 // }
 
-int peekTokenLine(Scanner * pScanner, uint lookahead)
+StartEndIndices peekTokenStartEnd(Scanner * pScanner, uint lookahead)
 {
 	Token throwaway;
 	peekToken(pScanner, &throwaway, lookahead);
-	return throwaway.line;
+	return throwaway.startEnd;
 }
 
-int prevTokenLine(Scanner * pScanner, uint lookbehind)
+StartEndIndices prevTokenStartEnd(Scanner * pScanner, uint lookbehind)
 {
 	Token throwaway;
 	prevToken(pScanner, &throwaway, lookbehind);
-	return throwaway.line;
+	return throwaway.startEnd;
 }
 
 bool tryConsumeToken(Scanner * pScanner, TOKENK tokenkMatch, Token * poToken)
@@ -548,6 +545,24 @@ bool isFinished(Scanner * pScanner)
 	return pScanner->scanexitk != SCANEXITK_Nil;
 }
 
+int lineFromI(const Scanner & scanner, int iText)
+{
+    // SLOW: Can use binary search + some heuristics to accelerate this, or mabye keep a second list that marks i for every 100th (or 1000th ?) line
+    //  that will let us just to the correct "neighborhood" faster
+
+    int line = 1;
+    for (int i = 0; i < scanner.newLineIndices.cItem; i++)
+    {
+        // '\n' itself is considered to be "on" the line that it ends
+
+        if (scanner.newLineIndices[i] >= iText) break;
+
+        line++;
+    }
+
+    return line;
+}
+
 void finishAfterConsumeDigit(Scanner * pScanner, char firstDigit, Token * poToken)
 {
 	_finishAfterConsumeDigit(pScanner, firstDigit, false, poToken);
@@ -716,8 +731,8 @@ void makeTokenWithLexeme(Scanner * pScanner, TOKENK tokenk, char * lexeme, Token
 	Assert(!pScanner->madeToken);
 
 	poToken->id = pScanner->iToken + 1;		// + 1 to make sure we never have id 0
-	poToken->line = pScanner->lineTokenStart;
-	poToken->column = pScanner->columnTokenStart;
+	poToken->startEnd.iStart = pScanner->iTextTokenStart;
+	poToken->startEnd.iEnd = pScanner->iText;
 	poToken->tokenk = tokenk;
 	poToken->lexeme = lexeme;
     poToken->grferrtok = 0;
@@ -744,15 +759,12 @@ char consumeChar(Scanner * pScanner)
 	if (checkEndOfFile(pScanner)) return '\0';	 // This check might be redundant/unnecessary
 
 	char c = pScanner->pText[pScanner->iText];
-	pScanner->iText++;
-	pScanner->column++;
-
 	if (c == '\n')
 	{
-		pScanner->line++;
-		pScanner->column = 1;
+		append(&pScanner->newLineIndices, pScanner->iText);
 	}
 
+	pScanner->iText++;
 	return c;
 }
 
@@ -840,8 +852,6 @@ bool tryPeekChar(Scanner * pScanner, char rangeMin, char rangeMax, char * poMatc
 void onStartToken(Scanner * pScanner)
 {
 	pScanner->iTextTokenStart = pScanner->iText;
-	pScanner->lineTokenStart = pScanner->line;
-	pScanner->columnTokenStart = pScanner->column;
 	pScanner->madeToken = false;
 }
 

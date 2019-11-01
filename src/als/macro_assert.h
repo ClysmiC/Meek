@@ -3,16 +3,17 @@
 #if _DEBUG
 
 #define Assert(x) do { if (!(x))  __debugbreak(); } while(0)
-
-// TODO: Morph this into some sort of AssertLog or AssertPrint so that it actuallyl ogs the error somehow
-#define AssertInfo(x, helpMsg) Assert(x)
 #define Verify(x) Assert(x)
+
+// TODO: Morph this into some sort of AssertLog or AssertPrint so that it actually logs the error somehow?
+
+#define AssertInfo(x, helpMsg) Assert(x)
 
 #else
 
 #define Assert(x)
-#define AssertInfo(x)
 #define Verify(x) x
+#define AssertInfo(x)
 
 #endif
 

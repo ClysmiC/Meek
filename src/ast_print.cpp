@@ -244,7 +244,7 @@ void debugPrintSubAst(DebugPrintCtx * pCtx, const AstNode & node, int level, boo
             auto * pErr = DownConst(&node, ScanErr);
             auto * pErrCasted = UpErrConst(pErr);
 
-            DynamicArray<StringBox<256>> errMsgs;
+            DynamicArray<String> errMsgs;
             init(&errMsgs);
             Defer(dispose(&errMsgs));
 
@@ -253,7 +253,7 @@ void debugPrintSubAst(DebugPrintCtx * pCtx, const AstNode & node, int level, boo
 
             if (errMsgs.cItem == 1)
             {
-                printf("%s %s", scanErrorString, errMsgs[0].aBuffer);
+                printf("%s %s", scanErrorString, errMsgs[0].pBuffer);
             }
             else
             {
@@ -263,7 +263,7 @@ void debugPrintSubAst(DebugPrintCtx * pCtx, const AstNode & node, int level, boo
                 {
                     printf("\n");
                     printTabs(pCtx, level, true, skipAfterArrow);
-                    printf("- %s", errMsgs[i].aBuffer);
+                    printf("- %s", errMsgs[i].pBuffer);
                 }
             }
 
@@ -355,25 +355,6 @@ void debugPrintSubAst(DebugPrintCtx * pCtx, const AstNode & node, int level, boo
             auto * pErrCasted = UpErrConst(pErr);
 
             printf("%s attempt to assign initial value to unnamed variable", parseErrorString);
-
-            if (pErrCasted->apChildren.cItem > 0)
-            {
-                // Sloppy... printChildren should probably handle the new line spacing so that if you pass
-                //	it an empty array of children it will still just work.
-
-                printf("\n");
-
-                printTabs(pCtx, levelNext, false, false);
-                printErrChildren(pCtx, *pErrCasted, levelNext);
-            }
-        } break;
-
-        case ASTK_IllegalInitErr:
-        {
-            auto * pErr = DownConst(&node, IllegalInitErr);
-            auto * pErrCasted = UpErrConst(pErr);
-
-            printf("%s variable '%s' is not allowed to be assigned an initial value", parseErrorString, pErr->pVarIdent->lexeme);
 
             if (pErrCasted->apChildren.cItem > 0)
             {

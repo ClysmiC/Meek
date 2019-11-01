@@ -5,17 +5,12 @@
 #include <stdarg.h>
 #include <stdio.h>
 
-inline void reportIceAndExit(const char * errFormat, ...)
-{
-    va_list arglist;
-    va_start(arglist, errFormat);
-    printf("\n!!![Internal compiler error]: ");
-    vprintf(errFormat, arglist);
-    printf("\n");
-    va_end(arglist);
-    fflush(stdout);
+struct AstNode;
+struct Parser;
+struct Scanner;
+struct Token;
 
-    Assert(false);
+void reportScanError(const Scanner & scanner, const Token & tokenErr, const char * errFormat, ...);
+void reportParseError(const Parser & parser, const AstNode & node, const char * errFormat, ...);
 
-    exit(EXIT_FAILURE);
-}
+void reportIceAndExit(const char * errFormat, ...);

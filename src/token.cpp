@@ -1,6 +1,11 @@
 #include "token.h"
 
+#include "error.h"
+
 #include <stdio.h>
+
+const StartEndIndices gc_startEndBubble(-1, -1);
+const StartEndIndices gc_startEndBuiltInPseudoToken(-1, -1);
 
 // TODO: should probably make these globals "const" for good measure.
 
@@ -119,14 +124,13 @@ const char * g_mpTokenkDisplay[] = {
 };
 StaticAssert(ArrayLen(g_mpTokenkDisplay) == TOKENK_Max);
 
-void errMessagesFromGrferrtok(GRFERRTOK grferrtok, DynamicArray<StringBox<256>> * poMessages)
+void errMessagesFromGrferrtok(GRFERRTOK grferrtok, DynamicArray<String> * poMessages)
 {
-    StringBox<256> str;
 
     if (grferrtok == FERRTOK_Unspecified)
     {
-        sprintf(str.aBuffer, "Unspecified error");
-        append(poMessages, str);
+		String * pStr = appendNew(poMessages);
+		init(pStr, "Unspecified error");
         return;
     }
 
@@ -134,51 +138,50 @@ void errMessagesFromGrferrtok(GRFERRTOK grferrtok, DynamicArray<StringBox<256>> 
     {
         if (grferrtok & ferrtok)
         {
+			String * pStr = appendNew(poMessages);
+
             switch (ferrtok)
             {
                 case FERRTOK_InvalidCharacter:
                 {
-                    sprintf(str.aBuffer, "Invalid character");
+					init(pStr, "Invalid character");
                 } break;
 
                 case FERRTOK_IntLiteralNonBase10WithDecimal:
                 {
-                    sprintf(str.aBuffer, "Numeric literal may only contain a decimal if it is in base-10");
+                    init(pStr, "Numeric literal may only contain a decimal if it is in base-10");
                 } break;
 
                 case FERRTOK_IntLiteralNonBase10NoDigits:
                 {
-                    sprintf(str.aBuffer, "Numeric literal with non-base-10 prefix must contain at least one digit");
+                    init(pStr, "Numeric literal with non-base-10 prefix must contain at least one digit");
                 } break;
 
                 case FERRTOK_NumberLiteralMultipleDecimals:
                 {
-                    sprintf(str.aBuffer, "Numeric literal cannot contain more than one decimal");
+                    init(pStr, "Numeric literal cannot contain more than one decimal");
                 } break;
 
                 case FERRTOK_MultilineString:
                 {
-                    sprintf(str.aBuffer, "Multiline string literals are not permitted");
+                    init(pStr, "Multiline string literals are not permitted");
                 } break;
 
                 case FERRTOK_UnterminatedString:
                 {
-                    sprintf(str.aBuffer, "Unterminated string literal");
+                    init(pStr, "Unterminated string literal");
                 } break;
 
                 case FERRTOK_UnterminatedBlockComment:
                 {
-                    sprintf(str.aBuffer, "Unterminated block comment");
+                    init(pStr, "Unterminated block comment");
                 } break;
 
                 default:
                 {
-                    Assert(false);
-                    sprintf(str.aBuffer, "!!! Internal Compiler Error: errTokenMessages failing on flag value %d", ferrtok);
-                }
+					reportIceAndExit("Unknown FERRTOK value %d", ferrtok);
+                } break;
             }
-
-            append(poMessages, str);
         }
     }
 }

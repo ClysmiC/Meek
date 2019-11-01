@@ -3,6 +3,7 @@
 #include "als.h"
 
 #include "ast.h"
+#include "ast_decorate.h"
 #include "token.h"
 #include "type.h"
 
@@ -40,6 +41,8 @@ struct Parser
     SCOPEID scopeidNext = SCOPEID_UserDefinedStart;
     Stack<Scope> scopeStack;
 
+    // TODO: Move all of these tables out to some god-struct and make these just pointers. No reason for the parser to own this stuff.
+
 	// Symbol Table
 
 	SymbolTable symbTable;
@@ -48,19 +51,19 @@ struct Parser
 
 	TypeTable typeTable;
 
+    // AST decoration
+
+    AstDecorations astDecs;
+
 	// Node construction / bookkeeping
 
 	uint iNode = 0;				// Becomes node's id
 	Token * pPendingToken = nullptr;
-	DynamicArray<AstNode *> astNodes;		// Might be able to replace this with just the root node. Although the root node will need to be a type that
-											//	is essentially just a dynamic array.
 
 
 	// Error and error recovery
 
-
-	// bool isPanicMode = false;
-    bool hadError = false;
+	DynamicArray<AstNode *> apErrorNodes;
 };
 
 
@@ -96,6 +99,7 @@ enum PARAMK
 
 bool init(Parser * pParser, Scanner * pScanner);
 AstNode * parseProgram(Parser * pParser, bool * poSuccess);
+void reportScanAndParseErrors(const Parser & parser);
 
 
 // HMM: Are these really public?
@@ -114,10 +118,10 @@ Scope popScope(Parser * pParser);
 
 // Node allocation
 
-AstNode * astNew(Parser * pParser, ASTK astk, int line);
-AstNode * astNewErr(Parser * pParser, ASTK astkErr, int line, AstNode * pChild0=nullptr, AstNode * pChild1=nullptr, AstNode * pChild2=nullptr);
-AstNode * astNewErr(Parser * pParser, ASTK astkErr, int line, AstNode * aPChildren[], uint cPChildren);
-AstNode * astNewErrMoveChildren(Parser * pParser, ASTK astkErr, int line, DynamicArray<AstNode *> * papChildren);
+AstNode * astNew(Parser * pParser, ASTK astk, StartEndIndices startEnd);
+AstNode * astNewErr(Parser * pParser, ASTK astkErr, StartEndIndices startEnd, AstNode * pChild0=nullptr, AstNode * pChild1=nullptr, AstNode * pChild2=nullptr);
+AstNode * astNewErr(Parser * pParser, ASTK astkErr, StartEndIndices startEnd, AstNode * aPChildren[], uint cPChildren);
+AstNode * astNewErrMoveChildren(Parser * pParser, ASTK astkErr, StartEndIndices startEnd, DynamicArray<AstNode *> * papChildren);
 
 // Error handling
 
@@ -137,7 +141,7 @@ enum PARSESTMTK
 AstNode * parseStmt(Parser * pParser, PARSESTMTK parsestmtk=PARSESTMTK_Stmt);
 AstNode * parseExprStmtOrAssignStmt(Parser * pParser);
 AstNode * parseStructDefnStmt(Parser * pParser);
-AstNode * parseVarDeclStmt(Parser * pParser, EXPECTK expectkName=EXPECTK_Required, EXPECTK expectkInit=EXPECTK_Optional, EXPECTK expectkSemicolon=EXPECTK_Required);
+AstNode * parseVarDeclStmt(Parser * pParser, EXPECTK expectkName=EXPECTK_Required, EXPECTK expectkSemicolon=EXPECTK_Required);
 AstNode * parseIfStmt(Parser * pParser);
 AstNode * parseWhileStmt(Parser * pParser);
 AstNode * parseDoStmtOrBlockStmt(Parser * pParser, bool pushPopScopeBlock=true);

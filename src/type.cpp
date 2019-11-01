@@ -355,8 +355,7 @@ void insertBuiltInTypes(TypeTable * pTable)
     {
         static Token voidToken;
         voidToken.id = -1;
-        voidToken.line = -1;
-        voidToken.column = -1;
+        voidToken.startEnd = gc_startEndBuiltInPseudoToken;
         voidToken.tokenk = TOKENK_Identifier;
         voidToken.lexeme = "void";
 
@@ -375,8 +374,7 @@ void insertBuiltInTypes(TypeTable * pTable)
     {
         static Token intToken;
         intToken.id = -1;
-        intToken.line = -1;
-        intToken.column = -1;
+        intToken.startEnd = gc_startEndBuiltInPseudoToken;
         intToken.tokenk = TOKENK_Identifier;
         intToken.lexeme = "int";
 
@@ -395,8 +393,7 @@ void insertBuiltInTypes(TypeTable * pTable)
     {
         static Token floatToken;
         floatToken.id = -1;
-        floatToken.line = -1;
-        floatToken.column = -1;
+        floatToken.startEnd = gc_startEndBuiltInPseudoToken;
         floatToken.tokenk = TOKENK_Identifier;
         floatToken.lexeme = "float";
 
@@ -415,8 +412,7 @@ void insertBuiltInTypes(TypeTable * pTable)
     {
         static Token boolToken;
         boolToken.id = -1;
-        boolToken.line = -1;
-        boolToken.column = -1;
+        boolToken.startEnd = gc_startEndBuiltInPseudoToken;
         boolToken.tokenk = TOKENK_Identifier;
         boolToken.lexeme = "bool";
 
@@ -435,8 +431,7 @@ void insertBuiltInTypes(TypeTable * pTable)
     {
         static Token stringToken;
         stringToken.id = -1;
-        stringToken.line = -1;
-        stringToken.column = -1;
+        stringToken.startEnd = gc_startEndBuiltInPseudoToken;
         stringToken.tokenk = TOKENK_Identifier;
         stringToken.lexeme = "string";
 
@@ -559,29 +554,24 @@ TYPID resolveIntoTypeTableOrSetPending(
 
 bool tryResolveAllPendingTypesIntoTypeTable(Parser * pParser)
 {
-	bool madeProgress = true;
-	while (madeProgress && pParser->typeTable.typesPendingResolution.cItem > 0)
+	// NOTE: This *should* be doable in a single pass after we have inserted all declared type symbols into the symbol table.
+	//	That might change if I add typedefs, since typedefs may form big dependency chains.
+
+	// Iterate backwards to perform removals w/o any fuss
+
+	for (int i = pParser->typeTable.typesPendingResolution.cItem - 1; i >= 0; i--)
 	{
-		madeProgress = false;
+		TypePendingResolution * pTypePending = &pParser->typeTable.typesPendingResolution[i];
 
-		// Iterate backwards to perform removals w/o any fuss
-
-		for (int i = pParser->typeTable.typesPendingResolution.cItem - 1; i >= 0; i--)
+		if (tryResolveType(pTypePending->pType, pParser->symbTable, pTypePending->scopeStack))
 		{
-			TypePendingResolution * pTypePending = &pParser->typeTable.typesPendingResolution[i];
+			TYPID typid = ensureInTypeTable(&pParser->typeTable, *(pTypePending->pType));
+			*(pTypePending->pTypidUpdateWhenResolved) = typid;
 
-			if (tryResolveType(pTypePending->pType, pParser->symbTable, pTypePending->scopeStack))
-			{
-				madeProgress = true;
+			dispose(&pTypePending->scopeStack);
+			releaseType(pParser, pTypePending->pType);
 
-				TYPID typid = ensureInTypeTable(&pParser->typeTable, *(pTypePending->pType));
-				*(pTypePending->pTypidUpdateWhenResolved) = typid;
-
-				dispose(&pTypePending->scopeStack);
-				releaseType(pParser, pTypePending->pType);
-
-				unorderedRemove(&pParser->typeTable.typesPendingResolution, i);
-			}
+			unorderedRemove(&pParser->typeTable.typesPendingResolution, i);
 		}
 	}
 

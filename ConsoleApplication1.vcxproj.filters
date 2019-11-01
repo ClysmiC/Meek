@@ -83,6 +83,9 @@
     <ClInclude Include="src\literal.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="src\ast_decorate.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\ast.cpp">
@@ -113,6 +116,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="src\literal.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\error.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

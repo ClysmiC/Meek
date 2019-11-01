@@ -2,9 +2,10 @@
 
 #include "ast.h"
 #include "ast_print.h"
-#include "scan.h"
+#include "error.h"
 #include "parse.h"
 #include "resolve_pass.h"
+#include "scan.h"
 
 #include <stdio.h>
 
@@ -53,18 +54,14 @@ int main()
 	Scanner scanner;
 	if (!init(&scanner, buffer, bytesRead, lexemeBuffer, lexemeBufferSize))
 	{
-		// TODO: distinguish this as internal compiler error
-
-		fprintf(stderr, "Failed to initialize scanner");
+		reportIceAndExit("Failed to initialize scanner");
 		return 1;
 	}
 
     Parser parser;
     if (!init(&parser, &scanner))
     {
-        // TODO: distinguish this as internal compiler error
-
-        fprintf(stderr, "Failed to initialize parser");
+        reportIceAndExit("Failed to initialize parser");
         return 1;
     }
 
@@ -73,7 +70,9 @@ int main()
 
     if (!success)
     {
-        printf("Exiting with parse error(s)...");
+		// TODO: Still try to do semantic analysis on non-erroneous parts of the program so that we can report better errors?
+
+		reportScanAndParseErrors(parser);
         return 1;
     }
 

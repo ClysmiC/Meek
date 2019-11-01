@@ -91,8 +91,7 @@ void insertBuiltInSymbols(SymbolTable * pSymbolTable)
     {
         static Token intToken;
         intToken.id = -1;
-        intToken.line = -1;
-        intToken.column = -1;
+        intToken.startEnd = gc_startEndBuiltInPseudoToken;
         intToken.tokenk = TOKENK_Identifier;
         intToken.lexeme = "int";
 
@@ -109,8 +108,7 @@ void insertBuiltInSymbols(SymbolTable * pSymbolTable)
     {
         static Token floatToken;
         floatToken.id = -1;
-        floatToken.line = -1;
-        floatToken.column = -1;
+        floatToken.startEnd = gc_startEndBuiltInPseudoToken;
         floatToken.tokenk = TOKENK_Identifier;
         floatToken.lexeme = "float";
 
@@ -127,8 +125,7 @@ void insertBuiltInSymbols(SymbolTable * pSymbolTable)
     {
         static Token boolToken;
         boolToken.id = -1;
-        boolToken.line = -1;
-        boolToken.column = -1;
+        boolToken.startEnd = gc_startEndBuiltInPseudoToken;
         boolToken.tokenk = TOKENK_Identifier;
         boolToken.lexeme = "bool";
 

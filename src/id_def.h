@@ -2,6 +2,10 @@
 
 #include "als.h"
 
+enum ASTID : u32
+{
+};
+
 enum SYMBSEQID : u32
 {
     SYMBSEQID_Unset,

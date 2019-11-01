@@ -134,21 +134,51 @@ enum FERRTOK : u32
 };
 typedef u32 GRFERRTOK;
 
-void errMessagesFromGrferrtok(GRFERRTOK grferrtok, DynamicArray<StringBox<256>> * poMessages);
+void errMessagesFromGrferrtok(GRFERRTOK grferrtok, DynamicArray<String> * poMessages);
+
+struct StartEndIndices
+{
+    StartEndIndices() {}
+    StartEndIndices(int iStart, int iEnd) : iStart(iStart), iEnd(iEnd) {}
+
+    // Char indices in source file
+
+    int iStart = 0;
+    int iEnd = 0;       // (inclusive)
+};
+
+extern const StartEndIndices gc_startEndBubble;
+extern const StartEndIndices gc_startEndBuiltInPseudoToken;
+
+inline StartEndIndices makeStartEnd(int start, int end)
+{
+    Assert(end >= start);
+    AssertInfo(Implies(start < 0, start == -1 && end == -1), "Bubble errors (which don't really have good lexical locations) use -1 for start/end");
+
+    StartEndIndices result;
+    result.iStart = start;
+    result.iEnd = end;
+    return result;
+}
+
+inline StartEndIndices makeStartEnd(int startAndEnd)
+{ 
+    return makeStartEnd(startAndEnd, startAndEnd);
+}
 
 struct Token
 {
-	int			id = 0;
-	int			line = 0;       // Technically the "start" line if there are any tokens that can span multiple lines
-	int			column = 0;
+	int id = 0;
 
-	TOKENK		tokenk = TOKENK_Nil;
-    GRFERRTOK   grferrtok = GRFERRTOK_None;      // TOKENK_Error
+    StartEndIndices startEnd;
+
+	TOKENK tokenk = TOKENK_Nil;
+    GRFERRTOK grferrtok = GRFERRTOK_None;      // TOKENK_Error
 
     // TODO: store lexeme length? I *do* make sure that they are null-terminated so
     //  I can always just strlen them but that is pretty lame.
 
-	char *		lexeme = nullptr;
+	char * lexeme = nullptr;
 };
 
 struct ReservedWord
@@ -167,7 +197,14 @@ inline bool isLiteral(TOKENK tokenk)
 inline void nillify(Token * poToken)
 {
 	poToken->id = 0;
+
+	poToken->startEnd.iStart = 0;
+	poToken->startEnd.iEnd = 0;
+
 	poToken->tokenk = TOKENK_Nil;
+    poToken->grferrtok = GRFERRTOK_None;
+
+	poToken->lexeme = nullptr;
 }
 
 // TODO: use a dict or trie for reserved words

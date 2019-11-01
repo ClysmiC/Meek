@@ -35,8 +35,6 @@ struct Type;
 #define DownExpr(pNode) reinterpret_cast<AstExpr *>(pNode)
 #define DownExprConst(pNode) reinterpret_cast<const AstExpr *>(pNode)
 
-#define AstNew(pParser, astk, line) reinterpret_cast<Ast##astk *>(astNew(pParser, ASTK_##astk, line))
-
 enum ASTCATK
 {
 	ASTCATK_Error,
@@ -53,13 +51,12 @@ enum ASTK : u8
 	//	the kinds that we don't. For the kinds that we don't, we could probably just make them all the same error kind and have an enum that
 	//	that corresponds to which one it is?
 
-	ASTK_InternalCompilerErr,	// TODO: add error codes!
+	// ASTK_InternalCompilerErr,	// TODO: add error codes!
 	ASTK_ScanErr,
 	ASTK_BubbleErr,
 	ASTK_UnexpectedTokenkErr,
 	ASTK_ExpectedTokenkErr,
 	ASTK_InitUnnamedVarErr,
-	ASTK_IllegalInitErr,
 	ASTK_ChainedAssignErr,
 	ASTK_IllegalDoStmtErr,
 	ASTK_IllegalTopLevelStmtErr,
@@ -149,11 +146,6 @@ struct AstExpectedTokenkErr
 
 struct AstInitUnnamedVarErr {};
 
-struct AstIllegalInitErr
-{
-	Token * pVarIdent;
-};
-
 struct AstChainedAssignErr {};
 
 struct AstIllegalDoStmtErr
@@ -180,7 +172,6 @@ struct AstErr
 		AstUnexpectedTokenkErr unexpectedTokenErr;
 		AstExpectedTokenkErr expectedTokenErr;
 		AstInitUnnamedVarErr unnamedVarErr;
-		AstIllegalInitErr illegalInitErr;
 		AstChainedAssignErr chainedAssignErr;
         AstIllegalDoStmtErr illegalDoStmtErr;
 		AstIllegalTopLevelStmtErr illegalTopLevelStmt;
@@ -426,11 +417,15 @@ struct AstNode
 
 			ASTK				astk;
 
-			int					id;
-			int					startLine;
+			ASTID			    astid;
+
+            // Indices into source file
+
+			// int					iStart;
+            // int                 iEnd;
 		};
 
-        char _padding[32];
+        char _padding[64];
 	};
 };
 
@@ -441,6 +436,7 @@ StaticAssert(sizeof(AstNode) <= 64);		// Goal: Make it so each AstNode fits in a
                                             //  an aligned spot?
 
 // TODO: other "value" functions
+// TODO: move to literal.h / literal.cpp
 
 int intValue(AstLiteralExpr * pLiteralExpr);
 
@@ -468,10 +464,10 @@ inline bool isErrorNode(const AstNode & node)
 
 bool containsErrorNode(const DynamicArray<AstNode *> & apNodes);
 
-const char * displayString(ASTK astk);
+const char * displayString(ASTK astk, bool capitalizeFirstLetter=false);
 
-#if 0
+#if 1
 // Convenient place to hover the mouse and get size info for different kinds of nodes!
 
-constexpr uint convenientSizeDebugger = sizeof(AstErr);
+constexpr uint convenientSizeDebugger = sizeof(AstFuncDefnStmt);
 #endif

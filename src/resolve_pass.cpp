@@ -242,7 +242,7 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 
 			if (!isPointerType(*pTypePtr))
 			{
-				printf("Trying to dereferenec a non-pointer\n");
+				printf("Trying to dereference a non-pointer\n");
 				typidResult = TYPID_TypeError;
 				goto end;
 			}

@@ -19,6 +19,8 @@ fn add(Vector v1, Vector v2) -> Vector
 	{
 		return i1 + i2;
 	}
+
+	[6 uaeu] Vector jvv;
 }
 
 // struct defined way after used... order doesn't matter!

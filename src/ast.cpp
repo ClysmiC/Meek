@@ -1,5 +1,7 @@
 #include "ast.h"
 
+#include "error.h"
+
 int intValue(AstLiteralExpr * pLiteralExpr)
 {
 	Assert(pLiteralExpr->literalk == LITERALK_Int);
@@ -90,33 +92,88 @@ bool containsErrorNode(const DynamicArray<AstNode *> & apNodes)
 	return false;
 }
 
-const char * displayString(ASTK astk)
+
+const char * displayString(ASTK astk, bool capitalizeFirstLetter)
 {
+	// TODO: improve this...
+
 	switch (astk)
 	{
+		case ASTK_ExprStmt:
+		{
+			return (capitalizeFirstLetter) ?
+				"Expression statement" :
+				"expression statement";
+		} break;
+
+		case ASTK_AssignStmt:
+		{
+			return (capitalizeFirstLetter) ?
+				"Assignment" :
+				"assignment";
+		} break;
+
 		case ASTK_VarDeclStmt:
 		{
-			return "variable declaration statement";
+			return (capitalizeFirstLetter) ?
+				"Variable declaration" :
+				"variable declaration";
 		} break;
 
 		case ASTK_FuncDefnStmt:
 		{
-			return "function definition statement";
+			return (capitalizeFirstLetter) ?
+				"Function definition" :
+				"function definition";
 		} break;
 
 		case ASTK_StructDefnStmt:
 		{
-			return "struct definition statement";
+			return (capitalizeFirstLetter) ?
+				"Struct definition" :
+				"struct definition";
+		} break;
+
+		case ASTK_IfStmt:
+		{
+			// NOTE: no caps
+			return "'if' statement";
+		} break;
+
+		case ASTK_WhileStmt:
+		{
+			// NOTE: no caps
+			return "'while' statement";
 		} break;
 
 		case ASTK_BlockStmt:
 		{
-			return "statement block";
+			return (capitalizeFirstLetter) ?
+				"Statement block" :
+				"statement block";
+		} break;
+
+		case ASTK_ReturnStmt:
+		{
+			// NOTE: no caps
+			return "'return' statement";
+		} break;
+
+		case ASTK_BreakStmt:
+		{
+			// NOTE: no caps
+			return "'break' statement";
+		} break;
+
+		case ASTK_ContinueStmt:
+		{
+			// NOTE: no caps
+			return "'continue' statement";
 		} break;
 
 		default:
 		{
-			AssertInfo(false, "Update this function with any ASTK display string that you want to be able to output in error messages");
+			reportIceAndExit("No display string listed for astk %d", astk);
             return "<internal compiler error>";
 		}
 	}

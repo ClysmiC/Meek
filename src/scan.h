@@ -18,36 +18,36 @@ struct Scanner
 	// Init state
 
 	char *		pText = nullptr;
-	uint		textSize = 0;
+	int		textSize = 0;
 	char *		pLexemeBuffer = nullptr;		// Must be as large as pText
-	uint		lexemeBufferSize = 0;
+	int		lexemeBufferSize = 0;
 
 	// Scan state
 
-	uint		iText = 0;
-	uint		line = 1;
-	uint		column = 1;
+	int		iText = 0;
 
-	uint		iTextTokenStart = 0;
-	uint		lineTokenStart = 1;
-	uint		columnTokenStart = 1;
+	int		iTextTokenStart = 0;
 
-	uint		iToken = 0;						// Becomes tokens id
+	int		iToken = 0;						// Becomes tokens id
 
 	int			cNestedBlockComment = 0;		/* this style of comment can nest */
 
 	bool		madeToken = false;				// Resets at beginning of each call to makeToken
 	bool		hadError = false;
 
+	// Sorted array of each \n index. Used to retrieve line #'s from raw indices (which are the only thing we track)
+
+	DynamicArray<int> newLineIndices;
+
 	// Peek and prev buffers
 
-    static constexpr uint s_lookMax = 16;
+    static constexpr int s_lookMax = 16;
 	RingBuffer<Token, s_lookMax> peekBuffer;
 	RingBuffer<Token, s_lookMax> prevBuffer;    // More recent tokens are at the end of the buffer
 
 	// Lexeme buffer management
 
-	uint		iLexemeBuffer = 0;
+	int		iLexemeBuffer = 0;
 
 	// Exit kind
 
@@ -62,13 +62,14 @@ bool init(Scanner * pScanner, char * pText, uint textSize, char * pLexemeBuffer,
 TOKENK peekToken(Scanner * pScanner, Token * poToken=nullptr, uint lookahead=0);
 TOKENK prevToken(Scanner * pScanner, Token * poToken=nullptr, uint lookbehind=0);
 // bool tryPeekTokenSequence(Scanner * pScanner, const TOKENK * aSequence, int cSequence);
-int peekTokenLine(Scanner * pScanner, uint lookahead=0);
-int prevTokenLine(Scanner * pScanner, uint lookbehind=0);
+StartEndIndices peekTokenStartEnd(Scanner * pScanner, uint lookahead=0);
+StartEndIndices prevTokenStartEnd(Scanner * pScanner, uint lookbehind=0);
 bool tryConsumeToken(Scanner * pScanner, TOKENK tokenk, Token * poToken=nullptr);
 bool tryConsumeToken(Scanner * pScanner, const TOKENK * aTokenk, int cTokenk, Token * poToken=nullptr);
 bool tryPeekToken(Scanner * pScanner, const TOKENK * aTokenk, int cTokenk, Token * poToken=nullptr);
 TOKENK consumeToken(Scanner * pScanner, Token * poToken=nullptr);
 bool isFinished(Scanner * pScanner);
+int lineFromI(const Scanner & scanner, int iText);
 
 
 // Internal
