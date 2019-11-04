@@ -21,8 +21,6 @@ struct BinopInfo
     //  it is the only one that will likely be right associative.
 };
 
-
-
 struct Parser
 {
 	// Scanner
@@ -167,6 +165,7 @@ AstNode * finishParsePrimary(Parser * pParser, AstNode * pLhsExpr);
 enum PARSETYPERESULT
 {
     PARSETYPERESULT_ParseFailed,
+	PARSETYPERESULT_ParseFailedButRecovered,
     PARSETYPERESULT_ParseSucceededTypeResolveFailed,
     PARSETYPERESULT_ParseSucceededTypeResolveSucceeded
 };
@@ -205,7 +204,15 @@ bool tryParseFuncDefnOrLiteralHeaderParamList(Parser * pParser, FUNCHEADERK func
 // TODO: Consider combining with tryParseFuncDefnOrLiteralHeader... the problem is that they
 //	have different kinds of out parameters, despite the parsing pattern being very similar!
 
-bool tryParseFuncHeaderTypeOnly(
+enum PARSEFUNCHEADERTYPEONLYRESULT
+{
+    PARSEFUNCHEADERTYPEONLYRESULT_Succeeded,
+    PARSEFUNCHEADERTYPEONLYRESULT_Failed,
+    PARSEFUNCHEADERTYPEONLYRESULT_FailedButRecovered
+};
+
+PARSEFUNCHEADERTYPEONLYRESULT
+tryParseFuncHeaderTypeOnly(
 	Parser * pParser,
 	FuncType * poFuncType,
 	AstErr ** ppoErr

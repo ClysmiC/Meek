@@ -490,6 +490,8 @@ AstNode * parseStructDefnStmt(Parser * pParser)
 	pushScope(pParser, SCOPEK_StructDefn);
 	Defer(if (!success) popScope(pParser));		// NOTE: In success case we pop it manually before inserting into symbol table
 
+	// TODO: Allow nested struct definitions!
+
 	// Parse vardeclstmt list, then '}'
 
 	DynamicArray<AstNode *> apVarDeclStmt;
@@ -505,6 +507,21 @@ AstNode * parseStructDefnStmt(Parser * pParser)
 
 		if (isErrorNode(*pVarDeclStmt))
 		{
+			static const TOKENK s_aTokenkRecover[] = { TOKENK_CloseBrace, TOKENK_Semicolon };
+			TOKENK tokenkRecover;
+			if (tryRecoverFromPanic(pParser, s_aTokenkRecover, ArrayLen(s_aTokenkRecover), &tokenkRecover))
+			{
+				if (tokenkRecover == TOKENK_CloseBrace)
+				{
+					break;
+				}
+				else
+				{
+					Assert(tokenkRecover == TOKENK_Semicolon);
+					continue;
+				}
+			}
+
 			Assert(apVarDeclStmt.cItem > 0);
 
 			auto * pErr = AstNewErrListChildMove(pParser, BubbleErr, gc_startEndBubble, &apVarDeclStmt);
@@ -658,10 +675,11 @@ AstNode * parseVarDeclStmt(Parser * pParser, EXPECTK expectkName, EXPECTK expect
 
 	// Parse type
 
+    PARSETYPERESULT parseTypeResult;
 	TypePendingResolution * pTypePending;
 	TYPID typidResolved;
 	{
-		PARSETYPERESULT parseTypeResult = tryParseType(pParser, &apNodeChildren, &typidResolved, &pTypePending);
+		parseTypeResult = tryParseType(pParser, &apNodeChildren, &typidResolved, &pTypePending);
 		if (parseTypeResult == PARSETYPERESULT_ParseFailed)
 		{
 			Assert(apNodeChildren.cItem > 0);
@@ -679,6 +697,7 @@ AstNode * parseVarDeclStmt(Parser * pParser, EXPECTK expectkName, EXPECTK expect
 
 		Assert(Implies(parseTypeResult == PARSETYPERESULT_ParseSucceededTypeResolveSucceeded, !pTypePending));
 		Assert(Implies(parseTypeResult == PARSETYPERESULT_ParseSucceededTypeResolveFailed, pTypePending));
+        Assert(Implies(parseTypeResult == PARSETYPERESULT_ParseFailedButRecovered, !pTypePending));
 	}
 
 	// Parse name
@@ -777,15 +796,30 @@ AstNode * parseVarDeclStmt(Parser * pParser, EXPECTK expectkName, EXPECTK expect
 	setIdent(&pNode->ident, pVarIdent, declScope);
 	pNode->pInitExpr = pInitExpr;
 
-	if (pTypePending)
-	{
-		pTypePending->pTypidUpdateWhenResolved = &pNode->typid;
-	}
-	else
-	{
-		Assert(isTypeResolved(typidResolved));
-		pNode->typid = typidResolved;
-	}
+    switch (parseTypeResult)
+    {
+        case PARSETYPERESULT_ParseSucceededTypeResolveSucceeded:
+        {
+		    Assert(isTypeResolved(typidResolved));
+		    pNode->typid = typidResolved;
+        } break;
+
+        case PARSETYPERESULT_ParseSucceededTypeResolveFailed:
+        {
+        	pTypePending->pTypidUpdateWhenResolved = &pNode->typid;
+        } break;
+
+        case PARSETYPERESULT_ParseFailedButRecovered:
+        {
+
+        } break;
+
+        default:
+        {
+            reportIceAndExit("Unknown PARSETYPERESULT %d", parseTypeResult);
+            return nullptr;
+        }
+    }
 
 	if (pNode->ident.pToken)
 	{
@@ -980,6 +1014,21 @@ AstNode * parseBlockStmt(Parser * pParser, bool pushPopScope)
 
 		if (isErrorNode(*pStmt))
 		{
+			static const TOKENK s_aTokenkRecover[] = { TOKENK_CloseBrace, TOKENK_Semicolon };
+			TOKENK tokenkRecover;
+			if (tryRecoverFromPanic(pParser, s_aTokenkRecover, ArrayLen(s_aTokenkRecover), &tokenkRecover))
+			{
+				if (tokenkRecover == TOKENK_CloseBrace)
+				{
+					break;
+				}
+				else
+				{
+					Assert(tokenkRecover == TOKENK_Semicolon);
+					continue;
+				}
+			}
+
 			auto * pErr = AstNewErrListChildMove(pParser, BubbleErr, gc_startEndBubble, &apStmts);
 			return Up(pErr);
 		}
@@ -1005,7 +1054,7 @@ AstNode * parseReturnStmt(Parser * pParser)
 	if (!tryConsumeToken(pParser->pScanner, TOKENK_Return))
 	{
         auto startEndPrev = prevTokenStartEnd(pParser->pScanner);
-        
+
 		auto * pErr = AstNewErr0Child(pParser, ExpectedTokenkErr, makeStartEnd(startEndPrev.iEnd + 1));
 		append(&pErr->aTokenkValid, TOKENK_Return);
 		return Up(pErr);
@@ -1489,7 +1538,12 @@ bool tryParseFuncDefnOrLiteralHeaderParamList(
 		}
 	}
 
+	static const TOKENK s_aTokenkRecoverWithParen[] = { TOKENK_Comma, TOKENK_CloseParen };
+	static const TOKENK s_aTokenkRecoverWithoutParen[] = { TOKENK_Comma };
+
+	bool success = true;
 	bool isFirstParam = true;
+
 	while (true)
 	{
 		if (!singleReturnWithoutParens && tryConsumeToken(pParser->pScanner, TOKENK_CloseParen))
@@ -1500,12 +1554,40 @@ bool tryParseFuncDefnOrLiteralHeaderParamList(
 
 		if (!isFirstParam && !tryConsumeToken(pParser->pScanner, TOKENK_Comma))
 		{
+			// Missing ,
+
+			success = false;
+
             auto startEndPrev = prevTokenStartEnd(pParser->pScanner);
 
 			auto * pErr = AstNewErrListChildMove(pParser, ExpectedTokenkErr, makeStartEnd(startEndPrev.iEnd + 1), papParamVarDecls);
 			append(&pErr->aTokenkValid, TOKENK_Comma);
 			append(papParamVarDecls, Up(pErr));
-			return false;
+
+			TOKENK tokenkRecover;
+			if (tryRecoverFromPanic(
+					pParser,
+					(singleReturnWithoutParens) ? s_aTokenkRecoverWithoutParen : s_aTokenkRecoverWithParen,
+					(singleReturnWithoutParens) ? ArrayLen(s_aTokenkRecoverWithoutParen) : ArrayLen(s_aTokenkRecoverWithParen),
+					&tokenkRecover))
+			{
+				if (tokenkRecover == TOKENK_Comma)
+				{
+					// Do nothing (this substitutes as the comma we were missing)
+				}
+				else
+				{
+					Assert(tokenkRecover == TOKENK_CloseParen);
+					break;;
+				}
+			}
+			else
+			{
+				// Couldn't recover
+
+				Assert(!success);
+				return success;
+			}
 		}
 
 		const static EXPECTK s_expectkVarName = EXPECTK_Optional;
@@ -1516,7 +1598,32 @@ bool tryParseFuncDefnOrLiteralHeaderParamList(
 
 		if (isErrorNode(*pNode))
 		{
-			return false;
+			// Erroneous vardecl
+
+			success = false;
+
+			TOKENK tokenkRecover;
+			if (tryRecoverFromPanic(
+					pParser,
+					(singleReturnWithoutParens) ? s_aTokenkRecoverWithoutParen : s_aTokenkRecoverWithParen,
+					(singleReturnWithoutParens) ? ArrayLen(s_aTokenkRecoverWithoutParen) : ArrayLen(s_aTokenkRecoverWithParen),
+					&tokenkRecover))
+			{
+				if (tokenkRecover == TOKENK_Comma)
+				{
+					continue;
+				}
+				else
+				{
+					Assert(tokenkRecover == TOKENK_CloseParen);
+					break;;
+				}
+			}
+
+			// Couldn't recover
+
+			Assert(!success);
+			return success;
 		}
 
 		isFirstParam = false;
@@ -1543,6 +1650,8 @@ PARSETYPERESULT tryParseType(
 	// NOTE; Since all nodes are stored in papNodeChildren, error nodes do not need to attach any children. It is the
 	//	responsibility of the caller to add papNodeChildren to a bubble error if we return false
 
+	bool recoveredFromPanic = false;
+
 	while (peekToken(pParser->pScanner) != TOKENK_Identifier &&
 		   peekToken(pParser->pScanner) != TOKENK_Fn)
 	{
@@ -1555,7 +1664,19 @@ PARSETYPERESULT tryParseType(
 
 			if (isErrorNode(*pSubscriptExpr))
 			{
-				return PARSETYPERESULT_ParseFailed;
+				if (tryRecoverFromPanic(pParser, TOKENK_CloseBracket))
+				{
+					// Embed error in pSubscriptExpr
+
+					recoveredFromPanic = true;
+					goto arrayTypeEnd;
+				}
+				else
+				{
+					// Couldn't recover
+
+					return PARSETYPERESULT_ParseFailed;
+				}
 			}
 
 			if (!tryConsumeToken(pParser->pScanner, TOKENK_CloseBracket))
@@ -1565,8 +1686,25 @@ PARSETYPERESULT tryParseType(
 				auto * pErr = AstNewErr0Child(pParser, ExpectedTokenkErr, makeStartEnd(startEndPrev.iEnd + 1));
 				append(&pErr->aTokenkValid, TOKENK_CloseBracket);
 				append(papNodeChildren, Up(pErr));
-				return PARSETYPERESULT_ParseFailed;
+
+				if (tryRecoverFromPanic(pParser, TOKENK_CloseBracket))
+				{
+					// Embed error in pSubscriptExpr
+
+					recoveredFromPanic = true;
+					append(&UpErr(pErr)->apChildren, pSubscriptExpr);
+					pSubscriptExpr = Up(pErr);
+					goto arrayTypeEnd;
+				}
+				else
+				{
+					// Couldn't recover
+
+					return PARSETYPERESULT_ParseFailed;
+				}
 			}
+
+		arrayTypeEnd:
 
 			TypeModifier mod;
 			mod.typemodk = TYPEMODK_Array;
@@ -1589,73 +1727,155 @@ PARSETYPERESULT tryParseType(
 		}
 	}
 
-	bool parseSucceeded = false;
-
-	// Init type
-
-	Type * pType = newType(pParser);
-	if (peekToken(pParser->pScanner) == TOKENK_Identifier)
+	if (recoveredFromPanic)
 	{
-		init(pType, false /* isFuncType */);
-	}
-	else
-	{
-		init(pType, true /* isFuncType */);
-	}
+		// Parse through but don't actually try to resolve a type
 
-	reinitMove(&pType->aTypemods, &aModifiers);
-
-	// Defer cleanup on fail
-
-	Defer(
-		if (!parseSucceeded)
+		TOKENK tokenkPeek = peekToken(pParser->pScanner);
+		if (tokenkPeek == TOKENK_Identifier)
 		{
-			dispose(pType);
-			releaseType(pParser, pType);
+			consumeToken(pParser->pScanner);
+			return PARSETYPERESULT_ParseFailedButRecovered;
 		}
-	);
-
-	TYPID typid;
-	if (!pType->isFuncType)
-	{
-		Token * pTypeIdent = ensureAndClaimPendingToken(pParser);
-		consumeToken(pParser->pScanner, pTypeIdent);
-
-		Assert(pTypeIdent->tokenk == TOKENK_Identifier);
-		setIdentNoScope(&pType->ident, pTypeIdent);
-
-		typid = resolveIntoTypeTableOrSetPending(pParser, pType, ppoTypePendingResolution);
-	}
-	else
-	{
-		AstErr * pErr = nullptr;
-		bool funcHeaderSuccess = tryParseFuncHeaderTypeOnly(pParser, &pType->funcType, &pErr);
-
-		Assert(Implies(funcHeaderSuccess, !pErr));
-
-		if (!funcHeaderSuccess)
+		else if (tokenkPeek == TOKENK_Fn)
 		{
-			append(papNodeChildren, Up(pErr));
+            FuncType dummy;
+            init(&dummy);
+            Defer(dispose(&dummy));
+
+			AstErr * pErr = nullptr;
+			auto headerResult = tryParseFuncHeaderTypeOnly(pParser, &dummy, &pErr);
+
+			Assert(Implies(headerResult != PARSEFUNCHEADERTYPEONLYRESULT_Failed, !pErr));
+
+            switch (headerResult)
+            {
+			    case PARSEFUNCHEADERTYPEONLYRESULT_Failed:
+                {
+                    append(papNodeChildren, Up(pErr));
+                    return PARSETYPERESULT_ParseFailed;
+                } break;
+
+                case PARSEFUNCHEADERTYPEONLYRESULT_FailedButRecovered:
+                case PARSEFUNCHEADERTYPEONLYRESULT_Succeeded:
+                {
+                    return PARSETYPERESULT_ParseFailedButRecovered;
+                } break;
+
+                default:
+                {
+                    reportIceAndExit("Unknown PARSEFUNCHEADERTYPEONLYRESULT %d", headerResult);
+                    return PARSETYPERESULT_ParseFailed;
+                } break;
+            }
+		}
+		else
+		{
+			AstNode * pErr = handleScanOrUnexpectedTokenkErr(pParser, nullptr);
+			append(papNodeChildren, pErr);
 			return PARSETYPERESULT_ParseFailed;
 		}
-
-		typid = resolveIntoTypeTableOrSetPending(pParser, pType, ppoTypePendingResolution);
 	}
+    else
+    {
+        // So far so good...
 
-	parseSucceeded = true;		// Used in Defer
+        TOKENK tokenkPeek = peekToken(pParser->pScanner);
+        if (tokenkPeek == TOKENK_Identifier)
+        {
+            // Non-func type
 
-	if (isTypeResolved(typid))
-	{
-		*poTypidResolved = typid;
-		return PARSETYPERESULT_ParseSucceededTypeResolveSucceeded;
-	}
-	else
-	{
-		return PARSETYPERESULT_ParseSucceededTypeResolveFailed;
-	}
+            Type * pType = newType(pParser);
+            init(pType, false /* isFuncType */);
+            reinitMove(&pType->aTypemods, &aModifiers);
+
+            Token * pTypeIdent = ensureAndClaimPendingToken(pParser);
+            consumeToken(pParser->pScanner, pTypeIdent);
+            Assert(pTypeIdent->tokenk == TOKENK_Identifier);
+
+            setIdentNoScope(&pType->ident, pTypeIdent);
+
+            TYPID typid = resolveIntoTypeTableOrSetPending(pParser, pType, ppoTypePendingResolution);
+            if (isTypeResolved(typid))
+            {
+                *poTypidResolved = typid;
+                return PARSETYPERESULT_ParseSucceededTypeResolveSucceeded;
+            }
+            else
+            {
+                return PARSETYPERESULT_ParseSucceededTypeResolveFailed;
+            }
+        }
+        else if (tokenkPeek == TOKENK_Fn)
+        {
+            // Func type
+
+            PARSEFUNCHEADERTYPEONLYRESULT headerResult;
+
+            Type * pType = newType(pParser);
+            init(pType, true /* isFuncType */);
+            reinitMove(&pType->aTypemods, &aModifiers);
+            Defer(
+                if (headerResult != PARSEFUNCHEADERTYPEONLYRESULT_Succeeded)
+                {
+                    dispose(pType);
+                    releaseType(pParser, pType);
+                }
+            );
+
+            AstErr * pErr = nullptr;
+            headerResult = tryParseFuncHeaderTypeOnly(pParser, &pType->funcType, &pErr);
+
+            Assert(Implies(headerResult != PARSEFUNCHEADERTYPEONLYRESULT_Failed, !pErr));
+
+            switch (headerResult)
+            {
+                case PARSEFUNCHEADERTYPEONLYRESULT_Failed:
+                {
+                    append(papNodeChildren, Up(pErr));
+                    return PARSETYPERESULT_ParseFailed;
+                } break;
+
+                case PARSEFUNCHEADERTYPEONLYRESULT_FailedButRecovered:
+                {
+                    return PARSETYPERESULT_ParseFailedButRecovered;
+                } break;
+
+                case PARSEFUNCHEADERTYPEONLYRESULT_Succeeded:
+                {
+                    TYPID typid = resolveIntoTypeTableOrSetPending(pParser, pType, ppoTypePendingResolution);
+                    if (isTypeResolved(typid))
+                    {
+                        *poTypidResolved = typid;
+                        return PARSETYPERESULT_ParseSucceededTypeResolveSucceeded;
+                    }
+                    else
+                    {
+                        return PARSETYPERESULT_ParseSucceededTypeResolveFailed;
+                    }
+                } break;
+
+                default:
+                {
+                    reportIceAndExit("Unknown PARSEFUNCHEADERTYPEONLYRESULT %d", headerResult);
+                    return PARSETYPERESULT_ParseFailed;
+                } break;
+            }
+        }
+        else
+        {
+            AstNode * pErr = handleScanOrUnexpectedTokenkErr(pParser, nullptr);
+            append(papNodeChildren, pErr);
+            return PARSETYPERESULT_ParseFailed;
+        }
+    }
 }
 
-bool tryParseFuncHeaderTypeOnly(Parser * pParser, FuncType * poFuncType, AstErr ** ppoErr)
+PARSEFUNCHEADERTYPEONLYRESULT
+tryParseFuncHeaderTypeOnly(
+    Parser * pParser,
+    FuncType * poFuncType,
+    AstErr ** ppoErr)
 {
 	// NOTE: poFuncType should be inited by caller
 
@@ -1669,10 +1889,10 @@ bool tryParseFuncHeaderTypeOnly(Parser * pParser, FuncType * poFuncType, AstErr 
 		append(&pErr->aTokenkValid, TOKENK_Fn);
 
 		*ppoErr = UpErr(pErr);
-		return false;
+		return PARSEFUNCHEADERTYPEONLYRESULT_Failed;
 	}
 
-	// Subscript expressions are AstNodes that we have to attach as children if we error
+	// Array subscript expressions are AstNodes that we have to attach as children if we error
 
 	DynamicArray<AstNode *> apNodeChildren;
 	init(&apNodeChildren);
@@ -1683,7 +1903,7 @@ bool tryParseFuncHeaderTypeOnly(Parser * pParser, FuncType * poFuncType, AstErr 
 		PARAMK paramk,
 		DynamicArray<TYPID> * paTypids,				// Value we are computing. We will set the typid's of the types we can resolve and set the others to pending
 		DynamicArray<AstNode *> * papNodeChildren)	// Boookkeeping so caller can attach children to errors
-		-> bool
+		-> PARSEFUNCHEADERTYPEONLYRESULT
 	{
 		// Parse (
 
@@ -1697,10 +1917,11 @@ bool tryParseFuncHeaderTypeOnly(Parser * pParser, FuncType * poFuncType, AstErr 
 				auto * pErr = AstNewErr0Child(pParser, ExpectedTokenkErr, makeStartEnd(startEndPrev.iEnd + 1));
 				append(&pErr->aTokenkValid, TOKENK_OpenParen);
 				append(papNodeChildren, Up(pErr));
-				return false;
+				return PARSEFUNCHEADERTYPEONLYRESULT_Failed;
 			}
 		}
 
+        bool recoveredFromPanic = false;
 		bool isFirstParam = true;
 		while (true)
 		{
@@ -1719,7 +1940,7 @@ bool tryParseFuncHeaderTypeOnly(Parser * pParser, FuncType * poFuncType, AstErr 
 				auto * pErr = AstNewErr0Child(pParser, ExpectedTokenkErr, makeStartEnd(startEndPrev.iEnd + 1));
 				append(&pErr->aTokenkValid, TOKENK_Comma);
 				append(papNodeChildren, Up(pErr));
-				return false;
+				return PARSEFUNCHEADERTYPEONLYRESULT_Failed;
 			}
 
 			// type
@@ -1735,7 +1956,7 @@ bool tryParseFuncHeaderTypeOnly(Parser * pParser, FuncType * poFuncType, AstErr 
 						category((*papNodeChildren)[papNodeChildren->cItem - 1]->astk) == ASTCATK_Error
 					);
 
-					return false;
+					return PARSEFUNCHEADERTYPEONLYRESULT_Failed;
 				}
 
 				if (parseTypeResult == PARSETYPERESULT_ParseSucceededTypeResolveSucceeded)
@@ -1743,9 +1964,8 @@ bool tryParseFuncHeaderTypeOnly(Parser * pParser, FuncType * poFuncType, AstErr 
 					Assert(isTypeResolved(typidResolved));
 					append(paTypids, typidResolved);
 				}
-				else
+				else if (parseTypeResult == PARSETYPERESULT_ParseSucceededTypeResolveFailed)
 				{
-					Assert(parseTypeResult == PARSETYPERESULT_ParseSucceededTypeResolveFailed);
 					Assert(pTypePending);
 
 					TYPID * pTypidPending = appendNew(paTypids);
@@ -1753,6 +1973,12 @@ bool tryParseFuncHeaderTypeOnly(Parser * pParser, FuncType * poFuncType, AstErr 
 
 					pTypePending->pTypidUpdateWhenResolved = pTypidPending;
 				}
+                else
+                {
+                    Assert(parseTypeResult == PARSETYPERESULT_ParseFailedButRecovered);
+                    append(paTypids, TYPID_Unresolved);
+                    recoveredFromPanic = true;
+                }
 			}
 
 			// name (optional)
@@ -1771,19 +1997,27 @@ bool tryParseFuncHeaderTypeOnly(Parser * pParser, FuncType * poFuncType, AstErr 
 			isFirstParam = false;
 		}
 
-		return true;
+		return
+            recoveredFromPanic ?
+            PARSEFUNCHEADERTYPEONLYRESULT_FailedButRecovered :
+            PARSEFUNCHEADERTYPEONLYRESULT_Succeeded;
 	};
 
 	//
 	// Parse in parameters
 	//
+    bool recoveredFromPanic = false;
+    {
+        PARSEFUNCHEADERTYPEONLYRESULT paramTypesResult = tryParseParameterTypes(pParser, PARAMK_Param, &poFuncType->paramTypids, &apNodeChildren);
+        if (paramTypesResult == PARSEFUNCHEADERTYPEONLYRESULT_Failed)
+        {
+            auto * pErr = AstNewErrListChildMove(pParser, BubbleErr, gc_startEndBubble, &apNodeChildren);
+            *ppoErr = UpErr(pErr);
+            return PARSEFUNCHEADERTYPEONLYRESULT_Failed;
+        }
 
-	if (!tryParseParameterTypes(pParser, PARAMK_Param, &poFuncType->paramTypids, &apNodeChildren))
-	{
-		auto * pErr = AstNewErrListChildMove(pParser, BubbleErr, gc_startEndBubble, &apNodeChildren);
-		*ppoErr = UpErr(pErr);
-		return false;
-	}
+        recoveredFromPanic = (paramTypesResult == PARSEFUNCHEADERTYPEONLYRESULT_FailedButRecovered);
+    }
 
 	// Parse ->
 
@@ -1799,15 +2033,21 @@ bool tryParseFuncHeaderTypeOnly(Parser * pParser, FuncType * poFuncType, AstErr 
 
 	if (!arrowOmitted)
 	{
-		if (!tryParseParameterTypes(pParser, PARAMK_Return, &poFuncType->returnTypids, &apNodeChildren))
+        PARSEFUNCHEADERTYPEONLYRESULT returnTypesResult = tryParseParameterTypes(pParser, PARAMK_Return, &poFuncType->returnTypids, &apNodeChildren);
+		if (returnTypesResult == PARSEFUNCHEADERTYPEONLYRESULT_Failed)
 		{
 			auto * pErr = AstNewErrListChildMove(pParser, BubbleErr, gc_startEndBubble, &apNodeChildren);
 			*ppoErr = UpErr(pErr);
-			return false;
+			return PARSEFUNCHEADERTYPEONLYRESULT_Failed;
 		}
+
+        recoveredFromPanic = recoveredFromPanic || (returnTypesResult == PARSEFUNCHEADERTYPEONLYRESULT_FailedButRecovered);
 	}
 
-	return true;
+	return
+        recoveredFromPanic ? 
+        PARSEFUNCHEADERTYPEONLYRESULT_FailedButRecovered :
+        PARSEFUNCHEADERTYPEONLYRESULT_Succeeded;
 }
 
 AstNode * finishParsePrimary(Parser * pParser, AstNode * pExpr)
@@ -1841,19 +2081,46 @@ AstNode * finishParsePrimary(Parser * pParser, AstNode * pExpr)
 		AstNode * pSubscriptExpr = parseLiteralExpr(pParser, s_mustBeIntLiteral);
 		if (isErrorNode(*pSubscriptExpr))
 		{
-			auto * pErr = AstNewErr2Child(pParser, BubbleErr, gc_startEndBubble, pExpr, pSubscriptExpr);
-			return Up(pErr);
+			if (tryRecoverFromPanic(pParser, TOKENK_CloseBracket))
+			{
+				// Embed error in pSubscriptExpr
+
+				goto arrayEnd;
+			}
+			else
+			{
+				// Couldn't recover
+
+				auto * pErr = AstNewErr2Child(pParser, BubbleErr, gc_startEndBubble, pExpr, pSubscriptExpr);
+				return Up(pErr);
+			}
 		}
 		else if (!tryConsumeToken(pParser->pScanner, TOKENK_CloseBracket, ensurePendingToken(pParser)))
 		{
+			// Missing ]
+
             auto startEndPrev = prevTokenStartEnd(pParser->pScanner);
 
 			auto * pErr = AstNewErr2Child(pParser, ExpectedTokenkErr, makeStartEnd(startEndPrev.iEnd + 1), pExpr, pSubscriptExpr);
 			append(&pErr->aTokenkValid, TOKENK_CloseBracket);
 
-			return Up(pErr);
+			if (tryRecoverFromPanic(pParser, TOKENK_CloseBracket))
+			{
+				// Embed error in pSubscriptExpr
+
+				append(&UpErr(pErr)->apChildren, pSubscriptExpr);
+				pSubscriptExpr = Up(pErr);
+				goto arrayEnd;
+			}
+			else
+			{
+				// Couldn't recover
+
+				return Up(pErr);
+			}
 		}
 
+	arrayEnd:
         int iEnd = prevTokenStartEnd(pParser->pScanner).iEnd;
 
 		auto * pNode = AstNew(pParser, ArrayAccessExpr, makeStartEnd(iStart, iEnd));
@@ -1871,37 +2138,88 @@ AstNode * finishParsePrimary(Parser * pParser, AstNode * pExpr)
 		Defer(Assert(!apArgs.pBuffer));		// buffer should get "moved" into AST
 
 		bool isFirstArg = true;
+		bool isCommaAlreadyAccountedFor = false;
 
-		// Error recovery variables
-
-		bool skipCommaCheck = false;
-		static const TOKENK s_aTokenkRecoverable[] = { TOKENK_CloseParen, TOKENK_Comma };
+		static const TOKENK s_aTokenkRecover[] = { TOKENK_Comma, TOKENK_CloseParen };
 
 		while (!tryConsumeToken(pParser->pScanner, TOKENK_CloseParen, ensurePendingToken(pParser)))
 		{
-			if (!isFirstArg && !tryConsumeToken(pParser->pScanner, TOKENK_Comma))
+			if (!isFirstArg && !isCommaAlreadyAccountedFor && !tryConsumeToken(pParser->pScanner, TOKENK_Comma))
 			{
+				// Missing ,
+
                 auto startEndPrev = prevTokenStartEnd(pParser->pScanner);
 
-				prepend(&apArgs, pExpr);
-
-				auto * pErr = AstNewErrListChildMove(pParser, ExpectedTokenkErr, makeStartEnd(startEndPrev.iEnd + 1), &apArgs);
+				auto * pErr = AstNewErr0Child(pParser, ExpectedTokenkErr, makeStartEnd(startEndPrev.iEnd + 1));
 				append(&pErr->aTokenkValid, TOKENK_Comma);
 
-				return Up(pErr);
+				TOKENK tokenkRecover;
+				if (tryRecoverFromPanic(pParser, s_aTokenkRecover, ArrayLen(s_aTokenkRecover), &tokenkRecover))
+				{
+					append(&apArgs, Up(pErr));	// Error node simply slots into an argument
+
+					if (tokenkRecover == TOKENK_Comma)
+					{
+						// Do nothing (this substitutes as the comma we were missing)
+					}
+					else
+					{
+						Assert(tokenkRecover == TOKENK_CloseParen);
+						break;;
+					}
+				}
+				else
+				{
+					// Couldn't recover
+
+					prepend(&apArgs, pExpr);
+					reinitMove(&DownErr(pErr)->apChildren, &apArgs);
+					return Up(pErr);
+				}
 			}
 
-			skipCommaCheck = false;
+			isCommaAlreadyAccountedFor = false;		// For next iteration...
+
+			// Parse expr
 
 			AstNode * pExprArg = parseExpr(pParser);
-			append(&apArgs, pExprArg);
 
 			if (isErrorNode(*pExprArg))
 			{
-				prepend(&apArgs, pExpr);
+				// Erroneous expr
 
-				auto * pErrNode = AstNewErrListChildMove(pParser, BubbleErr, gc_startEndBubble, &apArgs);
-				return Up(pErrNode);
+				TOKENK tokenkRecover;
+				if (tryRecoverFromPanic(pParser, s_aTokenkRecover, ArrayLen(s_aTokenkRecover), &tokenkRecover))
+				{
+					// Slot error into arg if we recovered
+
+					append(&apArgs, pExprArg);
+
+					if (tokenkRecover == TOKENK_Comma)
+					{
+						isCommaAlreadyAccountedFor = true;
+						continue;
+					}
+					else
+					{
+						Assert(tokenkRecover == TOKENK_CloseParen);
+						break;;
+					}
+				}
+				else
+				{
+					// Couldn't recover
+
+					prepend(&apArgs, pExpr);
+					auto * pErrNode = AstNewErrListChildMove(pParser, BubbleErr, gc_startEndBubble, &apArgs);
+					return Up(pErrNode);
+				}
+			}
+			else
+			{
+				// Add expr to args
+
+				append(&apArgs, pExprArg);
 			}
 
 			isFirstArg = false;
@@ -2232,30 +2550,6 @@ AstNode * astNewErrMoveChildren(Parser * pParser, ASTK astkErr, StartEndIndices 
 	return Up(pNode);
 }
 
-// FIXME:
-// Panic recovery is pretty busted. Trying to recover from something like this by matching
-//	with ; or } as it does now will lead to a totally busted parse. We need some way
-//	to identify the nested {} and try to parse them cleanly while still being in
-//	panic in the outer context??? That sounds hard! Might be easier to just skip to
-//	the } at the end of the outer context (can track { that we hit along the way to
-//	make sure that we properly match enough } to be outside the outer context)
-
-// struct NestedStructWithError
-// {
-//	int bar;
-//	int foo;
-
-//	%bar
-
-//	struct Nested
-//	 {
-//		 int j;
-//		 int k;
-//	}
-
-//	int z;
-// }
-
 bool tryRecoverFromPanic(Parser * pParser, TOKENK tokenkRecover)
 {
 	return tryRecoverFromPanic(pParser, &tokenkRecover, 1);
@@ -2263,38 +2557,95 @@ bool tryRecoverFromPanic(Parser * pParser, TOKENK tokenkRecover)
 
 bool tryRecoverFromPanic(Parser * pParser, const TOKENK * aTokenkRecover, int cTokenkRecover, TOKENK * poTokenkMatch)
 {
-	if (poTokenkMatch) *poTokenkMatch = TOKENK_Nil;
+    // Consume tokens until we hit a recoverable token or a semicolon IN OUR CURRENT CONTEXT. New contexts are pushed
+    //  when we consume (, {, or [. We need to pop any pushed context before we can match a recoverable token.
 
-	// Scan up to (but not past) the next semicolon, or until we consume a tokenk that
-	//	we can recover from. Note that if that tokenk is a semicolon then we *do*
-	//	consume it.
+	// NOTE: Matching a semicolon returns true if it is one of our "recoverable" tokens, and
+	//	false otherwise.
+
+	// NOTE: The token that we successfully match to recover also gets consumed.
+
+#if DEBUG
+	for (int i = 0; i < cTokenkRecover; i++)
+	{
+		TOKENK tokenkRecover = aTokenkRecover[i];
+
+		AssertInfo(
+			tokenkRecover == TOKENK_Semicolon ||
+			tokenkRecover == TOKENK_Comma ||
+			tokenkRecover == TOKENK_CloseParen ||
+			tokenkRecover == TOKENK_CloseBrace ||
+			tokenkRecover == TOKENK_CloseBracket,
+			"Only these tokens are supported right now"
+		);
+	}
+#endif
 
 	// NOTE: This will consume EOF token if it hits it!
+
+	if (poTokenkMatch) *poTokenkMatch = TOKENK_Nil;
+
+    int cParensPushed = 0;
+	int cBracesPushed = 0;
+	int cBracketsPushed = 0;
 
 	while(true)
 	{
 		if (isFinished(pParser->pScanner)) return false;
 
-		Token token;
-		for (int i = 0; i < cTokenkRecover; i++)
-		{
-			if (tryConsumeToken(pParser->pScanner, aTokenkRecover[i], &token))
-			{
-				if (poTokenkMatch) *poTokenkMatch = aTokenkRecover[i];
+		TOKENK tokenk = peekToken(pParser->pScanner);
 
-				return true;
-			}
+		// Push contexts
+
+		switch (tokenk)
+		{
+			case TOKENK_OpenParen:		cParensPushed++; break;
+			case TOKENK_OpenBrace:		cBracesPushed++; break;
+			case TOKENK_OpenBracket:	cBracketsPushed++; break;
 		}
 
-		peekToken(pParser->pScanner, &token);
-		if (token.tokenk == TOKENK_Semicolon)
+		bool isAnyContextPushed =
+			cParensPushed != 0 ||
+			cBracesPushed != 0 ||
+			cBracketsPushed != 0;
+
+		if (isAnyContextPushed)
 		{
-			return false;
+			// Pop contexts
+
+			switch (tokenk)
+			{
+				case TOKENK_CloseParen:		cParensPushed = Max(cParensPushed - 1, 0); break;
+				case TOKENK_CloseBrace:		cBracesPushed = Max(cBracesPushed - 1, 0); break;
+				case TOKENK_CloseBracket:	cBracketsPushed = Max(cBracketsPushed - 1, 0); break;
+			}
+		}
+		else
+		{
+			// Try to match!
+
+			for (int i = 0; i < cTokenkRecover; i++)
+			{
+				TOKENK tokenkRecover = aTokenkRecover[i];
+
+				if (tokenkRecover == tokenk)
+				{
+					if (poTokenkMatch) *poTokenkMatch = tokenk;
+					consumeToken(pParser->pScanner);
+					return true;
+				}
+			}
+
+			if (tokenk == TOKENK_Semicolon)
+			{
+				consumeToken(pParser->pScanner);
+				return false;
+			}
 		}
 
 		// Keep chewing!
 
-		consumeToken(pParser->pScanner, &token);
+		consumeToken(pParser->pScanner);
 	}
 }
 

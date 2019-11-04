@@ -221,7 +221,7 @@ struct AstLiteralExpr
 
 struct AstGroupExpr
 {
-	AstNode * pExpr;
+    AstNode * pExpr;
 };
 
 struct AstVarExpr
@@ -429,8 +429,8 @@ struct AstNode
 	};
 };
 
-StaticAssert(sizeof(AstNode) <= 64);		// Goal: Make it so each AstNode fits in a cache line
-                                            // TODO: Maybe try to work this down to 32 bytes so 2 fit in a cache line!
+StaticAssert(sizeof(AstNode) <= 64);		// Goal: Make it so each AstNode fits in a cache line.
+                                            //  For any additional per-node data that isn't "hot", use decorator tables. See ast_decorate.h/.cpp
                                             // TODO: Make sure we have an option for our allocator to align these to cache lines!
                                             //  (have dynamic allocator allocate an extra 64 bytes and point the "actual" buffer to
                                             //  an aligned spot?
@@ -466,7 +466,7 @@ bool containsErrorNode(const DynamicArray<AstNode *> & apNodes);
 
 const char * displayString(ASTK astk, bool capitalizeFirstLetter=false);
 
-#if 1
+#if 0
 // Convenient place to hover the mouse and get size info for different kinds of nodes!
 
 constexpr uint convenientSizeDebugger = sizeof(AstFuncDefnStmt);

@@ -31,6 +31,7 @@
     <ClInclude Include="src\als\macro_defer.h" />
     <ClInclude Include="src\als\macro_flags.h" />
     <ClInclude Include="src\als\macro_mem.h" />
+    <ClInclude Include="src\als\macro_util.h" />
     <ClInclude Include="src\ast.h" />
     <ClInclude Include="src\ast_decorate.h" />
     <ClInclude Include="src\ast_print.h" />

@@ -86,6 +86,9 @@
     <ClInclude Include="src\ast_decorate.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="src\als\macro_util.h">
+      <Filter>Header Files\als</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\ast.cpp">
