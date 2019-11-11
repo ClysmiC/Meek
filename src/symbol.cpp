@@ -205,8 +205,8 @@ bool tryInsert(
 
         // NOTE: If func parameter types are not yet resolved, we can't check for overload duplication,
 		//	so we add it to a list to be resolved after all type params get resolved.
-
-        if (!areVarDeclListTypesFullyResolved(pFuncDefnStmt->apParamVarDecls))
+        
+        if (!areVarDeclListTypesFullyResolved(*paramVarDecls(*pFuncDefnStmt)))
         {
             FuncSymbolPendingResolution * pPending = appendNew(&pSymbolTable->funcSymbolsPendingResolution);
             init(pPending, symbInfo, scopeStack);
@@ -229,7 +229,7 @@ bool tryInsert(
 
 				AstFuncDefnStmt * pFuncDefnStmtOther = pSymbInfoCandidate->pFuncDefnStmt;
 
-				if (areVarDeclListTypesEq(pFuncDefnStmt->apParamVarDecls, pFuncDefnStmtOther->apParamVarDecls))
+				if (areVarDeclListTypesEq(*paramVarDecls(*pFuncDefnStmt), *paramVarDecls(*pFuncDefnStmtOther)))
 				{
 					// Duplicate
 
@@ -250,9 +250,9 @@ bool tryInsert(
 
         // Add sequence id to AST node
 
-        symbInfo.pFuncDefnStmt->symbseqid = pSymbolTable->symbseqidNext;
+        auto * pFuncDefnHeaderGrp = Down(symbInfo.pFuncDefnStmt->pFuncDefnHeaderGrp, FuncDefnHeaderGrp);
+        pFuncDefnHeaderGrp->symbseqid = pSymbolTable->symbseqidNext;
         pSymbolTable->symbseqidNext = static_cast<SYMBSEQID>(pSymbolTable->symbseqidNext + 1);
-
 
         // Insert into table
 
@@ -503,15 +503,17 @@ void debugPrintSymbolTable(const SymbolTable & symbTable)
 		    Assert(pSymbInfo->symbolk == SYMBOLK_Func);
 
             AstFuncDefnStmt * pFuncDefnStmt = Down(pSymbInfo->pFuncDefnStmt, FuncDefnStmt);
+            DynamicArray<AstNode *> * papParamVarDecls = paramVarDecls(*pFuncDefnStmt);
+            DynamicArray<AstNode *> * papReturnVarDecls = returnVarDecls(*pFuncDefnStmt);
 
             if (paSymbInfo->cItem > 1)
             {
                 printf("\t(overload %d)\n", i);
             }
 
-		    for (int j = 0; j < pFuncDefnStmt->apParamVarDecls.cItem; j++)
+		    for (int j = 0; j < papParamVarDecls->cItem; j++)
 		    {
-                auto * pNode = pFuncDefnStmt->apParamVarDecls[j];
+                auto * pNode = (*papParamVarDecls)[j];
                 Assert(pNode->astk == ASTK_VarDeclStmt);
                 auto * pVarDecl = Down(pNode, VarDeclStmt);
 
@@ -519,9 +521,9 @@ void debugPrintSymbolTable(const SymbolTable & symbTable)
 			    printf("param %d typeid: %d\n", j, pVarDecl->typid);
 		    }
 
-		    for (int j = 0; j < pFuncDefnStmt->apReturnVarDecls.cItem; j++)
+		    for (int j = 0; j < papReturnVarDecls->cItem; j++)
 		    {
-                auto * pNode = pFuncDefnStmt->apReturnVarDecls[j];
+                auto * pNode = (*papReturnVarDecls)[j];
                 Assert(pNode->astk == ASTK_VarDeclStmt);
                 auto * pVarDecl = Down(pNode, VarDeclStmt);
 

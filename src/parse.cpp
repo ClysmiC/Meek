@@ -148,8 +148,7 @@ AstNode * parseStmt(Parser * pParser, PARSESTMTK parsestmtk)
 	}
 	else if (tokenkNext == TOKENK_Fn && tokenkNextNext == TOKENK_Identifier)
 	{
-		AstNode * pNode;
-		tryParseFuncDefnStmtOrLiteralExpr(pParser, FUNCHEADERK_Defn, &pNode);
+		AstNode * pNode = parseFuncDefnStmt(pParser);
 
 		if (isErrorNode(*pNode)) return pNode;
 
@@ -496,7 +495,7 @@ AstNode * parseStructDefnStmt(Parser * pParser)
 
 	DynamicArray<AstNode *> apVarDeclStmt;
 	init(&apVarDeclStmt);
-	Defer(dispose(&apVarDeclStmt));
+	Defer(Assert(!apVarDeclStmt.pBuffer));
 
 	while (!tryConsumeToken(pParser->pScanner, TOKENK_CloseBrace))
 	{
@@ -555,105 +554,6 @@ AstNode * parseStructDefnStmt(Parser * pParser)
 	pNode->typidSelf = ensureInTypeTable(&pParser->typeTable, type, true /* debugAssertIfAlreadyInTable */ );
 
 	return Up(pNode);
-}
-
-bool tryParseFuncDefnStmtOrLiteralExpr(Parser * pParser, FUNCHEADERK funcheaderk, AstNode ** ppoNode)
-{
-	Assert(funcheaderk == FUNCHEADERK_Defn || funcheaderk == FUNCHEADERK_Literal);
-	Assert(ppoNode);
-
-	bool success = false;
-	bool isDefn = (funcheaderk == FUNCHEADERK_Defn);
-
-	int iStart = peekTokenStartEnd(pParser->pScanner).iStart;
-
-	// Parse header
-
-	// NOTE: Push scope before parsing header so that the symbols declared in the header
-	//	are subsumed by the function's scope.
-
-	pushScope(pParser, SCOPEK_CodeBlock);
-	Defer(if (!success) popScope(pParser));		// NOTE: In success case we pop it manually before inserting into symbol table
-
-	ScopedIdentifier identDefn;		// Only valid if isDefn
-	DynamicArray<AstNode *> apParamVarDecl;
-	DynamicArray<AstNode *> apReturnVarDecl;
-	init(&apParamVarDecl);
-	init(&apReturnVarDecl);
-
-	{
-		ScopedIdentifier * pDefnIdent = (isDefn) ? &identDefn : nullptr;
-		if (!tryParseFuncDefnOrLiteralHeader(pParser, funcheaderk, &apParamVarDecl, &apReturnVarDecl, pDefnIdent))
-		{
-			Assert(containsErrorNode(apParamVarDecl) || containsErrorNode(apReturnVarDecl));
-
-			// NOTE: Append output parameters to the list of input parameters to make our life
-			//	easier using the AstNewErr macro. Note that this means we have to manually destroy
-			//	the out param list since only the (now combined) in param list is getting "moved"
-			//	into the error node.
-
-			appendMultiple(&apParamVarDecl, apReturnVarDecl.pBuffer, apReturnVarDecl.cItem);
-			dispose(&apReturnVarDecl);
-
-			auto * pErr = AstNewErrListChildMove(pParser, BubbleErr, gc_startEndBubble, &apParamVarDecl);
-			*ppoNode = Up(pErr);
-
-			success = false;
-			return success;
-		}
-	}
-
-	// Parse { <stmts> } or do <stmt>
-
-	bool pushPopScope = false;
-	AstNode * pBody = parseDoStmtOrBlockStmt(pParser, pushPopScope);
-
-	if (isErrorNode(*pBody))
-	{
-		appendMultiple(&apParamVarDecl, apReturnVarDecl.pBuffer, apReturnVarDecl.cItem);
-		dispose(&apReturnVarDecl);
-
-		append(&apParamVarDecl, pBody);
-		auto * pErr = AstNewErrListChildMove(pParser, BubbleErr, gc_startEndBubble, &apParamVarDecl);
-		*ppoNode = Up(pErr);
-
-		return success = false;
-	}
-
-	success = true;
-	int iEnd = prevTokenStartEnd(pParser->pScanner).iEnd;
-
-	if (!isDefn)
-	{
-		auto * pNode = AstNew(pParser, FuncLiteralExpr, makeStartEnd(iStart, iEnd));
-		pNode->pBodyStmt = pBody;
-		pNode->scopeid = peekScope(pParser).id;
-		initMove(&pNode->apParamVarDecls, &apParamVarDecl);
-		initMove(&pNode->apReturnVarDecls, &apReturnVarDecl);
-		*ppoNode = Up(pNode);
-
-		return success;
-	}
-	else
-	{
-		auto * pNode = AstNew(pParser, FuncDefnStmt, makeStartEnd(iStart, iEnd));
-		pNode->ident = identDefn;
-		pNode->pBodyStmt = pBody;
-		pNode->scopeid = peekScope(pParser).id;
-		initMove(&pNode->apParamVarDecls, &apParamVarDecl);
-		initMove(&pNode->apReturnVarDecls, &apReturnVarDecl);
-
-		// Insert into symbol table (pop first so the scope stack doesn't include the scope that the function itself pushed)
-
-		popScope(pParser);
-
-		SymbolInfo funcDefnInfo;
-		setSymbolInfo(&funcDefnInfo, pNode->ident, SYMBOLK_Func, Up(pNode));
-		tryInsert(&pParser->symbTable, identDefn, funcDefnInfo, pParser->scopeStack);
-
-		*ppoNode = Up(pNode);
-		return success;
-	}
 }
 
 AstNode * parseVarDeclStmt(Parser * pParser, EXPECTK expectkName, EXPECTK expectkSemicolon)
@@ -986,7 +886,6 @@ AstNode * parseDoStmtOrBlockStmt(Parser * pParser, bool pushPopScopeBlock)
 AstNode * parseBlockStmt(Parser * pParser, bool pushPopScope)
 {
     int iStart = peekTokenStartEnd(pParser->pScanner).iStart;
-
 	// Parse {
 
 	if (!tryConsumeToken(pParser->pScanner, TOKENK_OpenBrace))
@@ -1161,6 +1060,11 @@ AstNode * parseContinueStmt(Parser * pParser)
 	return Up(pNode);
 }
 
+AstNode * parseFuncDefnStmt(Parser * pParser)
+{
+	return parseFuncInternal(pParser, FUNCHEADERK_Defn);
+}
+
 AstNode * parseExpr(Parser * pParser)
 {
 	return parseBinop(pParser, s_aParseOp[s_iParseOpMax - 1]);
@@ -1295,8 +1199,7 @@ AstNode * parsePrimary(Parser * pParser)
 	{
 		// Func literal
 
-		AstNode * pNode;
-		tryParseFuncDefnStmtOrLiteralExpr(pParser, FUNCHEADERK_Literal, &pNode);
+		AstNode * pNode = parseFuncLiteralExpr(pParser);
 
 		if (isErrorNode(*pNode))
 		{
@@ -1358,6 +1261,11 @@ AstNode * parseLiteralExpr(Parser * pParser, bool mustBeIntLiteralk)
 	return Up(pExpr);
 }
 
+AstNode * parseFuncLiteralExpr(Parser * pParser)
+{
+	return parseFuncInternal(pParser, FUNCHEADERK_Literal);
+}
+
 AstNode * parseVarExpr(Parser * pParser, AstNode * pOwnerExpr)
 {
 	if (!tryConsumeToken(pParser->pScanner, TOKENK_Identifier, ensurePendingToken(pParser)))
@@ -1395,241 +1303,6 @@ AstNode * parseVarExpr(Parser * pParser, AstNode * pOwnerExpr)
 	pNode->pResolvedDecl = nullptr;
 
 	return finishParsePrimary(pParser, Up(pNode));
-}
-
-bool tryParseFuncDefnOrLiteralHeader(
-	Parser * pParser,
-	FUNCHEADERK funcheaderk,
-	DynamicArray<AstNode *> * papParamVarDecls,
-	DynamicArray<AstNode *> * papReturnVarDecls,
-	ScopedIdentifier * poDefnIdent)
-{
-	Assert(funcheaderk == FUNCHEADERK_Defn || funcheaderk == FUNCHEADERK_Literal);
-
-	EXPECTK expectkName = (funcheaderk == FUNCHEADERK_Defn) ? EXPECTK_Required : EXPECTK_Forbidden;
-
-	AssertInfo(Implies(expectkName == EXPECTK_Forbidden, !poDefnIdent), "Don't provide an ident pointer in a context where a name is illegal!");
-	AssertInfo(Implies(expectkName != EXPECTK_Forbidden, poDefnIdent), "Should provide an ident pointer in a context where a name is legal!");
-
-	// NOTE: If function fails, we embed an error node in one of the pap*VarDecl variables
-
-	bool success = false;
-	Token * pIdent = nullptr;
-	Defer(
-		if (!success && pIdent) release(&pParser->tokenAlloc, pIdent)
-	);
-
-	// Parse "fn"
-
-	if (!tryConsumeToken(pParser->pScanner, TOKENK_Fn))
-	{
-        auto startEndPrev = prevTokenStartEnd(pParser->pScanner);
-
-		auto * pErr = AstNewErr0Child(pParser, ExpectedTokenkErr, makeStartEnd(startEndPrev.iEnd + 1));
-		append(&pErr->aTokenkValid, TOKENK_Fn);
-		append(papParamVarDecls, Up(pErr));
-		return false;
-	}
-
-	// Parse definition name
-
-	if (expectkName == EXPECTK_Required)
-	{
-		Assert(poDefnIdent);
-
-		if (!tryConsumeToken(pParser->pScanner, TOKENK_Identifier, ensurePendingToken(pParser)))
-		{
-            auto startEndPrev = prevTokenStartEnd(pParser->pScanner);
-
-            auto * pErr = AstNewErr0Child(pParser, ExpectedTokenkErr, makeStartEnd(startEndPrev.iEnd + 1));
-			append(&pErr->aTokenkValid, TOKENK_Identifier);
-			append(papParamVarDecls, Up(pErr));
-			return false;
-		}
-
-		pIdent = claimPendingToken(pParser);
-
-		// NOTE: We are not responsible for adding the identifier to the symbol table.
-		//	That responsibility falls on the function that allocates the AST node that
-		//	contains the identifier.
-
-		// NOTE: Use prev scopeid for the func defn ident instead of the one that the func itself
-		//	has pushed!
-
-		setIdent(poDefnIdent, pIdent, peekScopePrev(pParser).id);
-	}
-	else
-	{
-		Assert(expectkName == EXPECTK_Forbidden);
-
-		if (tryConsumeToken(pParser->pScanner, TOKENK_Identifier, ensurePendingToken(pParser)))
-		{
-			// TODO: Maybe this should be a more specific/informative error, since we basically
-			//	understand what they are trying to do. Something like NamedFuncNonDefnErr...?
-			//	This is probably a good test case for adding more "context" to errors!!!
-
-			Token * pErrToken = claimPendingToken(pParser);
-			Assert(pErrToken->tokenk == TOKENK_Identifier);
-
-			auto * pErr = AstNewErr0Child(pParser, UnexpectedTokenkErr, pErrToken->startEnd);
-			pErr->pErrToken = pErrToken;
-			append(papParamVarDecls, Up(pErr));
-			return false;
-		}
-	}
-
-	// Parse "in" parameters
-
-	if (!tryParseFuncDefnOrLiteralHeaderParamList(pParser, funcheaderk, PARAMK_Param, papParamVarDecls))
-	{
-		Assert(containsErrorNode(*papParamVarDecls));
-		return false;
-	}
-
-	// Parse ->
-
-	bool arrowOmitted = false;
-	if (!tryConsumeToken(pParser->pScanner, TOKENK_MinusGreater))
-	{
-		arrowOmitted = true;
-	}
-
-	//
-	// Parse out parameters
-	//
-
-	if (!arrowOmitted)
-	{
-		if (!tryParseFuncDefnOrLiteralHeaderParamList(pParser, funcheaderk, PARAMK_Return, papReturnVarDecls))
-		{
-			Assert(containsErrorNode(*papReturnVarDecls));
-			return false;
-		}
-	}
-
-	// Success!
-
-	return true;
-}
-
-bool tryParseFuncDefnOrLiteralHeaderParamList(
-	Parser * pParser,
-	FUNCHEADERK funcheaderk,
-	PARAMK paramk,
-	DynamicArray<AstNode *> * papParamVarDecls)
-{
-	Assert(funcheaderk == FUNCHEADERK_Defn || funcheaderk == FUNCHEADERK_Literal);
-
-	bool singleReturnWithoutParens = false;
-	if (!tryConsumeToken(pParser->pScanner, TOKENK_OpenParen))
-	{
-		if (paramk != PARAMK_Return)
-		{
-            auto startEndPrev = prevTokenStartEnd(pParser->pScanner);
-
-			auto * pErr = AstNewErr0Child(pParser, ExpectedTokenkErr, makeStartEnd(startEndPrev.iEnd + 1));
-			append(&pErr->aTokenkValid, TOKENK_OpenParen);
-			append(papParamVarDecls, Up(pErr));
-			return false;
-		}
-		else
-		{
-			singleReturnWithoutParens = true;
-		}
-	}
-
-	static const TOKENK s_aTokenkRecoverWithParen[] = { TOKENK_Comma, TOKENK_CloseParen };
-	static const TOKENK s_aTokenkRecoverWithoutParen[] = { TOKENK_Comma };
-
-	bool success = true;
-	bool isFirstParam = true;
-
-	while (true)
-	{
-		if (!singleReturnWithoutParens && tryConsumeToken(pParser->pScanner, TOKENK_CloseParen))
-			break;
-
-		if (singleReturnWithoutParens && !isFirstParam)
-			break;
-
-		if (!isFirstParam && !tryConsumeToken(pParser->pScanner, TOKENK_Comma))
-		{
-			// Missing ,
-
-			success = false;
-
-            auto startEndPrev = prevTokenStartEnd(pParser->pScanner);
-
-			auto * pErr = AstNewErrListChildMove(pParser, ExpectedTokenkErr, makeStartEnd(startEndPrev.iEnd + 1), papParamVarDecls);
-			append(&pErr->aTokenkValid, TOKENK_Comma);
-			append(papParamVarDecls, Up(pErr));
-
-			TOKENK tokenkRecover;
-			if (tryRecoverFromPanic(
-					pParser,
-					(singleReturnWithoutParens) ? s_aTokenkRecoverWithoutParen : s_aTokenkRecoverWithParen,
-					(singleReturnWithoutParens) ? ArrayLen(s_aTokenkRecoverWithoutParen) : ArrayLen(s_aTokenkRecoverWithParen),
-					&tokenkRecover))
-			{
-				if (tokenkRecover == TOKENK_Comma)
-				{
-					// Do nothing (this substitutes as the comma we were missing)
-				}
-				else
-				{
-					Assert(tokenkRecover == TOKENK_CloseParen);
-					break;;
-				}
-			}
-			else
-			{
-				// Couldn't recover
-
-				Assert(!success);
-				return success;
-			}
-		}
-
-		const static EXPECTK s_expectkVarName = EXPECTK_Optional;
-		const static EXPECTK s_expectkSemicolon = EXPECTK_Forbidden;
-
-		AstNode * pNode = parseVarDeclStmt(pParser, s_expectkVarName, s_expectkSemicolon);
-		append(papParamVarDecls, pNode);
-
-		if (isErrorNode(*pNode))
-		{
-			// Erroneous vardecl
-
-			success = false;
-
-			TOKENK tokenkRecover;
-			if (tryRecoverFromPanic(
-					pParser,
-					(singleReturnWithoutParens) ? s_aTokenkRecoverWithoutParen : s_aTokenkRecoverWithParen,
-					(singleReturnWithoutParens) ? ArrayLen(s_aTokenkRecoverWithoutParen) : ArrayLen(s_aTokenkRecoverWithParen),
-					&tokenkRecover))
-			{
-				if (tokenkRecover == TOKENK_Comma)
-				{
-					continue;
-				}
-				else
-				{
-					Assert(tokenkRecover == TOKENK_CloseParen);
-					break;;
-				}
-			}
-
-			// Couldn't recover
-
-			Assert(!success);
-			return success;
-		}
-
-		isFirstParam = false;
-	}
-
-	return true;
 }
 
 PARSETYPERESULT tryParseType(
@@ -2045,7 +1718,7 @@ tryParseFuncHeaderTypeOnly(
 	}
 
 	return
-        recoveredFromPanic ? 
+        recoveredFromPanic ?
         PARSEFUNCHEADERTYPEONLYRESULT_FailedButRecovered :
         PARSEFUNCHEADERTYPEONLYRESULT_Succeeded;
 }
@@ -2236,6 +1909,368 @@ AstNode * finishParsePrimary(Parser * pParser, AstNode * pExpr)
 	else
 	{
 		return pExpr;
+	}
+}
+
+AstNode * parseFuncHeaderGrp(Parser * pParser, FUNCHEADERK funcheaderk, bool * pHadErrorButRecovered)
+{
+    Assert(pHadErrorButRecovered);
+    *pHadErrorButRecovered = false;
+
+	Assert(funcheaderk == FUNCHEADERK_Defn || funcheaderk == FUNCHEADERK_Literal);
+
+	bool isDefn = (funcheaderk == FUNCHEADERK_Defn);
+    ScopedIdentifier identDefn;     // Only valid if isDefn
+
+	bool success = false;
+	Token * pTokIdent = nullptr;
+	Defer(
+		if (!success && isDefn) release(&pParser->tokenAlloc, pTokIdent)
+	);
+
+    int iStart = peekTokenStartEnd(pParser->pScanner).iStart;
+
+	// Parse "fn"
+
+	if (!tryConsumeToken(pParser->pScanner, TOKENK_Fn))
+	{
+        auto startEndPrev = prevTokenStartEnd(pParser->pScanner);
+
+		success = false;
+		auto * pErr = AstNewErr0Child(pParser, ExpectedTokenkErr, makeStartEnd(startEndPrev.iEnd + 1));
+		append(&pErr->aTokenkValid, TOKENK_Fn);
+		return Up(pErr);
+	}
+
+	// Parse definition name
+
+	if (isDefn)
+	{
+		if (!tryConsumeToken(pParser->pScanner, TOKENK_Identifier, ensurePendingToken(pParser)))
+		{
+            auto startEndPrev = prevTokenStartEnd(pParser->pScanner);
+
+			success = false;
+            auto * pErr = AstNewErr0Child(pParser, ExpectedTokenkErr, makeStartEnd(startEndPrev.iEnd + 1));
+			append(&pErr->aTokenkValid, TOKENK_Identifier);
+			return Up(pErr);
+		}
+
+		pTokIdent = claimPendingToken(pParser);
+
+		// NOTE: Use prev scopeid for the func defn ident instead of the one that the func itself
+		//	has pushed!
+
+		setIdent(&identDefn, pTokIdent, peekScopePrev(pParser).id);
+	}
+	else
+	{
+		if (tryConsumeToken(pParser->pScanner, TOKENK_Identifier, ensurePendingToken(pParser)))
+		{
+			// TODO: Maybe this should be a more specific/informative error, since we basically
+			//	understand what they are trying to do. Something like NamedFuncNonDefnErr...?
+			//	This is probably a good test case for adding more "context" to errors!!!
+
+			Token * pErrToken = claimPendingToken(pParser);
+			Assert(pErrToken->tokenk == TOKENK_Identifier);
+
+			success = false;
+			auto * pErr = AstNewErr0Child(pParser, UnexpectedTokenkErr, pErrToken->startEnd);
+			pErr->pErrToken = pErrToken;
+			return Up(pErr);
+		}
+	}
+
+	// Parse "in" parameters
+
+    bool paramRecoveredError = false;
+    bool returnRecoveredError = false;
+
+	AstNode * pParamListGrp = parseParamOrReturnListGrp(pParser, PARAMK_Param, &paramRecoveredError);
+	if (isErrorNode(*pParamListGrp))
+	{
+		success = false;
+		auto * pErr = AstNewErr0Child(pParser, BubbleErr, gc_startEndBubble);
+		return Up(pErr);
+	}
+
+	// Parse ->
+
+	bool arrowOmitted = false;
+	if (!tryConsumeToken(pParser->pScanner, TOKENK_MinusGreater))
+	{
+		arrowOmitted = true;
+	}
+
+	//
+	// Parse out parameters if there was a ->
+	//
+
+	AstNode * pReturnListGrp = nullptr;
+	if (arrowOmitted)
+	{
+        auto startEndPrev = prevTokenStartEnd(pParser->pScanner);
+
+		auto * pReturnGrpEmpty = AstNew(pParser, ReturnListGrp, makeStartEnd(startEndPrev.iEnd + 1));
+		init(&pReturnGrpEmpty->apVarDecls);
+		pReturnListGrp = Up(pReturnGrpEmpty);
+	}
+	else
+	{
+		pReturnListGrp = parseParamOrReturnListGrp(pParser, PARAMK_Return, &returnRecoveredError);
+		if (isErrorNode(*pReturnListGrp))
+		{
+			success = false;
+			auto * pErr = AstNewErr1Child(pParser, BubbleErr, gc_startEndBubble, pParamListGrp);
+			return Up(pErr);
+		}
+	}
+	Assert(pReturnListGrp);
+
+    *pHadErrorButRecovered = paramRecoveredError || returnRecoveredError;
+
+	// Success!
+
+	success = true;
+    int iEnd = prevTokenStartEnd(pParser->pScanner).iEnd;
+
+	if (isDefn)
+	{
+        // NOTE: parseFuncDefnStmt is responsible for inserting into the symbol table which will poke in our symbseqid
+
+		auto * pNode = AstNew(pParser, FuncDefnHeaderGrp, makeStartEnd(iStart, iEnd));
+		pNode->ident = identDefn;
+        pNode->symbseqid = SYMBSEQID_Unset;
+		pNode->pParamListGrp = pParamListGrp;
+		pNode->pReturnListGrp = pReturnListGrp;
+
+		return Up(pNode);
+	}
+	else
+	{
+		auto * pNode = AstNew(pParser, FuncLiteralHeaderGrp, makeStartEnd(iStart, iEnd));
+		pNode->pParamListGrp = pParamListGrp;
+		pNode->pReturnListGrp = pReturnListGrp;
+
+		return Up(pNode);
+	}
+}
+
+AstNode * parseParamOrReturnListGrp(Parser * pParser, PARAMK paramk, bool * pHadErrorButRecovered)
+{
+	Assert(pHadErrorButRecovered);
+	*pHadErrorButRecovered = false;
+
+    int iStart = peekTokenStartEnd(pParser->pScanner).iStart;
+
+	bool singleReturnWithoutParens = false;
+	if (!tryConsumeToken(pParser->pScanner, TOKENK_OpenParen))
+	{
+		if (paramk != PARAMK_Return)
+		{
+            auto startEndPrev = prevTokenStartEnd(pParser->pScanner);
+
+			auto * pErr = AstNewErr0Child(pParser, ExpectedTokenkErr, makeStartEnd(startEndPrev.iEnd + 1));
+			append(&pErr->aTokenkValid, TOKENK_OpenParen);
+			return Up(pErr);
+		}
+		else
+		{
+			singleReturnWithoutParens = true;
+		}
+	}
+
+	static const TOKENK s_aTokenkRecoverWithParen[] = { TOKENK_Comma, TOKENK_CloseParen };
+	static const TOKENK s_aTokenkRecoverWithoutParen[] = { TOKENK_Comma };
+
+	bool isFirstParam = true;
+
+	DynamicArray<AstNode *> apVarDecls;
+	init(&apVarDecls);
+	Defer(Assert(!apVarDecls.pBuffer));
+
+	while (true)
+	{
+		if (!singleReturnWithoutParens && tryConsumeToken(pParser->pScanner, TOKENK_CloseParen))
+			break;
+
+		if (singleReturnWithoutParens && !isFirstParam)
+			break;
+
+		if (!isFirstParam && !tryConsumeToken(pParser->pScanner, TOKENK_Comma))
+		{
+			// Missing ,
+
+            auto startEndPrev = prevTokenStartEnd(pParser->pScanner);
+
+			TOKENK tokenkRecover;
+			if (tryRecoverFromPanic(
+					pParser,
+					(singleReturnWithoutParens) ? s_aTokenkRecoverWithoutParen : s_aTokenkRecoverWithParen,
+					(singleReturnWithoutParens) ? ArrayLen(s_aTokenkRecoverWithoutParen) : ArrayLen(s_aTokenkRecoverWithParen),
+					&tokenkRecover))
+			{
+				*pHadErrorButRecovered = true;
+
+				if (tokenkRecover == TOKENK_Comma)
+				{
+					// Do nothing (this substitutes as the comma we were missing)
+				}
+				else
+				{
+					Assert(tokenkRecover == TOKENK_CloseParen);
+					break;;
+				}
+			}
+			else
+			{
+				// Couldn't recover
+
+				auto * pErr = AstNewErrListChildMove(pParser, ExpectedTokenkErr, makeStartEnd(startEndPrev.iEnd + 1), &apVarDecls);
+				append(&pErr->aTokenkValid, TOKENK_Comma);
+				return Up(pErr);
+			}
+		}
+
+		const static EXPECTK s_expectkVarName = EXPECTK_Optional;
+		const static EXPECTK s_expectkSemicolon = EXPECTK_Forbidden;
+
+		AstNode * pNode = parseVarDeclStmt(pParser, s_expectkVarName, s_expectkSemicolon);
+		append(&apVarDecls, pNode);
+
+		if (isErrorNode(*pNode))
+		{
+			// Erroneous vardecl
+
+			TOKENK tokenkRecover;
+			if (tryRecoverFromPanic(
+					pParser,
+					(singleReturnWithoutParens) ? s_aTokenkRecoverWithoutParen : s_aTokenkRecoverWithParen,
+					(singleReturnWithoutParens) ? ArrayLen(s_aTokenkRecoverWithoutParen) : ArrayLen(s_aTokenkRecoverWithParen),
+					&tokenkRecover))
+			{
+				*pHadErrorButRecovered = true;
+
+				if (tokenkRecover == TOKENK_Comma)
+				{
+					continue;
+				}
+				else
+				{
+					Assert(tokenkRecover == TOKENK_CloseParen);
+					break;;
+				}
+			}
+
+			// Couldn't recover
+
+			auto * pErr = AstNewErrListChildMove(pParser, BubbleErr, gc_startEndBubble, &apVarDecls);
+			return Up(pErr);
+		}
+
+		isFirstParam = false;
+	}
+
+	// Success!
+
+    int iEnd = prevTokenStartEnd(pParser->pScanner).iEnd;
+
+	if (paramk == PARAMK_Param)
+	{
+		auto * pNode = AstNew(pParser, ParamListGrp, makeStartEnd(iStart, iEnd));
+		initMove(&pNode->apVarDecls, &apVarDecls);
+		return Up(pNode);
+	}
+	else
+	{
+		Assert(paramk == PARAMK_Return);
+
+		auto * pNode = AstNew(pParser, ReturnListGrp, makeStartEnd(iStart, iEnd));
+		initMove(&pNode->apVarDecls, &apVarDecls);
+		return Up(pNode);
+	}
+}
+
+AstNode * parseFuncInternal(Parser * pParser, FUNCHEADERK funcheaderk)
+{
+	Assert(funcheaderk == FUNCHEADERK_Defn || funcheaderk == FUNCHEADERK_Literal);
+
+	bool success = false;
+	bool isDefn = (funcheaderk == FUNCHEADERK_Defn);
+
+	int iStart = peekTokenStartEnd(pParser->pScanner).iStart;
+
+	// Parse header
+
+	// NOTE: Push scope before parsing header so that the symbols declared in the header
+	//	are subsumed by the function's scope.
+
+	pushScope(pParser, SCOPEK_CodeBlock);
+	Defer(if (!success) popScope(pParser));		// NOTE: In success case we pop it manually before inserting into symbol table
+
+	//ScopedIdentifier identDefn;		// Only valid if isDefn
+	//DynamicArray<AstNode *> apParamVarDecl;
+	//DynamicArray<AstNode *> apReturnVarDecl;
+	//init(&apParamVarDecl);
+	//init(&apReturnVarDecl);
+
+    bool hadErrorButRecovered;
+    AstNode * pFuncHeaderGrp = parseFuncHeaderGrp(pParser, funcheaderk, &hadErrorButRecovered);
+    if (isErrorNode(*pFuncHeaderGrp))
+    {
+        success = false;
+        auto * pErr = AstNewErr0Child(pParser, BubbleErr, gc_startEndBubble);
+        return Up(pErr);
+    }
+
+	// Parse { <stmts> } or do <stmt>
+
+	bool pushPopScope = false;
+	AstNode * pBody = parseDoStmtOrBlockStmt(pParser, pushPopScope);
+
+	if (isErrorNode(*pBody))
+	{
+        success = false;
+		auto * pErr = AstNewErr1Child(pParser, BubbleErr, gc_startEndBubble, pFuncHeaderGrp);
+		return Up(pErr);
+	}
+
+	success = true;
+	int iEnd = prevTokenStartEnd(pParser->pScanner).iEnd;
+
+	if (!isDefn)
+	{
+		auto * pNode = AstNew(pParser, FuncLiteralExpr, makeStartEnd(iStart, iEnd));
+        pNode->pFuncLiteralHeaderGrp = pFuncHeaderGrp;
+		pNode->pBodyStmt = pBody;
+		pNode->scopeid = peekScope(pParser).id;
+
+		return Up(pNode);
+	}
+	else
+	{
+		auto * pNode = AstNew(pParser, FuncDefnStmt, makeStartEnd(iStart, iEnd));
+        pNode->pFuncDefnHeaderGrp = pFuncHeaderGrp;
+		pNode->pBodyStmt = pBody;
+		pNode->scopeid = peekScope(pParser).id;
+
+
+		popScope(pParser);
+
+        if (!hadErrorButRecovered)
+        {
+		    // Insert into symbol table (pop first so the scope stack doesn't include the scope that the function itself pushed)
+            // TODO: Even if we had an error but recovered, we *know* the symbol name -- so we should probably insert some sort of
+            //  special value to prevent unresolved symbol errors.
+
+            ScopedIdentifier ident = Down(pFuncHeaderGrp, FuncDefnHeaderGrp)->ident;
+
+            SymbolInfo funcDefnInfo;
+            setSymbolInfo(&funcDefnInfo, ident, SYMBOLK_Func, Up(pNode));
+            tryInsert(&pParser->symbTable, ident, funcDefnInfo, pParser->scopeStack);
+        }
+
+		return Up(pNode);
 	}
 }
 

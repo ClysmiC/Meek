@@ -365,7 +365,7 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 
 						AstFuncDefnStmt * pFuncDefnStmt = pSymbInfoCandidate->pFuncDefnStmt;
 
-						if (areTypidListAndVarDeclListTypesEq(aTypidArg, pFuncDefnStmt->apParamVarDecls))
+						if (areTypidListAndVarDeclListTypesEq(aTypidArg, *paramVarDecls(*pFuncDefnStmt)))
 						{
 							pFuncDefnStmtMatch = pFuncDefnStmt;
 							break;
@@ -381,15 +381,16 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 						goto end;
 					}
 
-					if (pFuncDefnStmtMatch->apReturnVarDecls.cItem == 0)
+                    auto * papReturnVarDecls = returnVarDecls(*pFuncDefnStmtMatch);
+					if (papReturnVarDecls->cItem == 0)
 					{
 						typidResult = TYPID_Void;
 					}
 					else
 					{
-						AssertInfo(pFuncDefnStmtMatch->apReturnVarDecls.cItem == 1, "TODO: figure out semantics for multiple return values.... for now I will just assert that there is only 1");
-						Assert(pFuncDefnStmtMatch->apReturnVarDecls[0]->astk == ASTK_VarDeclStmt);
-						typidResult = Down(pFuncDefnStmtMatch->apReturnVarDecls[0], VarDeclStmt)->typid;
+						AssertInfo(papReturnVarDecls->cItem == 1, "TODO: figure out semantics for multiple return values.... for now I will just assert that there is only 1");
+						Assert((*papReturnVarDecls)[0]->astk == ASTK_VarDeclStmt);
+						typidResult = Down((*papReturnVarDecls)[0], VarDeclStmt)->typid;
 					}
 				}
 			}
@@ -419,20 +420,22 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 			push(&pPass->scopeStack, scope);
 			Defer(pop(&pPass->scopeStack));
 
-			for (int i = 0; i < pExpr->apParamVarDecls.cItem; i++)
+            auto * papParamVarDecls = paramVarDecls(*pExpr);
+			for (int i = 0; i < papParamVarDecls->cItem; i++)
 			{
-				doResolvePass(pPass, pExpr->apParamVarDecls[i]);
+				doResolvePass(pPass, (*papParamVarDecls)[i]);
 			}
 
-			for (int i = 0; i < pExpr->apReturnVarDecls.cItem; i++)
+            auto * papReturnVarDecls = returnVarDecls(*pExpr);
+			for (int i = 0; i < papReturnVarDecls->cItem; i++)
 			{
-				doResolvePass(pPass, pExpr->apReturnVarDecls[i]);
+				doResolvePass(pPass, (*papReturnVarDecls)[i]);
 			}
 
 			// Push ctx
 
 			auto * pFnCtx = pushNew(&pPass->fnCtxStack);
-			initExtract(&pFnCtx->aTypidReturn, pExpr->apReturnVarDecls, offsetof(AstVarDeclStmt, typid));
+			initExtract(&pFnCtx->aTypidReturn, *papReturnVarDecls, offsetof(AstVarDeclStmt, typid));
 			Defer(dispose(&pFnCtx->aTypidReturn));
 
 			// Resolve body
@@ -583,7 +586,7 @@ void resolveStmt(ResolvePass * pPass, AstNode * pNode)
                 // Verify assumptions
 
                 DynamicArray<SymbolInfo> * paSymbInfo;
-                paSymbInfo = lookupFuncSymb(*pPass->pSymbTable, pStmt->ident);
+                paSymbInfo = lookupFuncSymb(*pPass->pSymbTable, *ident(*pStmt));
 
                 AssertInfo(paSymbInfo && paSymbInfo->cItem > 0, "We should have put this func decl in the symbol table when we parsed it...");
                 bool found = false;
@@ -606,8 +609,8 @@ void resolveStmt(ResolvePass * pPass, AstNode * pNode)
 
 			// Record sequence id
 
-			Assert(pStmt->symbseqid != SYMBSEQID_Unset);
-			pPass->lastSymbseqid = pStmt->symbseqid;
+			Assert(*symbseqid(*pStmt) != SYMBSEQID_Unset);
+			pPass->lastSymbseqid = *symbseqid(*pStmt);
 
 			// Record scope id
 
@@ -620,22 +623,24 @@ void resolveStmt(ResolvePass * pPass, AstNode * pNode)
 
 			// Resolve params
 
-			for (int i = 0; i < pStmt->apParamVarDecls.cItem; i++)
+            auto * papParamVarDecls = paramVarDecls(*pStmt);
+			for (int i = 0; i < papParamVarDecls->cItem; i++)
 			{
-				doResolvePass(pPass, pStmt->apParamVarDecls[i]);
+				doResolvePass(pPass, (*papParamVarDecls)[i]);
 			}
 
 			// Resolve return values
 
-			for (int i = 0; i < pStmt->apReturnVarDecls.cItem; i++)
+            auto * papReturnVarDecls = returnVarDecls(*pStmt);
+			for (int i = 0; i < papReturnVarDecls->cItem; i++)
 			{
-				doResolvePass(pPass, pStmt->apReturnVarDecls[i]);
+				doResolvePass(pPass, (*papReturnVarDecls)[i]);
 			}
 
 			// Push ctx
 
 			auto * pFnCtx = pushNew(&pPass->fnCtxStack);
-			initExtract(&pFnCtx->aTypidReturn, pStmt->apReturnVarDecls, offsetof(AstVarDeclStmt, typid));
+			initExtract(&pFnCtx->aTypidReturn, *papReturnVarDecls, offsetof(AstVarDeclStmt, typid));
 			Defer(dispose(&pFnCtx->aTypidReturn));
 
 			// Resolve body

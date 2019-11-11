@@ -147,6 +147,7 @@ AstNode * parseBlockStmt(Parser * pParser, bool pushPopScope=true);
 AstNode * parseReturnStmt(Parser * pParser);
 AstNode * parseBreakStmt(Parser * pParser);
 AstNode * parseContinueStmt(Parser * pParser);
+AstNode * parseFuncDefnStmt(Parser * pParser);
 
 // EXPR
 
@@ -157,9 +158,25 @@ AstNode * parseUnopPre(Parser * pParser);
 AstNode * parsePrimary(Parser * pParser);
 AstNode * parseVarExpr(Parser * pParser, AstNode * pOwnerExpr);
 AstNode * parseLiteralExpr(Parser * pParser, bool mustBeIntLiteralk=false);
+AstNode * parseFuncLiteralExpr(Parser * pParser);
 
 AstNode * finishParsePrimary(Parser * pParser, AstNode * pLhsExpr);
 
+// GRP
+
+AstNode * parseFuncHeaderGrp(               // Defn or literal, depending on FUNCHEADERK
+    Parser * pParser,
+    FUNCHEADERK funcheaderk,
+    bool * pHadErrorButRecovered);
+
+AstNode * parseParamOrReturnListGrp(        // Param or return, depending on PARAMK
+	Parser * pParser,
+	PARAMK paramk,
+	bool * pHadErrorButRecovered);
+
+// Internal
+
+AstNode * parseFuncInternal(Parser * pParser, FUNCHEADERK funcheaderk);		// Defn or literal, depending on FUNCHEADERK
 
 
 enum PARSETYPERESULT
@@ -183,20 +200,19 @@ PARSETYPERESULT tryParseType(
 //	like the rest of the parse functions? I guess because it can return a stmt or an expr so it's a little
 //	bit different?
 
-bool tryParseFuncDefnStmtOrLiteralExpr(Parser * pParser, FUNCHEADERK funcheaderk, AstNode ** ppoNode);
 
 
 // Func headers in function definitions and literals are full var decls for params/returns
 // NOTE: Errors are embedded in the pap's for tryParseFuncDefnOrLiteralHeader and tryParseFuncDefnOrLiteralHeaderParamList
 
-bool tryParseFuncDefnOrLiteralHeader(
-	Parser * pParser,
-	FUNCHEADERK funcheaderk,
-	DynamicArray<AstNode *> * papParamVarDecls,
-	DynamicArray<AstNode *> * papReturnVarDecls,
-	ScopedIdentifier * poDefnIdent=nullptr);
+// bool tryParseFuncDefnOrLiteralHeader(
+// 	Parser * pParser,
+// 	FUNCHEADERK funcheaderk,
+// 	DynamicArray<AstNode *> * papParamVarDecls,
+// 	DynamicArray<AstNode *> * papReturnVarDecls,
+// 	ScopedIdentifier * poDefnIdent=nullptr);
 
-bool tryParseFuncDefnOrLiteralHeaderParamList(Parser * pParser, FUNCHEADERK funcheaderk, PARAMK paramk, DynamicArray<AstNode *> * papParamVarDecls);
+// bool tryParseFuncDefnOrLiteralHeaderParamList(Parser * pParser, FUNCHEADERK funcheaderk, PARAMK paramk, DynamicArray<AstNode *> * papParamVarDecls);
 
 
 // Func headers as the type of a variable only require type information. Variable names are optional and ignored.

@@ -40,6 +40,7 @@ enum ASTCATK
 	ASTCATK_Error,
 	ASTCATK_Expr,
 	ASTCATK_Stmt,
+	ASTCATK_Grp,
 	ASTCATK_Program
 };
 
@@ -51,7 +52,6 @@ enum ASTK : u8
 	//	the kinds that we don't. For the kinds that we don't, we could probably just make them all the same error kind and have an enum that
 	//	that corresponds to which one it is?
 
-	// ASTK_InternalCompilerErr,	// TODO: add error codes!
 	ASTK_ScanErr,
 	ASTK_BubbleErr,
 	ASTK_UnexpectedTokenkErr,
@@ -99,6 +99,16 @@ enum ASTK : u8
 
 	ASTK_StmtMax,		// Illegal value, used to determine ASTCATK
 
+
+	// GRP
+
+	ASTK_FuncDefnHeaderGrp,
+	ASTK_FuncLiteralHeaderGrp,
+	ASTK_ParamListGrp,
+	ASTK_ReturnListGrp,
+	ASTK_TypeListGrp,
+
+	ASTK_GrpMax,
 
 
     ASTK_Program,
@@ -254,8 +264,7 @@ struct AstFuncCallExpr
 
 struct AstFuncLiteralExpr
 {
-	DynamicArray<AstNode *> apParamVarDecls;
-	DynamicArray<AstNode *> apReturnVarDecls;		// A.k.a. output params
+	AstNode * pFuncLiteralHeaderGrp;
 	AstNode * pBodyStmt;
 
     SCOPEID scopeid;
@@ -317,15 +326,15 @@ struct AstStructDefnStmt
 
 struct AstFuncDefnStmt
 {
-	ScopedIdentifier ident;
+	// ScopedIdentifier ident;
 
-	DynamicArray<AstNode *> apParamVarDecls;
-	DynamicArray<AstNode *> apReturnVarDecls;		// A.k.a. output params
+	// DynamicArray<AstNode *> apParamVarDecls;
+	// DynamicArray<AstNode *> apReturnVarDecls;		// A.k.a. output params
 
+	AstNode * pFuncDefnHeaderGrp;
 	AstNode * pBodyStmt;
     SCOPEID scopeid;        // Scope introduced by this func defn
 	TYPID typid;
-    SYMBSEQID symbseqid;
 };
 
 struct AstBlockStmt
@@ -354,6 +363,38 @@ struct AstReturnStmt
 
 struct AstBreakStmt {};
 struct AstContinueStmt {};
+
+
+
+// Groups
+
+struct AstFuncDefnHeaderGrp
+{
+	ScopedIdentifier ident;
+	SYMBSEQID symbseqid;
+	AstNode * pParamListGrp;
+	AstNode * pReturnListGrp;
+};
+
+struct AstFuncLiteralHeaderGrp
+{
+	AstNode * pParamListGrp;
+	AstNode * pReturnListGrp;
+};
+
+struct AstParamListGrp
+{
+	DynamicArray<AstNode *> apVarDecls;
+};
+
+struct AstReturnListGrp
+{
+	DynamicArray<AstNode *> apVarDecls;
+};
+
+struct AstTypeListGrp
+{
+};
 
 
 
@@ -388,29 +429,37 @@ struct AstNode
 			{
 				// ERR
 
-				AstErr  			err;
+				AstErr					err;
 
 				// EXPR
 
-                AstExpr             expr;
+                AstExpr					expr;
 
 				// STMT
 
-                AstExprStmt         exprStmt;
-				AstAssignStmt		assignExpr;
-                AstVarDeclStmt      varDeclStmt;
-                AstFuncDefnStmt     funcDefnStmt;
-                AstStructDefnStmt   structDefnStmt;
-				AstIfStmt			ifStmt;
-				AstWhileStmt		whileStmt;
-				AstBlockStmt		blockStmt;
-				AstReturnStmt		returnStmt;
-				AstBreakStmt		breakStmt;
-				AstContinueStmt		continueStmt;
+                AstExprStmt				exprStmt;
+				AstAssignStmt			assignExpr;
+                AstVarDeclStmt			varDeclStmt;
+                AstFuncDefnStmt			funcDefnStmt;
+                AstStructDefnStmt		structDefnStmt;
+				AstIfStmt				ifStmt;
+				AstWhileStmt			whileStmt;
+				AstBlockStmt			blockStmt;
+				AstReturnStmt			returnStmt;
+				AstBreakStmt			breakStmt;
+				AstContinueStmt			continueStmt;
+
+				// GRP
+
+				AstFuncDefnHeaderGrp	funcDefnHeaderGrp;
+				AstFuncLiteralHeaderGrp	funcLiteralHeaderGrp;
+				AstParamListGrp			paramListGrp;
+				AstReturnListGrp		returnListGrp;
+				AstTypeListGrp			typeListGrp;
 
 				// PROGRAM
 
-				AstProgram			program;
+				AstProgram				program;
 			};
 
             // NOTE: These fields MUST be after the above union in the struct
@@ -435,6 +484,19 @@ StaticAssert(sizeof(AstNode) <= 64);		// Goal: Make it so each AstNode fits in a
                                             //  (have dynamic allocator allocate an extra 64 bytes and point the "actual" buffer to
                                             //  an aligned spot?
 
+
+
+// Convenient accessors that handle casting/reaching through GRP nodes
+
+DynamicArray<AstNode *> * paramVarDecls(const AstFuncDefnStmt & stmt);
+DynamicArray<AstNode *> * paramVarDecls(const AstFuncLiteralExpr & expr);
+
+DynamicArray<AstNode *> * returnVarDecls(const AstFuncDefnStmt & stmt);
+DynamicArray<AstNode *> * returnVarDecls(const AstFuncLiteralExpr & expr);
+
+ScopedIdentifier * ident(const AstFuncDefnStmt & stmt);
+SYMBSEQID * symbseqid(const AstFuncDefnStmt & stmt);
+
 // TODO: other "value" functions
 // TODO: move to literal.h / literal.cpp
 
@@ -447,6 +509,7 @@ inline ASTCATK category(ASTK astk)
 	if (astk < ASTK_ErrMax) return ASTCATK_Error;
 	if (astk < ASTK_ExprMax) return ASTCATK_Expr;
 	if (astk < ASTK_StmtMax) return ASTCATK_Stmt;
+	if (astk < ASTK_GrpMax) return ASTCATK_Grp;
 
 	Assert(astk == ASTK_Program);
 	return ASTCATK_Program;
@@ -459,7 +522,7 @@ inline ASTCATK category(const AstNode & node)
 
 inline bool isErrorNode(const AstNode & node)
 {
-	return node.astk < ASTK_ErrMax;
+	return category(node.astk) == ASTCATK_Error;
 }
 
 bool containsErrorNode(const DynamicArray<AstNode *> & apNodes);
