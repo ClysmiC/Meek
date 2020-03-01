@@ -13,21 +13,25 @@ struct AstNode;
 struct Parser;
 struct Type;
 
-enum TYPEMODK : u8
+enum TYPEK : u8
 {
-	TYPEMODK_Array,
-	TYPEMODK_Pointer
+	TYPEK_Base,
+	TYPEK_Fn,
+	TYPEK_Array,
+	TYPEK_Pointer,
+
+	TYPEK_Nil = -1
 };
 
-struct TypeModifier
-{
-	// TODO: I want different values here when parsing and after typechecking.
-	//	Namely, while parsing I want to store the expressions inside subscripts,
-	//	and after typechecking those expressions should all be resolved to ints.
+// struct TypeModifier
+// {
+// 	// TODO: I want different values here when parsing and after typechecking.
+// 	//	Namely, while parsing I want to store the expressions inside subscripts,
+// 	//	and after typechecking those expressions should all be resolved to ints.
 
-	TYPEMODK typemodk;
-	AstNode * pSubscriptExpr = nullptr;		// Only valid if TYPEMODK_Array
-};
+// 	TYPEMODK typemodk;
+// 	AstNode * pSubscriptExpr = nullptr;		// Only valid if TYPEMODK_Array
+// };
 
 struct FuncType
 {
@@ -37,20 +41,27 @@ struct FuncType
 
 struct Type
 {
+	TYPEK typek;
+
 	union
 	{
-		ScopedIdentifier ident;		// !isFuncType
-		FuncType funcType;			// isFuncType
-	};
+		Type * pTypePtr;			// TYPEK_Pointer
 
-	DynamicArray<TypeModifier> aTypemods;
-	bool isFuncType = false;
+		struct						// TYPEK_Array
+		{
+			Type * pTypeArray;
+			AstNode * pSubscriptExpr;
+		};
+
+		ScopedIdentifier ident;		// TYPEK_Base
+		FuncType funcType;			// TYPEK_Fn
+	};
 };
 
-void init(Type * pType, bool isFuncType);
+void init(Type * pType, TYPEK typek);
 void initMove(Type * pType, Type * pTypeSrc);
 void initCopy(Type * pType, const Type & typeSrc);
-void dispose(Type * pType);
+// void dispose(Type * pType);
 
 bool isTypeResolved(const Type & type);
 bool isTypeInferred(const Type & type);
@@ -74,6 +85,7 @@ uint funcTypeHash(const FuncType & f);
 void init(FuncType * pFuncType);
 void initMove(FuncType * pFuncType, FuncType * pFuncTypeSrc);
 void initCopy(FuncType * pFuncType, const FuncType & funcTypeSrc);
+void reinitCopy(FuncType * pFuncType, const FuncType & funcTypeSrc);
 void dispose(FuncType * pFuncType);
 
 bool areTypidListTypesFullyResolved(const DynamicArray<TYPID> & aTypid);
@@ -98,7 +110,7 @@ inline bool typidEq(const TYPID & typid0, const TYPID & typid1)
 
 struct TypePendingResolution
 {
-	Stack<Scope> scopeStack;
+	// Stack<Scope> scopeStack;
 	Type * pType;
 	TYPID * pTypidUpdateWhenResolved;
 };

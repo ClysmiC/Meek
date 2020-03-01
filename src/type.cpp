@@ -6,70 +6,137 @@
 
 #include <string.h>
 
-void init(Type * pType, bool isFuncType)
+void init(Type * pType, TYPEK typek)
 {
-	pType->isFuncType = isFuncType;
-	init(&pType->aTypemods);
+	pType->typek = typek;
 
-	if (pType->isFuncType)
+	switch (pType->typek)
 	{
-		init(&pType->funcType);
-	}
-	else
-	{
-		Token * pToken = nullptr;
-		setIdentNoScope(&pType->ident, pToken);
+		case TYPEK_Base:
+		{
+			Token * pToken = nullptr;
+			setIdentNoScope(&pType->ident, pToken);
+		}
+		break;
+
+		case TYPEK_Fn:
+		{
+			init(&pType->funcType);
+		}
+		break;
+
+		case TYPEK_Array:
+		{
+			pType->pTypeArray = nullptr;
+			pType->pSubscriptExpr = nullptr;
+		}
+		break;
+
+		case TYPEK_Pointer:
+		{
+			pType->pTypePtr = nullptr;
+		}
+		break;
 	}
 }
 
 void initMove(Type * pType, Type * pTypeSrc)
 {
-	pType->isFuncType = pTypeSrc->isFuncType;
-	initMove(&pType->aTypemods, &pTypeSrc->aTypemods);
+	pType->typek = pTypeSrc->typek;
 
-	if (pType->isFuncType)
+	switch (pType->typek)
 	{
-		initMove(&pType->funcType, &pTypeSrc->funcType);
+		case TYPEK_Base:
+		{
+			pType->ident = pTypeSrc->ident;
+		}
+		break;
+
+		case TYPEK_Fn:
+		{
+			initMove(&pType->funcType, &pTypeSrc->funcType);
+		}
+		break;
+
+		case TYPEK_Array:
+		{
+			pType->pTypeArray = nullptr;
+			pType->pSubscriptExpr = nullptr;
+		}
+		break;
+
+		case TYPEK_Pointer:
+		{
+			pType->pTypePtr = nullptr;
+		}
+		break;
 	}
 }
 
 void initCopy(Type * pType, const Type & typeSrc)
 {
-	pType->isFuncType = typeSrc.isFuncType;
-	initCopy(&pType->aTypemods, typeSrc.aTypemods);
+	pType->typek = typeSrc.typek;
 
-	if (pType->isFuncType)
+	switch (pType->typek)
 	{
-		initCopy(&pType->funcType, typeSrc.funcType);
-	}
-	else
-	{
-		// META: This assignment is fine since ScopedIdentifier doesn't own any resources. How would I make this more robust
-		//	if I wanted to change ScopedIdentifier to allow it to own resources in the future? Writing an initCopy for ident
-		//	that just does this assignment seems like too much boilerplate. I would also like to prefer avoiding C++ constructor
-		//	craziness. Is there a middle ground? How do I want to handle this in Meek?
+		case TYPEK_Base:
+		{
+			pType->ident = typeSrc.ident;
+		}
+		break;
 
-		pType->ident = typeSrc.ident;
+		case TYPEK_Fn:
+		{
+			initCopy(&pType->funcType, typeSrc.funcType);
+		}
+		break;
+
+		case TYPEK_Array:
+		{
+			pType->pTypeArray = nullptr;
+			pType->pSubscriptExpr = nullptr;
+		}
+		break;
+
+		case TYPEK_Pointer:
+		{
+			pType->pTypePtr = nullptr;
+		}
+		break;
 	}
 }
 
-void dispose(Type * pType)
-{
-	dispose(&pType->aTypemods);
-	if (pType->isFuncType)
-	{
-		dispose(&pType->funcType);
-	}
-}
+//void dispose(Type * pType)
+//{
+//	dispose(&pType->aTypemods);
+//	if (pType->isFuncType)
+//	{
+//		dispose(&pType->funcType);
+//	}
+//}
 
 bool isTypeResolved(const Type & type)
 {
-	if (type.isFuncType)
-	{
-        return isFuncTypeResolved(type.funcType);
-	}
+    switch (type.typek)
+    {
+        case TYPEK_Base:
+	        return isScopeSet(type.ident);
 
-	return isScopeSet(type.ident);
+        // TODO: Check that we have a valid subscript?
+
+        case TYPEK_Array:
+            return isTypeResolved(*type.pTypeArray);
+
+        case TYPEK_Fn:
+            return isFuncTypeResolved(type.funcType);
+
+        case TYPEK_Pointer:
+            return isTypeResolved(*type.pTypePtr);
+
+        default:
+            reportIceAndExit("bad typek");
+            return false;
+    }
 }
 
 bool isFuncTypeResolved(const FuncType & funcType)
@@ -93,95 +160,87 @@ bool isTypeInferred(const Type & type)
     return result;
 }
 
-bool isUnmodifiedType(const Type & type)
-{
-	return type.aTypemods.cItem == 0;
-}
-
-bool isPointerType(const Type & type)
-{
-	return type.aTypemods.cItem > 0 && type.aTypemods[0].typemodk == TYPEMODK_Pointer;
-}
-
 bool typeEq(const Type & t0, const Type & t1)
 {
-	if (t0.isFuncType != t1.isFuncType) return false;
-	if (t0.aTypemods.cItem != t1.aTypemods.cItem) return false;
+    if (t0.typek != t1.typek)
+        return false;
 
-	// Check typemods are same
+    switch (t0.typek)
+    {
+        case TYPEK_Base:
+            return scopedIdentEq(t0.ident, t1.ident);
 
-	for (int i = 0; i < t0.aTypemods.cItem; i++)
-	{
-		TypeModifier tmod0 = t0.aTypemods[i];
-		TypeModifier tmod1 = t1.aTypemods[i];
-		if (tmod0.typemodk != tmod1.typemodk)
-		{
-			return false;
-		}
+        case TYPEK_Array:
+        {
+            AssertInfo(t0.pSubscriptExpr->astk == ASTK_LiteralExpr, "Parser should enforce this... for now");
+            AssertInfo(t1.pSubscriptExpr->astk == ASTK_LiteralExpr, "Parser should enforce this... for now");
 
-		if (tmod0.typemodk == TYPEMODK_Array)
-		{
-			// TODO: Support arbitrary compile time expressions here... not just int literals
+            auto * pIntLit0 = Down(t0.pSubscriptExpr, LiteralExpr);
+            auto * pIntLit1 = Down(t1.pSubscriptExpr, LiteralExpr);
 
-			AssertInfo(tmod0.pSubscriptExpr->astk == ASTK_LiteralExpr, "Parser should enforce this... for now");
-			AssertInfo(tmod1.pSubscriptExpr->astk == ASTK_LiteralExpr, "Parser should enforce this... for now");
+            AssertInfo(pIntLit0->literalk == LITERALK_Int, "Parser should enforce this... for now");
+            AssertInfo(pIntLit1->literalk == LITERALK_Int, "Parser should enforce this... for now");
 
-			auto * pIntLit0 = Down(tmod0.pSubscriptExpr, LiteralExpr);
-			auto * pIntLit1 = Down(tmod0.pSubscriptExpr, LiteralExpr);
+            int intValue0 = intValue(pIntLit0);
+            int intValue1 = intValue(pIntLit1);
 
-			AssertInfo(pIntLit0->literalk == LITERALK_Int, "Parser should enforce this... for now");
-			AssertInfo(pIntLit1->literalk == LITERALK_Int, "Parser should enforce this... for now");
+            if (intValue0 != intValue1)
+            {
+                return false;
+            }
 
-			int intValue0 = intValue(pIntLit0);
-			int intValue1 = intValue(pIntLit1);
+            return typeEq(*t0.pTypeArray, *t1.pTypeArray);
+        }
+        break;
 
-			if (intValue0 != intValue1)
-			{
-				return false;
-			}
-		}
-	}
+        case TYPEK_Fn:
+            return funcTypeEq(t0.funcType, t1.funcType);
 
-	if (t0.isFuncType)
-	{
-		return funcTypeEq(t0.funcType, t1.funcType);
-	}
-	else
-	{
-		return scopedIdentEq(t0.ident, t1.ident);
-	}
+        case TYPEK_Pointer:
+            return typeEq(*t0.pTypePtr, *t1.pTypePtr);
+
+        default:
+            reportIceAndExit("bad typek");
+            return false;
+    }
 }
 
 uint typeHash(const Type & t)
 {
-	auto hash = startHash();
 
-	for (int i = 0; i < t.aTypemods.cItem; i++)
-	{
-		TypeModifier tmod = t.aTypemods[i];
-		hash = buildHash(&tmod.typemodk, sizeof(tmod.typemodk), hash);
+    switch (t.typek)
+    {
+        case TYPEK_Base:
+        {
+            Assert(isScopeSet(t.ident));
+            return scopedIdentHashPrecomputed(t.ident);
+        }
+        break;
 
-		if (tmod.typemodk == TYPEMODK_Array)
-		{
-			AssertInfo(tmod.pSubscriptExpr->astk == ASTK_LiteralExpr, "Parser should enforce this... for now");
+        case TYPEK_Array:
+        {
+            AssertInfo(t.pSubscriptExpr->astk == ASTK_LiteralExpr, "Parser should enforce this... for now");
+            auto * pIntLit = Down(t.pSubscriptExpr, LiteralExpr);
 
-			auto * pIntLit = Down(tmod.pSubscriptExpr, LiteralExpr);
-			AssertInfo(pIntLit->literalk == LITERALK_Int, "Parser should enforce this... for now");
+            AssertInfo(pIntLit->literalk == LITERALK_Int, "Parser should enforce this... for now");
+            int intVal = intValue(pIntLit);
 
-			int intVal = intValue(pIntLit);
-			hash = buildHash(&intVal, sizeof(intVal), hash);
-		}
-	}
+	        auto hash = startHash();
+            buildHash(&intVal, sizeof(intVal), hash);
+            return combineHash(hash, typeHash(*t.pTypeArray));
+        }
+        break;
 
-	if (t.isFuncType)
-	{
-		return combineHash(hash, funcTypeHash(t.funcType));
-	}
-	else
-	{
-		Assert(isScopeSet(t.ident));
-		return combineHash(hash, scopedIdentHashPrecomputed(t.ident));
-	}
+        case TYPEK_Fn:
+            return funcTypeHash(t.funcType);
+
+        case TYPEK_Pointer:
+            return typeHash(*t.pTypePtr) * 37;
+
+        default:
+            reportIceAndExit("bad typek");
+            return 0;
+    }
 }
 
 void init(FuncType * pFuncType)
@@ -200,6 +259,12 @@ void initCopy(FuncType * pFuncType, const FuncType & funcTypeSrc)
 {
 	initCopy(&pFuncType->paramTypids, funcTypeSrc.paramTypids);
 	initCopy(&pFuncType->returnTypids, funcTypeSrc.returnTypids);
+}
+
+void reinitCopy(FuncType * pFuncType, const FuncType & funcTypeSrc)
+{
+	dispose(pFuncType);
+	initCopy(pFuncType, funcTypeSrc);
 }
 
 void dispose(FuncType * pFuncType)
@@ -363,7 +428,7 @@ void insertBuiltInTypes(TypeTable * pTable)
         setIdent(&voidIdent, &voidToken, SCOPEID_BuiltIn);
 
         Type voidType;
-        init(&voidType, false /* isFuncType */);
+        init(&voidType, TYPEK_Base);
         voidType.ident = voidIdent;
 
         Verify(isTypeResolved(voidType));
@@ -382,7 +447,7 @@ void insertBuiltInTypes(TypeTable * pTable)
         setIdent(&intIdent, &intToken, SCOPEID_BuiltIn);
 
         Type intType;
-        init(&intType, false /* isFuncType */);
+        init(&intType, TYPEK_Base);
         intType.ident = intIdent;
 
         Verify(isTypeResolved(intType));
@@ -401,7 +466,7 @@ void insertBuiltInTypes(TypeTable * pTable)
         setIdent(&floatIdent, &floatToken, SCOPEID_BuiltIn);
 
         Type floatType;
-        init(&floatType, false /* isFuncType */);
+        init(&floatType, TYPEK_Base);
         floatType.ident = floatIdent;
 
         Verify(isTypeResolved(floatType));
@@ -420,7 +485,7 @@ void insertBuiltInTypes(TypeTable * pTable)
         setIdent(&boolIdent, &boolToken, SCOPEID_BuiltIn);
 
         Type boolType;
-        init(&boolType, false /* isFuncType */);
+        init(&boolType, TYPEK_Base);
         boolType.ident = boolIdent;
 
         Verify(isTypeResolved(boolType));
@@ -439,7 +504,7 @@ void insertBuiltInTypes(TypeTable * pTable)
         setIdent(&stringIdent, &stringToken, SCOPEID_BuiltIn);
 
         Type stringType;
-        init(&stringType, false /* isFuncType */);
+        init(&stringType, TYPEK_Base);
         stringType.ident = stringIdent;
 
         Verify(isTypeResolved(stringType));
@@ -520,37 +585,37 @@ bool tryResolveType(Type * pType, const SymbolTable & symbolTable, const Stack<S
 	}
 }
 
-TYPID resolveIntoTypeTableOrSetPending(
-	Parser * pParser,
-	Type * pType,
-	TypePendingResolution ** ppoTypePendingResolution)
-{
-	Assert(!isTypeResolved(*pType));
-    AssertInfo(ppoTypePendingResolution, "You must have a plan for handling types that are pending resolution if you call this function!");
+// TYPID resolveIntoTypeTableOrSetPending(
+// 	Parser * pParser,
+// 	Type * pType,
+// 	TypePendingResolution ** ppoTypePendingResolution)
+// {
+// 	Assert(!isTypeResolved(*pType));
+//     AssertInfo(ppoTypePendingResolution, "You must have a plan for handling types that are pending resolution if you call this function!");
 
-	if (tryResolveType(pType, pParser->symbTable, pParser->scopeStack))
-	{
-		TYPID typid = ensureInTypeTable(&pParser->typeTable, *pType);
-        Assert(isTypeResolved(typid));
+// 	if (tryResolveType(pType, pParser->symbTable, pParser->scopeStack))
+// 	{
+// 		TYPID typid = ensureInTypeTable(&pParser->typeTable, *pType);
+//         Assert(isTypeResolved(typid));
 
-        *ppoTypePendingResolution = nullptr;
+//         *ppoTypePendingResolution = nullptr;
 
-		releaseType(pParser, pType);
+// 		releaseType(pParser, pType);
 
-        return typid;
-	}
-	else
-	{
-        TypePendingResolution * pTypePending = appendNew(&pParser->typeTable.typesPendingResolution);
-        pTypePending->pType = pType;
-        pTypePending->pTypidUpdateWhenResolved = nullptr;    // NOTE: Caller sets this value via the pointer that we return in an out param
-		initCopy(&pTypePending->scopeStack, pParser->scopeStack);
+//         return typid;
+// 	}
+// 	else
+// 	{
+//         TypePendingResolution * pTypePending = appendNew(&pParser->typeTable.typesPendingResolution);
+//         pTypePending->pType = pType;
+//         pTypePending->pTypidUpdateWhenResolved = nullptr;    // NOTE: Caller sets this value via the pointer that we return in an out param
+// 		initCopy(&pTypePending->scopeStack, pParser->scopeStack);
 
-        *ppoTypePendingResolution = pTypePending;
+//         *ppoTypePendingResolution = pTypePending;
 
-        return TYPID_Unresolved;
-	}
-}
+//         return TYPID_Unresolved;
+// 	}
+// }
 
 bool tryResolveAllPendingTypesIntoTypeTable(Parser * pParser)
 {

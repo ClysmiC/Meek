@@ -326,10 +326,7 @@ struct AstStructDefnStmt
 
 struct AstFuncDefnStmt
 {
-	// ScopedIdentifier ident;
-
-	// DynamicArray<AstNode *> apParamVarDecls;
-	// DynamicArray<AstNode *> apReturnVarDecls;		// A.k.a. output params
+	// Note: ident and symbseqid are in funcDefnHeaderGrp
 
 	AstNode * pFuncDefnHeaderGrp;
 	AstNode * pBodyStmt;

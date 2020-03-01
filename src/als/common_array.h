@@ -190,6 +190,13 @@ void initCopy(DynamicArray<T> * pArray, const DynamicArray<T> & arraySrc)
 	}
 }
 
+template <typename T>
+void reinitCopy(DynamicArray<T> * pArray, DynamicArray<T> * pArraySrc)
+{
+	dispose(pArray);
+	initCopy(pArray, pArraySrc);
+}
+
 // These extract functions feel a bit too clever/unsafe... if they bite me once or twice I might just delete them.
 
 template <typename T, typename E>
@@ -282,6 +289,18 @@ void appendMultiple(DynamicArray<T> * pArray, const T aT[], int cT)
 	for (int i = 0; i < cT; i++)
 	{
 		pArray->pBuffer[pArray->cItem] = aT[i];
+		pArray->cItem++;
+	}
+}
+
+template <typename T>
+void appendMultiple(DynamicArray<T> * pArray, const DynamicArray<T> & src)
+{
+	ensureCapacity(pArray, pArray->cItem + src.cItem);
+
+	for (int i = 0; i < src.cItem; i++)
+	{
+		pArray->pBuffer[pArray->cItem] = src.pBuffer[i];
 		pArray->cItem++;
 	}
 }

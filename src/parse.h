@@ -167,38 +167,53 @@ AstNode * finishParsePrimary(Parser * pParser, AstNode * pLhsExpr);
 AstNode * parseFuncHeaderGrp(               // Defn or literal, depending on FUNCHEADERK
     Parser * pParser,
     FUNCHEADERK funcheaderk,
-    bool * pHadErrorButRecovered);
+    bool * poHadErrorButRecovered);
 
 AstNode * parseParamOrReturnListGrp(        // Param or return, depending on PARAMK
 	Parser * pParser,
 	PARAMK paramk,
-	bool * pHadErrorButRecovered);
+	bool * poHadErrorButRecovered);
 
 // Internal
 
 AstNode * parseFuncInternal(Parser * pParser, FUNCHEADERK funcheaderk);		// Defn or literal, depending on FUNCHEADERK
 
 
-enum PARSETYPERESULT
-{
-    PARSETYPERESULT_ParseFailed,
-	PARSETYPERESULT_ParseFailedButRecovered,
-    PARSETYPERESULT_ParseSucceededTypeResolveFailed,
-    PARSETYPERESULT_ParseSucceededTypeResolveSucceeded
-};
 
 // - Any subscript expressions are appended to papNodeChildren for bookkeeping.
 // - Any errors are also appended to papNodeChildren
 
-PARSETYPERESULT tryParseType(
-    Parser * pParser,
-    DynamicArray<AstNode *> * papNodeChildren,
-    TYPID * poTypidResolved,
-    TypePendingResolution ** ppoTypePendingResolution);
+// PARSETYPERESULT tryParseType(
+//     Parser * pParser,
+//     DynamicArray<AstNode *> * papNodeChildren,
+//     TYPID * poTypidResolved,
+//     TypePendingResolution ** ppoTypePendingResolution);
 
-// HMM: Is there any reason why this is "tryParse" and returning the node via out-param instead of just being
-//	like the rest of the parse functions? I guess because it can return a stmt or an expr so it's a little
-//	bit different?
+
+
+
+// TODO: This parsing is an absolute mess because I am doing it iteratively and storing types
+//	as base types + flat array of typemodifiers. This requires me to lug a bunch of state
+//	around that would probably be better off on the stack via recursion (i.e., parse a single
+//	typemod and then recursively call tryParseType)
+
+// NOTE: false indicates an unrecoverable error was encountered and returned via ppoErr
+// NOTE: poTypePending is only returned if succeeded, and didn't have to recover from error
+
+
+TypePendingResolution *
+tryParseType(
+	Parser * pParser,
+	AstNode ** ppoErr);
+
+// NOTE: false indicates an unrecoverable error was encountered and returned via ppoErr
+
+// TypePendingResolution *
+// tryParseFuncType(
+// 	Parser * pParser,
+// 	FuncType * poFuncType
+// 	AstNode * ppoErr,
+// 	bool * poHadErrorButRecovered);
 
 
 
@@ -220,19 +235,19 @@ PARSETYPERESULT tryParseType(
 // TODO: Consider combining with tryParseFuncDefnOrLiteralHeader... the problem is that they
 //	have different kinds of out parameters, despite the parsing pattern being very similar!
 
-enum PARSEFUNCHEADERTYPEONLYRESULT
-{
-    PARSEFUNCHEADERTYPEONLYRESULT_Succeeded,
-    PARSEFUNCHEADERTYPEONLYRESULT_Failed,
-    PARSEFUNCHEADERTYPEONLYRESULT_FailedButRecovered
-};
+// enum PARSEFUNCHEADERTYPEONLYRESULT
+// {
+//     PARSEFUNCHEADERTYPEONLYRESULT_Succeeded,
+//     PARSEFUNCHEADERTYPEONLYRESULT_Failed,
+//     PARSEFUNCHEADERTYPEONLYRESULT_FailedButRecovered
+// };
 
-PARSEFUNCHEADERTYPEONLYRESULT
-tryParseFuncHeaderTypeOnly(
-	Parser * pParser,
-	FuncType * poFuncType,
-	AstErr ** ppoErr
-);
+// PARSEFUNCHEADERTYPEONLYRESULT
+// tryParseFuncHeaderTypeOnly(
+// 	Parser * pParser,
+// 	FuncType * poFuncType,
+// 	AstErr ** ppoErr
+// );
 
 
 // NOTE: This moves the children into the AST

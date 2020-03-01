@@ -33,6 +33,10 @@ enum TYPID : u32
 	TYPID_Unresolved,
 	TYPID_UnresolvedInferred,
 
+	// For vardecls that had parse errors that were able to recover
+
+	TYPID_ParseError,
+
     // Type checking errors
 
 	TYPID_TypeError,
