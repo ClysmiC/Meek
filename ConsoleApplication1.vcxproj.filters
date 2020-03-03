@@ -12,6 +12,9 @@
     <Filter Include="Header Files\als">
       <UniqueIdentifier>{e6de0e7e-411f-4d3d-aa7e-a83d6c80437a}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Meek Examples">
+      <UniqueIdentifier>{9d904bfd-0d40-490a-97a5-1b266d72f071}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\als\als.h">
@@ -124,5 +127,10 @@
     <ClCompile Include="src\error.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="examples\test.meek">
+      <Filter>Meek Examples</Filter>
+    </None>
   </ItemGroup>
 </Project>

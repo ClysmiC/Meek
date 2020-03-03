@@ -1,0 +1,80 @@
+// There are 3 function things that get parsed very similarly and share a lot of code.
+
+
+fn main()
+{
+	// 1. Function definitions. They look like this...
+
+	fn multipleReturns(int a) -> (int, int, int)
+//		or
+//	fn multipleReturns(int a) -> (int out0, int out1, int out2)
+//		or
+//	fn multipleReturns(int a = 3) -> (int out0 = 2, int out1, int out2 = 1)
+//		or
+//	fn multipleReturns(int) -> (int, int, int)
+	{
+		// NOTE: You can name as many or as few return values as you want.
+		// NOTE: You can give default values for params and return values
+		// NOTE: Naming parameters is optional. Unnamed parameters won't bind to anything so they will be impossible to
+		//	access, but you may want to define functions with unnamed parameters to adhere to a particular interface.
+	}
+
+	fn singleReturn(int a) -> (int)
+//		or
+//	fn singleReturn(int a) -> (int out)
+//		or
+//	fn singleReturn(int a) -> int
+//		or
+//	fn singleReturn(int a) -> int out
+//		or
+//	fn singleReturn(int a) -> (int out = 6)
+//		or
+//		or
+//	fn singleReturn(int a) -> int out = 6
+	{
+		// NOTE: You can omit the parentheses if you are returning a single value
+	}
+
+	fn noReturn(int a) -> ()
+//		or
+//	fn noReturn()
+	{
+		// You can omit the arrow altogether if there are no return values
+	}
+
+
+
+	// 2. Function literals. They look like this. (note: & operator is up for debate)
+
+	sort(
+		&arrayOfInts,
+		fn (int i0, int i1) -> int
+		{
+			return i0 < i1;
+		}
+	);
+
+	// They are identical to function definitions in all ways, *except* that they are not allowed to have a name.
+	//	If you want a name-like thing for descriptive purposes, you can always use an //InlineComment
+	//	TODO: How should it refer to itself if it wants to recurse? Maybe a keyword?
+
+
+
+	// 3. Function type descriptions. The same as literals, except default values are not allowed to be specified, since
+	//	they are not part of the type. They are just syntactic sugar for func definitions/literals.
+
+	fn (int) -> (int, int, int) fnPtrMultipleReturns = multipleReturns;
+
+//	^^^^^^^^^^^^^^^^^^^^^^^^^^^
+	// Notice that there is no name in the description. The name is the *variable* that is being declared of that type.
+
+	fn (int) -> (int) fnPtrSingleReturn = singleReturn;
+//		or
+//	fn (int a) -> (int) fnPtrSingleReturn = singleReturn;
+//		or
+//	fn (int a) -> int fnPtrSingleReturn = singleReturn;
+//
+//	NOTE: Omitting parens is not recommended, as it is harder for a human to parse.
+
+	fn (int a) fnPtrNoReturn = noReturn;
+}

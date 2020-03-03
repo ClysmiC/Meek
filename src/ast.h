@@ -5,7 +5,6 @@
 #include "literal.h"
 #include "symbol.h"
 #include "token.h"
-#include "token.h"
 #include "type.h"
 
 // Forward declarations
@@ -40,7 +39,7 @@ enum ASTCATK
 	ASTCATK_Error,
 	ASTCATK_Expr,
 	ASTCATK_Stmt,
-	ASTCATK_Grp,
+	/*ASTCATK_Grp,*/
 	ASTCATK_Program
 };
 
@@ -102,13 +101,13 @@ enum ASTK : u8
 
 	// GRP
 
-	ASTK_FuncDefnHeaderGrp,
-	ASTK_FuncLiteralHeaderGrp,
-	ASTK_ParamListGrp,
-	ASTK_ReturnListGrp,
-	ASTK_TypeListGrp,
+	//ASTK_FuncDefnHeaderGrp,
+	//ASTK_FuncLiteralHeaderGrp,
+	//ASTK_ParamListGrp,
+	//ASTK_ReturnListGrp,
+	//ASTK_TypeListGrp,
 
-	ASTK_GrpMax,
+	//ASTK_GrpMax,
 
 
     ASTK_Program,
@@ -227,6 +226,10 @@ struct AstLiteralExpr
 
 	bool isValueSet = false;
 	bool isValueErroneous = false;	// Things like integers that are too large, etc.
+
+#if 0
+	static constexpr uint s_nodeSizeDebug = sizeof(AstLiteralExpr);
+#endif
 };
 
 struct AstGroupExpr
@@ -264,10 +267,15 @@ struct AstFuncCallExpr
 
 struct AstFuncLiteralExpr
 {
-	AstNode * pFuncLiteralHeaderGrp;
+	DynamicArray<AstNode *> apParamVarDecls;
+	DynamicArray<AstNode *> apReturnVarDecls;
 	AstNode * pBodyStmt;
 
     SCOPEID scopeid;
+
+#if 0
+	static constexpr uint s_nodeSizeDebug = sizeof(AstFuncLiteralExpr);
+#endif
 };
 
 struct AstExpr
@@ -309,7 +317,7 @@ struct AstVarDeclStmt
 {
 	ScopedIdentifier ident;
 
-	AstNode * pInitExpr;	// null means default init
+	NULLABLE AstNode * pInitExpr;
 
     SYMBSEQID symbseqid;
 	TYPID typid;
@@ -322,19 +330,27 @@ struct AstStructDefnStmt
     SCOPEID scopeid;        // Scope introduced by this struct defn
     SYMBSEQID symbseqid;
 	TYPID typidSelf;
+
+#if 0
+	static constexpr uint s_nodeSizeDebug = sizeof(AstStructDefnStmt);
+#endif
 };
 
 struct AstFuncDefnStmt
 {
-	// ScopedIdentifier ident;
+	ScopedIdentifier ident;
 
-	// DynamicArray<AstNode *> apParamVarDecls;
-	// DynamicArray<AstNode *> apReturnVarDecls;		// A.k.a. output params
+	DynamicArray<AstNode *> apParamVarDecls;
+	DynamicArray<AstNode *> apReturnVarDecls;
 
-	AstNode * pFuncDefnHeaderGrp;
 	AstNode * pBodyStmt;
     SCOPEID scopeid;        // Scope introduced by this func defn
+	SYMBSEQID symbseqid;
 	TYPID typid;
+
+#if 0
+	static constexpr uint s_nodeSizeDebug = sizeof(AstFuncDefnStmt);
+#endif
 };
 
 struct AstBlockStmt
@@ -368,33 +384,33 @@ struct AstContinueStmt {};
 
 // Groups
 
-struct AstFuncDefnHeaderGrp
-{
-	ScopedIdentifier ident;
-	SYMBSEQID symbseqid;
-	AstNode * pParamListGrp;
-	AstNode * pReturnListGrp;
-};
-
-struct AstFuncLiteralHeaderGrp
-{
-	AstNode * pParamListGrp;
-	AstNode * pReturnListGrp;
-};
-
-struct AstParamListGrp
-{
-	DynamicArray<AstNode *> apVarDecls;
-};
-
-struct AstReturnListGrp
-{
-	DynamicArray<AstNode *> apVarDecls;
-};
-
-struct AstTypeListGrp
-{
-};
+//struct AstFuncDefnHeaderGrp
+//{
+//	ScopedIdentifier ident;
+//	SYMBSEQID symbseqid;
+//	AstNode * pParamListGrp;
+//	AstNode * pReturnListGrp;
+//};
+//
+//struct AstFuncLiteralHeaderGrp
+//{
+//	AstNode * pParamListGrp;
+//	AstNode * pReturnListGrp;
+//};
+//
+//struct AstParamListGrp
+//{
+//	DynamicArray<AstNode *> apVarDecls;
+//};
+//
+//struct AstReturnListGrp
+//{
+//	DynamicArray<AstNode *> apVarDecls;
+//};
+//
+//struct AstTypeListGrp
+//{
+//};
 
 
 
@@ -451,11 +467,11 @@ struct AstNode
 
 				// GRP
 
-				AstFuncDefnHeaderGrp	funcDefnHeaderGrp;
-				AstFuncLiteralHeaderGrp	funcLiteralHeaderGrp;
-				AstParamListGrp			paramListGrp;
-				AstReturnListGrp		returnListGrp;
-				AstTypeListGrp			typeListGrp;
+				//AstFuncDefnHeaderGrp	funcDefnHeaderGrp;
+				//AstFuncLiteralHeaderGrp	funcLiteralHeaderGrp;
+				//AstParamListGrp			paramListGrp;
+				//AstReturnListGrp		returnListGrp;
+				//AstTypeListGrp			typeListGrp;
 
 				// PROGRAM
 
@@ -509,7 +525,7 @@ inline ASTCATK category(ASTK astk)
 	if (astk < ASTK_ErrMax) return ASTCATK_Error;
 	if (astk < ASTK_ExprMax) return ASTCATK_Expr;
 	if (astk < ASTK_StmtMax) return ASTCATK_Stmt;
-	if (astk < ASTK_GrpMax) return ASTCATK_Grp;
+	/*if (astk < ASTK_GrpMax) return ASTCATK_Grp;*/
 
 	Assert(astk == ASTK_Program);
 	return ASTCATK_Program;
@@ -529,8 +545,3 @@ bool containsErrorNode(const DynamicArray<AstNode *> & apNodes);
 
 const char * displayString(ASTK astk, bool capitalizeFirstLetter=false);
 
-#if 0
-// Convenient place to hover the mouse and get size info for different kinds of nodes!
-
-constexpr uint convenientSizeDebugger = sizeof(AstFuncDefnStmt);
-#endif

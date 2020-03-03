@@ -520,37 +520,37 @@ bool tryResolveType(Type * pType, const SymbolTable & symbolTable, const Stack<S
 	}
 }
 
-TYPID resolveIntoTypeTableOrSetPending(
-	Parser * pParser,
-	Type * pType,
-	TypePendingResolution ** ppoTypePendingResolution)
-{
-	Assert(!isTypeResolved(*pType));
-    AssertInfo(ppoTypePendingResolution, "You must have a plan for handling types that are pending resolution if you call this function!");
-
-	if (tryResolveType(pType, pParser->symbTable, pParser->scopeStack))
-	{
-		TYPID typid = ensureInTypeTable(&pParser->typeTable, *pType);
-        Assert(isTypeResolved(typid));
-
-        *ppoTypePendingResolution = nullptr;
-
-		releaseType(pParser, pType);
-
-        return typid;
-	}
-	else
-	{
-        TypePendingResolution * pTypePending = appendNew(&pParser->typeTable.typesPendingResolution);
-        pTypePending->pType = pType;
-        pTypePending->pTypidUpdateWhenResolved = nullptr;    // NOTE: Caller sets this value via the pointer that we return in an out param
-		initCopy(&pTypePending->scopeStack, pParser->scopeStack);
-
-        *ppoTypePendingResolution = pTypePending;
-
-        return TYPID_Unresolved;
-	}
-}
+//TYPID resolveIntoTypeTableOrSetPending(
+//	Parser * pParser,
+//	Type * pType,
+//	TypePendingResolve ** ppoTypePendingResolution)
+//{
+//	Assert(!isTypeResolved(*pType));
+//    AssertInfo(ppoTypePendingResolution, "You must have a plan for handling types that are pending resolution if you call this function!");
+//
+//	if (tryResolveType(pType, pParser->symbTable, pParser->scopeStack))
+//	{
+//		TYPID typid = ensureInTypeTable(&pParser->typeTable, *pType);
+//        Assert(isTypeResolved(typid));
+//
+//        *ppoTypePendingResolution = nullptr;
+//
+//		releaseType(pParser, pType);
+//
+//        return typid;
+//	}
+//	else
+//	{
+//        TypePendingResolve * pTypePending = appendNew(&pParser->typeTable.typesPendingResolution);
+//        pTypePending->pType = pType;
+//        pTypePending->pTypidUpdateOnResolve = nullptr;    // NOTE: Caller sets this value via the pointer that we return in an out param
+//		initCopy(&pTypePending->scopeStack, pParser->scopeStack);
+//
+//        *ppoTypePendingResolution = pTypePending;
+//
+//        return TYPID_Unresolved;
+//	}
+//}
 
 bool tryResolveAllPendingTypesIntoTypeTable(Parser * pParser)
 {
@@ -561,12 +561,12 @@ bool tryResolveAllPendingTypesIntoTypeTable(Parser * pParser)
 
 	for (int i = pParser->typeTable.typesPendingResolution.cItem - 1; i >= 0; i--)
 	{
-		TypePendingResolution * pTypePending = &pParser->typeTable.typesPendingResolution[i];
+		TypePendingResolve * pTypePending = &pParser->typeTable.typesPendingResolution[i];
 
 		if (tryResolveType(pTypePending->pType, pParser->symbTable, pTypePending->scopeStack))
 		{
 			TYPID typid = ensureInTypeTable(&pParser->typeTable, *(pTypePending->pType));
-			*(pTypePending->pTypidUpdateWhenResolved) = typid;
+			*(pTypePending->pTypidUpdateOnResolve) = typid;
 
 			dispose(&pTypePending->scopeStack);
 			releaseType(pParser, pTypePending->pType);

@@ -162,7 +162,7 @@ inline StartEndIndices makeStartEnd(int start, int end)
 }
 
 inline StartEndIndices makeStartEnd(int startAndEnd)
-{ 
+{
     return makeStartEnd(startAndEnd, startAndEnd);
 }
 

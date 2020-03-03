@@ -11,12 +11,12 @@
 
 int main()
 {
-    Defer(getchar());   // Hack to see output at end
+	Defer(getchar());		// Hack to see output at end
 
 #if 1
 	// Desktop setup
 
-	char * filename = "C:/Users/Andrew/Desktop/lang/lang/test.meek";	// TODO: Read this in from command line
+	char * filename = "W:/examples/test.meek";		// TODO: Read this in from command line
 #else
 	// Laptop setup
 
@@ -44,10 +44,10 @@ int main()
 		return 1;
 	}
 
-    // NOTE: Lexeme buffer size is multiplied by 2 to handle worst case scenario where each byte is its own lexeme,
-    //  which gets written into the buffer and then null terminated.
+	// NOTE: Lexeme buffer size is multiplied by 2 to handle worst case scenario where each byte is its own lexeme,
+	//  which gets written into the buffer and then null terminated.
 
-    int lexemeBufferSize = bytesRead * 2;
+	int lexemeBufferSize = bytesRead * 2;
 	char * lexemeBuffer = new char[bytesRead * 2];
 	Defer(delete[] lexemeBuffer);
 
@@ -58,81 +58,82 @@ int main()
 		return 1;
 	}
 
-    Parser parser;
-    if (!init(&parser, &scanner))
-    {
-        reportIceAndExit("Failed to initialize parser");
-        return 1;
-    }
+	Parser parser;
+	if (!init(&parser, &scanner))
+	{
+		reportIceAndExit("Failed to initialize parser");
+		return 1;
+	}
 
-    bool success;
-    AstNode * pAst = parseProgram(&parser, &success);
+	bool success;
+	AstNode * pAst = parseProgram(&parser, &success);
 
-    if (!success)
-    {
+	if (!success)
+	{
 		// TODO: Still try to do semantic analysis on non-erroneous parts of the program so that we can report better errors?
 
 		reportScanAndParseErrors(parser);
-        return 1;
-    }
+		return 1;
+	}
 
-    bool allTypesResolved = tryResolveAllPendingTypesIntoTypeTable(&parser);
+	bool allTypesResolved = tryResolveAllPendingTypesIntoTypeTable(&parser);
 	bool allFuncSymbolsResolved = tryResolvePendingFuncSymbolsAfterTypesResolved(&parser.symbTable);
 
-    if (!allTypesResolved)
-    {
-        printf("Unable to resolve following type(s):\n");
+	if (!allTypesResolved)
+	{
+		printf("Unable to resolve following type(s):\n");
 
-        for (int i = 0; i < parser.typeTable.typesPendingResolution.cItem; i++)
-        {
-            Type * pType = parser.typeTable.typesPendingResolution[i].pType;
+		for (int i = 0; i < parser.typeTable.typesPendingResolution.cItem; i++)
+		{
+			Type * pType = parser.typeTable.typesPendingResolution[i].pType;
 
-            if (pType->isFuncType)
-            {
-                printf("(skipping func type)\n");
-            }
-            else
-            {
-                printf("%s\n", pType->ident.pToken->lexeme);
-            }
-        }
+			if (pType->isFuncType)
+			{
+				printf("(skipping func type)\n");
+			}
+			else
+			{
+				printf("%s\n", pType->ident.pToken->lexeme);
+			}
+		}
 
-        return 1;
-    }
+		return 1;
+	}
 
-    if (!allFuncSymbolsResolved)
-    {
-        printf("Couldn't resolve all func symbols\n");
-        return 1;
-    }
+	if (!allFuncSymbolsResolved)
+	{
+		printf("Couldn't resolve all func symbols\n");
+		return 1;
+	}
 
-    ResolvePass resolvePass;
-    init(&resolvePass);
-    resolvePass.pSymbTable = &parser.symbTable;
-    resolvePass.pTypeTable = &parser.typeTable;
-    doResolvePass(&resolvePass, pAst);
+	ResolvePass resolvePass;
+	init(&resolvePass);
+	resolvePass.pSymbTable = &parser.symbTable;
+	resolvePass.pTypeTable = &parser.typeTable;
+	doResolvePass(&resolvePass, pAst);
 
-    printf("Resolve pass all done\n");
+	printf("Resolve pass all done\n");
 
-    printf("\n\n");
-    debugPrintSymbolTable(parser.symbTable);
-#if DEBUG && 0
-    /*DebugPrintCtx debugPrintCtx;
-    init(&debugPrintCtx.mpLevelSkip);
-    debugPrintCtx.pTypeTable = &parser.typeTable;
+	printf("\n\n");
+	debugPrintSymbolTable(parser.symbTable);
 
-    debugPrintAst(&debugPrintCtx, *pAst);*/
+#if DEBUG && 1
+	DebugPrintCtx debugPrintCtx;
+	init(&debugPrintCtx.mpLevelSkip);
+	debugPrintCtx.pTypeTable = &parser.typeTable;
+
+	debugPrintAst(&debugPrintCtx, *pAst);
 
 
-    printf("\n");
-    if (parser.hadError)
-    {
-        printf("Parse had error(s)!\n");
-    }
-    else
-    {
-        printf("No parse errors :)\n");
-    }
+	printf("\n");
+	if (parser.apErrorNodes.cItem > 0)
+	{
+		printf("Parse had error(s)!\n");
+	}
+	else
+	{
+		printf("No parse errors :)\n");
+	}
 
 #endif
 }

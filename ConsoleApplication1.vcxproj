@@ -58,6 +58,9 @@
     <ClCompile Include="src\token.cpp" />
     <ClCompile Include="src\type.cpp" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="examples\test.meek" />
+  </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{FAFEABCC-FEA7-4798-B916-7C0B7955B4EC}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>

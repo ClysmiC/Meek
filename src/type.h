@@ -26,6 +26,11 @@ struct TypeModifier
 	//	and after typechecking those expressions should all be resolved to ints.
 
 	TYPEMODK typemodk;
+
+	// TODO: I really hate that we are hiding part of the AST away in this random-ass type modifier struct.
+	//	I think I should restructure it so that there is a special AST group node called AstTypeDescriptionGrp.
+	//	Then, instead of an array of modifiers we can just chain the AST nodes together.
+
 	AstNode * pSubscriptExpr = nullptr;		// Only valid if TYPEMODK_Array
 };
 
@@ -61,8 +66,7 @@ bool isFuncTypeResolved(const FuncType & funcType);
 
 inline bool isTypeResolved(TYPID typid)
 {
-    return
-        typid >= TYPID_ActualTypesStart;
+    return typid >= TYPID_ActualTypesStart;
 }
 
 bool typeEq(const Type & t0, const Type & t1);
@@ -96,11 +100,16 @@ inline bool typidEq(const TYPID & typid0, const TYPID & typid1)
 }
 
 
-struct TypePendingResolution
+struct TypePendingResolve
 {
+	// Info we need to resolve the type
+
 	Stack<Scope> scopeStack;
 	Type * pType;
-	TYPID * pTypidUpdateWhenResolved;
+
+	// Typid value to poke into corresponding AST node when we succeed resolving
+
+	TYPID * pTypidUpdateOnResolve;
 };
 
 // Life-cycle of a type
@@ -119,7 +128,7 @@ struct TypeTable
 	// Due to order independence of certain types of declarations, unresolved types are put in
 	//	a "pending" list which gets resolved at a later time.
 
-	DynamicArray<TypePendingResolution> typesPendingResolution;
+	DynamicArray<TypePendingResolve> typesPendingResolution;
 
     TYPID typidNext = TYPID_ActualTypesStart;
 };
@@ -132,10 +141,10 @@ const Type * lookupType(const TypeTable & table, TYPID typid);
 TYPID ensureInTypeTable(TypeTable * pTable, const Type & type, bool debugAssertIfAlreadyInTable=false);
 
 bool tryResolveType(Type * pType, const SymbolTable & symbolTable, const Stack<Scope> & scopeStack);
-TYPID resolveIntoTypeTableOrSetPending(
-	Parser * pParser,
-	Type * pType,
-	TypePendingResolution ** ppoTypePendingResolution);
+//TYPID resolveIntoTypeTableOrSetPending(
+//	Parser * pParser,
+//	Type * pType,
+//	TypePendingResolve ** ppoTypePendingResolution);
 
 bool tryResolveAllPendingTypesIntoTypeTable(Parser * pParser);
 

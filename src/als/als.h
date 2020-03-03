@@ -12,6 +12,13 @@
 #include "macro.h"
 #include "common.h"
 
+
+// Use this to document pointers in struct definitions and function declarations that are allowed to be null.
+//	If this is omitted, you can assume the pointer is never null after initialization.
+//	This is an experiment, since I am considering a similar feature for my language.
+
+#define NULLABLE
+
 // Flip this on if you need to debug heap corruption!
 
 #define DEBUG_HEAP_CORRUPTION 0
