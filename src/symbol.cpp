@@ -206,7 +206,7 @@ bool tryInsert(
         // NOTE: If func parameter types are not yet resolved, we can't check for overload duplication,
 		//	so we add it to a list to be resolved after all type params get resolved.
         
-        if (!areVarDeclListTypesFullyResolved(*paramVarDecls(*pFuncDefnStmt)))
+        if (!areVarDeclListTypesFullyResolved(pFuncDefnStmt->pParamsReturnsGrp->apParamVarDecls))
         {
             FuncSymbolPendingResolution * pPending = appendNew(&pSymbolTable->funcSymbolsPendingResolution);
             init(pPending, symbInfo, scopeStack);
@@ -229,7 +229,7 @@ bool tryInsert(
 
 				AstFuncDefnStmt * pFuncDefnStmtOther = pSymbInfoCandidate->pFuncDefnStmt;
 
-				if (areVarDeclListTypesEq(*paramVarDecls(*pFuncDefnStmt), *paramVarDecls(*pFuncDefnStmtOther)))
+				if (areVarDeclListTypesEq(pFuncDefnStmt->pParamsReturnsGrp->apParamVarDecls, pFuncDefnStmtOther->pParamsReturnsGrp->apParamVarDecls))
 				{
 					// Duplicate
 
@@ -250,8 +250,7 @@ bool tryInsert(
 
         // Add sequence id to AST node
 
-        auto * pFuncDefnHeaderGrp = Down(symbInfo.pFuncDefnStmt->pFuncDefnHeaderGrp, FuncDefnHeaderGrp);
-        pFuncDefnHeaderGrp->symbseqid = pSymbolTable->symbseqidNext;
+		symbInfo.pFuncDefnStmt->symbseqid = pSymbolTable->symbseqidNext;
         pSymbolTable->symbseqidNext = static_cast<SYMBSEQID>(pSymbolTable->symbseqidNext + 1);
 
         // Insert into table
@@ -503,8 +502,8 @@ void debugPrintSymbolTable(const SymbolTable & symbTable)
 		    Assert(pSymbInfo->symbolk == SYMBOLK_Func);
 
             AstFuncDefnStmt * pFuncDefnStmt = Down(pSymbInfo->pFuncDefnStmt, FuncDefnStmt);
-            DynamicArray<AstNode *> * papParamVarDecls = paramVarDecls(*pFuncDefnStmt);
-            DynamicArray<AstNode *> * papReturnVarDecls = returnVarDecls(*pFuncDefnStmt);
+            DynamicArray<AstNode *> * papParamVarDecls = &pFuncDefnStmt->pParamsReturnsGrp->apParamVarDecls;
+            DynamicArray<AstNode *> * papReturnVarDecls = &pFuncDefnStmt->pParamsReturnsGrp->apReturnVarDecls;
 
             if (paSymbInfo->cItem > 1)
             {

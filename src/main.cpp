@@ -11,7 +11,7 @@
 
 int main()
 {
-	Defer(getchar());		// Hack to see output at end
+	Defer(char c = getchar());		// Hack to see output at end
 
 #if 1
 	// Desktop setup
@@ -31,7 +31,7 @@ int main()
 	FILE * file = fopen(filename, "rb");
 	Defer(if (file) fclose(file));
 
-	int bytesRead = file ? fread(buffer, 0x1, bufferSize, file) : -1;
+	u64 bytesRead = file ? fread(buffer, 0x1, bufferSize, file) : -1;
 
 	if (bytesRead < 0)
 	{
@@ -47,12 +47,12 @@ int main()
 	// NOTE: Lexeme buffer size is multiplied by 2 to handle worst case scenario where each byte is its own lexeme,
 	//  which gets written into the buffer and then null terminated.
 
-	int lexemeBufferSize = bytesRead * 2;
+	u64 lexemeBufferSize = bytesRead * 2;
 	char * lexemeBuffer = new char[bytesRead * 2];
 	Defer(delete[] lexemeBuffer);
 
 	Scanner scanner;
-	if (!init(&scanner, buffer, bytesRead, lexemeBuffer, lexemeBufferSize))
+	if (!init(&scanner, buffer, bytesRead, lexemeBuffer, (uint)lexemeBufferSize))
 	{
 		reportIceAndExit("Failed to initialize scanner");
 		return 1;

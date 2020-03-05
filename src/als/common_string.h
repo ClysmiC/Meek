@@ -76,7 +76,13 @@ inline void ensureCapacity(String * pStr, int requestedCapacity)
 	else
 	{
 		ALS_COMMON_STRING_Assert(pStr->pBuffer);
-		pStr->pBuffer = static_cast<char *>(realloc(pStr->pBuffer, actualRequestCapacity * sizeof(char)));
+		char * pBufferReallocd = static_cast<char *>(realloc(pStr->pBuffer, actualRequestCapacity * sizeof(char)));
+		if (!pBufferReallocd)
+		{
+			ALS_COMMON_STRING_Assert(false);		// Realloc failed! TODO (andrew) How to handle this?
+		}
+
+		pStr->pBuffer = pBufferReallocd;
 	}
 
 	pStr->capacity = newCapacity;

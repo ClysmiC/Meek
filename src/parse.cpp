@@ -1616,12 +1616,12 @@ AstErr * tryParseFuncHeader(Parser * pParser, const ParseFuncHeaderParam & param
 				{
 					if (param.paramk == PARAMK_Param)
 					{
-						append(&param.paramDefn.pioNode->apParamVarDecls, pNode);
+						append(&param.paramDefn.pioNode->pParamsReturnsGrp->apParamVarDecls, pNode);
 					}
 					else
 					{
 						Assert(param.paramk == PARAMK_Return);
-						append(&param.paramDefn.pioNode->apReturnVarDecls, pNode);
+						append(&param.paramDefn.pioNode->pParamsReturnsGrp->apReturnVarDecls, pNode);
 					}
 				}
 				else
@@ -1630,12 +1630,12 @@ AstErr * tryParseFuncHeader(Parser * pParser, const ParseFuncHeaderParam & param
 
 					if (param.paramk == PARAMK_Param)
 					{
-						append(&param.paramLiteral.pioNode->apParamVarDecls, pNode);
+						append(&param.paramLiteral.pioNode->pParamsReturnsGrp->apParamVarDecls, pNode);
 					}
 					else
 					{
 						Assert(param.paramk == PARAMK_Return);
-						append(&param.paramLiteral.pioNode->apReturnVarDecls, pNode);
+						append(&param.paramLiteral.pioNode->pParamsReturnsGrp->apReturnVarDecls, pNode);
 					}
 				}
 			}
@@ -2415,8 +2415,6 @@ AstNode * finishParsePrimary(Parser * pParser, AstNode * pExpr)
 
 AstNode * parseFuncDefnStmtOrLiteralExpr(Parser * pParser, FUNCHEADERK funcheaderk)
 {
-	TODO START HERE!
-
 	Assert(funcheaderk == FUNCHEADERK_Defn || funcheaderk == FUNCHEADERK_Literal);
 
 	bool success = false;
@@ -2426,46 +2424,86 @@ AstNode * parseFuncDefnStmtOrLiteralExpr(Parser * pParser, FUNCHEADERK funcheade
 
 	// Parse header
 	
-	// NOTE: Push scope before parsing header so that the symbols declared in the header
+	// NOTE (andrew) Push scope before parsing header so that the symbols declared in the header
 	//	are subsumed by the function's scope.
 
 	pushScope(pParser, SCOPEK_CodeBlock);
-	Defer(if (!success) popScope(pParser));		// NOTE: In success case we pop it manually before inserting into symbol table
 
-	//ScopedIdentifier identDefn;		// Only valid if isDefn
-	//DynamicArray<AstNode *> apParamVarDecl;
-	//DynamicArray<AstNode *> apReturnVarDecl;
-	//init(&apParamVarDecl);
-	//init(&apReturnVarDecl);
+	ParseFuncHeaderParam parseFuncHeaderParam;
+	parseFuncHeaderParam.funcheaderk = funcheaderk;
 
-	bool hadErrorButRecovered;
-	AstNode * pFuncHeaderGrp = parseFuncHeaderGrp(pParser, funcheaderk, &hadErrorButRecovered);
-	if (isErrorNode(*pFuncHeaderGrp))
+	// NOTE (andrew) We break our normal pattern and allocate the node eagerly here because parseFuncHeaderGrp
+	//	needs the node to fill its info out. We are responsible for the cleanup if we hit any errors.
+
+	AstNode * pNodeUnderConstruction = nullptr;
+	AstParamsReturnsGrp * pParamsReturnsUnderConstruction = nullptr;
 	{
-		success = false;
-		auto * pErr = AstNewErr0Child(pParser, BubbleErr, gc_startEndBubble);
-		return Up(pErr);
+		StartEndIndices startEndPlaceholder(-1, -1);
+
+		pParamsReturnsUnderConstruction = AstNew(pParser, ParamsReturnsGrp, startEndPlaceholder);;
+		init(&pParamsReturnsUnderConstruction->apParamVarDecls);
+		init(&pParamsReturnsUnderConstruction->apReturnVarDecls);
+
+		if (isDefn)
+		{
+			auto pDefnNodeUnderConstruction = AstNew(pParser, FuncDefnStmt, startEndPlaceholder);
+			pDefnNodeUnderConstruction->pParamsReturnsGrp = pParamsReturnsUnderConstruction;
+		}
+		else
+		{
+			auto pLiteralNodeUnderConstruction = AstNew(pParser, FuncLiteralExpr, startEndPlaceholder);
+			pLiteralNodeUnderConstruction->pParamsReturnsGrp = pParamsReturnsUnderConstruction;
+		}
 	}
+
+	Defer(
+		// TODO (andrew) Make sure that the param and return vardecls aren't leaking here. Ideally they should
+		//	be parented to whatever error node we return from this function, but I kind of punted on that.
+		//	I think I am going to rewrite the error node system anyways by simply maintaining a list of
+		//	orphaned subtrees in the parser instead of storing them in-place where the nodes should be.
+		//	That should fix this TODO.
+
+		if (!success)
+		{
+			dispose(&pParamsReturnsUnderConstruction->apParamVarDecls);
+			dispose(&pParamsReturnsUnderConstruction->apReturnVarDecls);
+			release(&pParser->astAlloc, Up(pParamsReturnsUnderConstruction));
+			release(&pParser->astAlloc, pNodeUnderConstruction);
+
+			popScope(pParser);
+		}
+	);
+
+	AstErr * pAstErr = tryParseFuncHeader(pParser, parseFuncHeaderParam);
+	if (pAstErr)
+	{
+		return Up(pAstErr);
+	}
+
+	int iEndHeader = prevTokenStartEnd(pParser->pScanner).iEnd;
+	decorate(&pParser->astDecs.startEndDecoration, Up(pParamsReturnsUnderConstruction)->astid, StartEndIndices(iStart, iEndHeader));
 
 	// Parse { <stmts> } or do <stmt>
 
-	bool pushPopScope = false;
+	const bool pushPopScope = false;
 	AstNode * pBody = parseDoStmtOrBlockStmt(pParser, pushPopScope);
 
 	if (isErrorNode(*pBody))
 	{
-		success = false;
-		auto * pErr = AstNewErr1Child(pParser, BubbleErr, gc_startEndBubble, pFuncHeaderGrp);
+		auto * pErr = AstNewErr0Child(pParser, BubbleErr, gc_startEndBubble);
 		return Up(pErr);
 	}
 
-	success = true;
+	// Success!
+
+	// Replace our start/end placeholder
+
 	int iEnd = prevTokenStartEnd(pParser->pScanner).iEnd;
+	decorate(&pParser->astDecs.startEndDecoration, pNodeUnderConstruction->astid, StartEndIndices(iStart, iEnd));
 
 	if (!isDefn)
 	{
-		auto * pNode = AstNew(pParser, FuncLiteralExpr, makeStartEnd(iStart, iEnd));
-		pNode->pFuncLiteralHeaderGrp = pFuncHeaderGrp;
+		AstFuncLiteralExpr * pNode = Down(pNodeUnderConstruction, FuncLiteralExpr);
 		pNode->pBodyStmt = pBody;
 		pNode->scopeid = peekScope(pParser).id;
 
@@ -2473,26 +2511,22 @@ AstNode * parseFuncDefnStmtOrLiteralExpr(Parser * pParser, FUNCHEADERK funcheade
 	}
 	else
 	{
-		auto * pNode = AstNew(pParser, FuncDefnStmt, makeStartEnd(iStart, iEnd));
-		pNode->pFuncDefnHeaderGrp = pFuncHeaderGrp;
+		AstFuncDefnStmt * pNode = Down(pNodeUnderConstruction, FuncDefnStmt);
 		pNode->pBodyStmt = pBody;
 		pNode->scopeid = peekScope(pParser).id;
 
-
 		popScope(pParser);
 
-		if (!hadErrorButRecovered)
-		{
-			// Insert into symbol table (pop first so the scope stack doesn't include the scope that the function itself pushed)
-			// TODO: Even if we had an error but recovered, we *know* the symbol name -- so we should probably insert some sort of
-			//  special value to prevent unresolved symbol errors.
+		// Insert into symbol table (pop first so the scope stack doesn't include the scope that the function itself pushed)
+		// TODO (andrew): Should place this in the symbol table before parsing body so that we can get it in even if the body has
+		//	errors. If doing that need to make sure we have the right scope id! Since we need to push a scope id for the parameters,
+		//	then would have to pop out for the fn name and then go back into the originially pushed scope for the fn body!
 
-			ScopedIdentifier ident = Down(pFuncHeaderGrp, FuncDefnHeaderGrp)->ident;
+		ScopedIdentifier ident = pNode->ident;
 
-			SymbolInfo funcDefnInfo;
-			setSymbolInfo(&funcDefnInfo, ident, SYMBOLK_Func, Up(pNode));
-			tryInsert(&pParser->symbTable, ident, funcDefnInfo, pParser->scopeStack);
-		}
+		SymbolInfo funcDefnInfo;
+		setSymbolInfo(&funcDefnInfo, ident, SYMBOLK_Func, Up(pNode));
+		tryInsert(&pParser->symbTable, ident, funcDefnInfo, pParser->scopeStack);
 
 		return Up(pNode);
 	}

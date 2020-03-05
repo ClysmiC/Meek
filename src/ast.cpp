@@ -2,37 +2,6 @@
 
 #include "error.h"
 
-DynamicArray<AstNode *> * paramVarDecls(const AstFuncDefnStmt & stmt)
-{
-	return &Down(Down(stmt.pFuncDefnHeaderGrp, FuncDefnHeaderGrp)->pParamListGrp, ParamListGrp)->apVarDecls;
-}
-
-DynamicArray<AstNode *> * paramVarDecls(const AstFuncLiteralExpr & expr)
-{
-    return &Down(Down(expr.pFuncLiteralHeaderGrp, FuncDefnHeaderGrp)->pParamListGrp, ParamListGrp)->apVarDecls;
-}
-
-DynamicArray<AstNode *> * returnVarDecls(const AstFuncDefnStmt & stmt)
-{
-    return &Down(Down(stmt.pFuncDefnHeaderGrp, FuncDefnHeaderGrp)->pReturnListGrp, ParamListGrp)->apVarDecls;
-}
-
-
-DynamicArray<AstNode *> * returnVarDecls(const AstFuncLiteralExpr & expr)
-{
-    return &Down(Down(expr.pFuncLiteralHeaderGrp, FuncDefnHeaderGrp)->pReturnListGrp, ReturnListGrp)->apVarDecls;
-}
-
-ScopedIdentifier * ident(const AstFuncDefnStmt & stmt)
-{
-    return &Down(stmt.pFuncDefnHeaderGrp, FuncDefnHeaderGrp)->ident;
-}
-
-SYMBSEQID * symbseqid(const AstFuncDefnStmt & stmt)
-{
-    return &Down(stmt.pFuncDefnHeaderGrp, FuncDefnHeaderGrp)->symbseqid;
-}
-
 int intValue(AstLiteralExpr * pLiteralExpr)
 {
 	Assert(pLiteralExpr->literalk == LITERALK_Int);
