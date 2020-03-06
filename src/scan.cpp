@@ -87,21 +87,6 @@ TOKENK prevToken(Scanner * pScanner, Token * poToken, uint lookbehind)
 	return pToken->tokenk;
 }
 
-// bool tryPeekTokenSequence(Scanner * pScanner, const TOKENK * aSequence, int cSequence)
-// {
-//     Assert(cSequence < pScanner->peekBuffer.s_capacity);
-
-//     for (int i = 0; i < cSequence; i++)
-//     {
-//         TOKENK tokenkSequence = aSequence[i];
-//         TOKENK tokenk = peekToken(pScanner, nullptr, i);
-
-//         if (tokenk != tokenkSequence) return false;
-//     }
-
-//     return true;
-// }
-
 StartEndIndices peekTokenStartEnd(Scanner * pScanner, uint lookahead)
 {
 	Token throwaway;
