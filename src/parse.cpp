@@ -69,7 +69,6 @@ AstNode * parseProgram(Parser * pParser, bool * poSuccess)
 	Defer(AssertInfo(!apNodes.pBuffer, "Should be moved into program AST node"));
 
 	StartEndIndices startEnd;
-	bool isFirstNode = true;
 
 	while (!isFinished(pParser->pScanner) && peekToken(pParser->pScanner) != TOKENK_Eof)
 	{
@@ -77,18 +76,11 @@ AstNode * parseProgram(Parser * pParser, bool * poSuccess)
 
 		if (isErrorNode(*pNode))
 		{
-			// NOTE: should move this recoverFromPanic to the parseXXXStmt functions
-			//	themselves. Otherwise errors will always bubble up to here which is
-			//	inconsistent with how they behave in expression contexts.
-
-			// bool recovered = tryRecoverFromPanic(pParser, TOKENK_Semicolon);
-
-			// Assert(Implies(!recovered, isFinished(pParser->pScanner)));
-
-			Assert(false);		// TODO: handle
+			bool recovered = tryRecoverFromPanic(pParser, TOKENK_Semicolon);
+			Assert(Implies(!recovered, isFinished(pParser->pScanner)));
 		}
 
-		if (isFirstNode)
+		if (apNodes.cItem == 0)
 		{
 			auto startEndNode = getStartEnd(pParser->astDecs, pNode->astid);
 			startEnd.iStart = startEndNode.iStart;
@@ -101,8 +93,6 @@ AstNode * parseProgram(Parser * pParser, bool * poSuccess)
 		}
 
 		append(&apNodes, pNode);
-
-		isFirstNode = false;
 	}
 
 	auto * pNodeProgram = AstNew(pParser, Program, startEnd);
@@ -522,8 +512,6 @@ AstNode * parseStructDefnStmt(Parser * pParser)
 					continue;
 				}
 			}
-
-			Assert(apVarDeclStmt.cItem > 0);
 
 			auto * pErr = AstNewErrListChildMove(pParser, BubbleErr, gc_startEndBubble, &apVarDeclStmt);
 			return Up(pErr);
@@ -1285,8 +1273,6 @@ ParseTypeResult tryParseType(Parser * pParser)
 	// NOTE; Since all nodes are stored in papNodeChildren, error nodes do not need to attach any children. It is the
 	//	responsibility of the caller to add papNodeChildren to a bubble error if we return false
 
-	// bool recoveredFromPanic = false;
-
 	while (peekToken(pParser->pScanner) != TOKENK_Identifier &&
 		   peekToken(pParser->pScanner) != TOKENK_Fn)
 	{
@@ -1302,20 +1288,6 @@ ParseTypeResult tryParseType(Parser * pParser)
 				result.success = false;
 				result.pErr = pSubscriptExpr;
 				return result;
-
-				//if (tryRecoverFromPanic(pParser, TOKENK_CloseBracket))
-				//{
-				//	// Embed error in pSubscriptExpr
-
-				//	recoveredFromPanic = true;
-				//	goto arrayTypeEnd;
-				//}
-				//else
-				//{
-				//	// Couldn't recover
-
-				//	return PARSETYPERESULT_ParseFailed;
-				//}
 			}
 
 			if (!tryConsumeToken(pParser->pScanner, TOKENK_CloseBracket))
@@ -1329,22 +1301,6 @@ ParseTypeResult tryParseType(Parser * pParser)
 				result.success = false;
 				result.pErr = pSubscriptExpr;
 				return result;
-
-				//if (tryRecoverFromPanic(pParser, TOKENK_CloseBracket))
-				//{
-				//	// Embed error in pSubscriptExpr
-
-				//	recoveredFromPanic = true;
-				//	append(&UpErr(pErr)->apChildren, pSubscriptExpr);
-				//	pSubscriptExpr = Up(pErr);
-				//	goto arrayTypeEnd;
-				//}
-				//else
-				//{
-				//	// Couldn't recover
-
-				//	return PARSETYPERESULT_ParseFailed;
-				//}
 			}
 
 			TypeModifier mod;
@@ -2417,7 +2373,6 @@ AstNode * parseFuncDefnStmtOrLiteralExpr(Parser * pParser, FUNCHEADERK funcheade
 {
 	Assert(funcheaderk == FUNCHEADERK_Defn || funcheaderk == FUNCHEADERK_Literal);
 
-	bool success = false;
 	bool isDefn = (funcheaderk == FUNCHEADERK_Defn);
 
 	int iStart = peekTokenStartEnd(pParser->pScanner).iStart;
@@ -2462,28 +2417,11 @@ AstNode * parseFuncDefnStmtOrLiteralExpr(Parser * pParser, FUNCHEADERK funcheade
 		}
 	}
 
-	Defer(
-		// TODO (andrew) Make sure that the param and return vardecls aren't leaking here. Ideally they should
-		//	be parented to whatever error node we return from this function, but I kind of punted on that.
-		//	I think I am going to rewrite the error node system anyways by simply maintaining a list of
-		//	orphaned subtrees in the parser instead of storing them in-place where the nodes should be.
-		//	That should fix this TODO.
-
-		if (!success)
-		{
-			dispose(&pParamsReturnsUnderConstruction->apParamVarDecls);
-			dispose(&pParamsReturnsUnderConstruction->apReturnVarDecls);
-			release(&pParser->astAlloc, Up(pParamsReturnsUnderConstruction));
-			release(&pParser->astAlloc, pNodeUnderConstruction);
-
-			popScope(pParser);
-		}
-	);
-
-	AstErr * pAstErr = tryParseFuncHeader(pParser, parseFuncHeaderParam);
-	if (pAstErr)
+	AstErr * pErr = tryParseFuncHeader(pParser, parseFuncHeaderParam);
+	if (pErr)
 	{
-		return Up(pAstErr);
+		pErr = UpErr(AstNewErr1Child(pParser, BubbleErr, gc_startEndBubble, Up(pErr)));
+		goto LFailCleanup;
 	}
 
 	int iEndHeader = prevTokenStartEnd(pParser->pScanner).iEnd;
@@ -2496,13 +2434,11 @@ AstNode * parseFuncDefnStmtOrLiteralExpr(Parser * pParser, FUNCHEADERK funcheade
 
 	if (isErrorNode(*pBody))
 	{
-		auto * pErr = AstNewErr0Child(pParser, BubbleErr, gc_startEndBubble);
-		return Up(pErr);
+		pErr = UpErr(AstNewErr1Child(pParser, BubbleErr, gc_startEndBubble, pBody));
+		goto LFailCleanup;
 	}
 
 	// Success!
-
-	success = true;
 
 	// Replace our start/end placeholder
 
@@ -2540,6 +2476,20 @@ AstNode * parseFuncDefnStmtOrLiteralExpr(Parser * pParser, FUNCHEADERK funcheade
 
 		return Up(pNode);
 	}
+
+LFailCleanup:
+	Assert(pErr);
+	appendMultiple(&pErr->apChildren, pParamsReturnsUnderConstruction->apParamVarDecls);
+	appendMultiple(&pErr->apChildren, pParamsReturnsUnderConstruction->apReturnVarDecls);
+
+	dispose(&pParamsReturnsUnderConstruction->apParamVarDecls);
+	dispose(&pParamsReturnsUnderConstruction->apReturnVarDecls);
+	release(&pParser->astAlloc, Up(pParamsReturnsUnderConstruction));
+	release(&pParser->astAlloc, pNodeUnderConstruction);
+
+	popScope(pParser);
+
+	return Up(pErr);
 }
 
 AstNode * handleScanOrUnexpectedTokenkErr(Parser * pParser, DynamicArray<AstNode *> * papChildren)
@@ -2808,14 +2758,6 @@ AstNode * astNewErr(Parser * pParser, ASTK astkErr, StartEndIndices startEnd, As
 		if (!hasErrorChild)
 		{
 			AssertInfo(false, "Bubble child by definition should have 1 or more error child(ren)");
-		}
-		else if (pNode->apChildren.cItem == 1)
-		{
-			// NOTE (andrew) We might actually want to allow this if there is any situation where it makes sense.
-			//	I am putting the assert here for now but if I hit it in a reasonable situation I'd be okay
-			//	removing it.
-
-			AssertInfo(false, "Why are we creating a bubble error with 1 child? Shouldn't we just return that error child directly?");
 		}
 	}
 #endif

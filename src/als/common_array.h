@@ -291,6 +291,12 @@ void appendMultiple(DynamicArray<T> * pArray, const T aT[], int cT)
 }
 
 template <typename T>
+void appendMultiple(DynamicArray<T> * pArray, DynamicArray<T> & arrayToAppend)
+{
+	appendMultiple(pArray, arrayToAppend.pBuffer, arrayToAppend.cItem);
+}
+
+template <typename T>
 void prepend(DynamicArray<T> * pArray, const T & t)
 {
 	// Slowest way to insert

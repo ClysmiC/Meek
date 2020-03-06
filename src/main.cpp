@@ -48,7 +48,7 @@ int main()
 	//  which gets written into the buffer and then null terminated.
 
 	int lexemeBufferSize = bytesRead * 2;
-	char * lexemeBuffer = new char[bytesRead * 2];
+	char * lexemeBuffer = new char[(u64)bytesRead * 2];
 	Defer(delete[] lexemeBuffer);
 
 	Scanner scanner;
