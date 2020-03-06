@@ -16,7 +16,7 @@ int main()
 #if 1
 	// Desktop setup
 
-	char * filename = "W:/examples/test.meek";		// TODO: Read this in from command line
+	char * filename = "W:/Meek/examples/test.meek";		// TODO: Read this in from command line
 #else
 	// Laptop setup
 
@@ -31,7 +31,7 @@ int main()
 	FILE * file = fopen(filename, "rb");
 	Defer(if (file) fclose(file));
 
-	u64 bytesRead = file ? fread(buffer, 0x1, bufferSize, file) : -1;
+	int bytesRead = (int)(file ? fread(buffer, 0x1, bufferSize, file) : -1);
 
 	if (bytesRead < 0)
 	{
@@ -47,12 +47,12 @@ int main()
 	// NOTE: Lexeme buffer size is multiplied by 2 to handle worst case scenario where each byte is its own lexeme,
 	//  which gets written into the buffer and then null terminated.
 
-	u64 lexemeBufferSize = bytesRead * 2;
+	int lexemeBufferSize = bytesRead * 2;
 	char * lexemeBuffer = new char[bytesRead * 2];
 	Defer(delete[] lexemeBuffer);
 
 	Scanner scanner;
-	if (!init(&scanner, buffer, bytesRead, lexemeBuffer, (uint)lexemeBufferSize))
+	if (!init(&scanner, buffer, bytesRead, lexemeBuffer, lexemeBufferSize))
 	{
 		reportIceAndExit("Failed to initialize scanner");
 		return 1;

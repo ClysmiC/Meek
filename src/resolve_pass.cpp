@@ -365,7 +365,7 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 
 						AstFuncDefnStmt * pFuncDefnStmt = pSymbInfoCandidate->pFuncDefnStmt;
 
-						if (areTypidListAndVarDeclListTypesEq(aTypidArg, *paramVarDecls(*pFuncDefnStmt)))
+						if (areTypidListAndVarDeclListTypesEq(aTypidArg, pFuncDefnStmt->pParamsReturnsGrp->apParamVarDecls))
 						{
 							pFuncDefnStmtMatch = pFuncDefnStmt;
 							break;
@@ -381,7 +381,7 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 						goto end;
 					}
 
-                    auto * papReturnVarDecls = returnVarDecls(*pFuncDefnStmtMatch);
+                    auto * papReturnVarDecls = &pFuncDefnStmtMatch->pParamsReturnsGrp->apReturnVarDecls;
 					if (papReturnVarDecls->cItem == 0)
 					{
 						typidResult = TYPID_Void;
@@ -420,13 +420,13 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 			push(&pPass->scopeStack, scope);
 			Defer(pop(&pPass->scopeStack));
 
-            auto * papParamVarDecls = paramVarDecls(*pExpr);
+            auto * papParamVarDecls = &pExpr->pParamsReturnsGrp->apParamVarDecls;
 			for (int i = 0; i < papParamVarDecls->cItem; i++)
 			{
 				doResolvePass(pPass, (*papParamVarDecls)[i]);
 			}
 
-            auto * papReturnVarDecls = returnVarDecls(*pExpr);
+            auto * papReturnVarDecls = &pExpr->pParamsReturnsGrp->apReturnVarDecls;
 			for (int i = 0; i < papReturnVarDecls->cItem; i++)
 			{
 				doResolvePass(pPass, (*papReturnVarDecls)[i]);
@@ -586,7 +586,7 @@ void resolveStmt(ResolvePass * pPass, AstNode * pNode)
                 // Verify assumptions
 
                 DynamicArray<SymbolInfo> * paSymbInfo;
-                paSymbInfo = lookupFuncSymb(*pPass->pSymbTable, *ident(*pStmt));
+                paSymbInfo = lookupFuncSymb(*pPass->pSymbTable, pStmt->ident);
 
                 AssertInfo(paSymbInfo && paSymbInfo->cItem > 0, "We should have put this func decl in the symbol table when we parsed it...");
                 bool found = false;
@@ -609,8 +609,8 @@ void resolveStmt(ResolvePass * pPass, AstNode * pNode)
 
 			// Record sequence id
 
-			Assert(*symbseqid(*pStmt) != SYMBSEQID_Unset);
-			pPass->lastSymbseqid = *symbseqid(*pStmt);
+			Assert(pStmt->symbseqid != SYMBSEQID_Unset);
+			pPass->lastSymbseqid = pStmt->symbseqid;
 
 			// Record scope id
 
@@ -623,7 +623,7 @@ void resolveStmt(ResolvePass * pPass, AstNode * pNode)
 
 			// Resolve params
 
-            auto * papParamVarDecls = paramVarDecls(*pStmt);
+            auto * papParamVarDecls = &pStmt->pParamsReturnsGrp->apParamVarDecls;
 			for (int i = 0; i < papParamVarDecls->cItem; i++)
 			{
 				doResolvePass(pPass, (*papParamVarDecls)[i]);
@@ -631,7 +631,7 @@ void resolveStmt(ResolvePass * pPass, AstNode * pNode)
 
 			// Resolve return values
 
-            auto * papReturnVarDecls = returnVarDecls(*pStmt);
+            auto * papReturnVarDecls = &pStmt->pParamsReturnsGrp->apReturnVarDecls;
 			for (int i = 0; i < papReturnVarDecls->cItem; i++)
 			{
 				doResolvePass(pPass, (*papReturnVarDecls)[i]);

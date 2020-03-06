@@ -105,7 +105,7 @@ inline void init(String * pStr, char * chars)
 		cursor++;
 	}
 
-	pStr->cChar = cursor - chars;
+	pStr->cChar = (int)(cursor - chars);
 	ensureCapacity(pStr, pStr->cChar);
 
 	for (int i = 0; i < pStr->cChar; i++)

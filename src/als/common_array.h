@@ -250,7 +250,7 @@ void ensureCapacity(DynamicArray<T> * pArray, int requestedCapacity)
 		}
 	}
 
-	char * pBufferReallocd = static_cast<T *>(realloc(pArray->pBuffer, newCapacity * sizeof(T)));
+	T * pBufferReallocd = static_cast<T *>(realloc(pArray->pBuffer, newCapacity * sizeof(T)));
 	if (!pBufferReallocd)
 	{
 		ALS_COMMON_ARRAY_Assert(false);		// Realloc failed! TODO (andrew) How to handle this?

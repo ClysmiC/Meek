@@ -575,7 +575,12 @@ void debugPrintSubAst(DebugPrintCtx * pCtx, const AstNode & node, int level, boo
             printf("\n");
             printTabs(pCtx, levelNext, false, false);
 
-            debugPrintFuncHeader(pCtx, *paramVarDecls(*pStmt), *returnVarDecls(*pStmt), levelNext, false);
+            debugPrintFuncHeader(
+                pCtx,
+                pStmt->pParamsReturnsGrp->apParamVarDecls,
+                pStmt->pParamsReturnsGrp->apReturnVarDecls,
+                levelNext,
+                false);
 
             debugPrintSubAst(pCtx, *pStmt->pBodyStmt, levelNext, true);
         } break;
@@ -704,12 +709,17 @@ void debugPrintSubAst(DebugPrintCtx * pCtx, const AstNode & node, int level, boo
 
             printf("\n");
             printTabs(pCtx, levelNext, true, false);
-            printf("%s", ident(*pStmt)->pToken->lexeme);
+            printf("%s", pStmt->ident.pToken->lexeme);
 
             printf("\n");
             printTabs(pCtx, levelNext, false, false);
 
-            debugPrintFuncHeader(pCtx, *paramVarDecls(*pStmt), *returnVarDecls(*pStmt), levelNext, false);
+            debugPrintFuncHeader(
+                pCtx,
+                pStmt->pParamsReturnsGrp->apParamVarDecls,
+                pStmt->pParamsReturnsGrp->apParamVarDecls,
+                levelNext,
+                false);
 
             debugPrintSubAst(pCtx, *pStmt->pBodyStmt, levelNext, true);
         } break;

@@ -275,7 +275,7 @@ struct AstFuncLiteralExpr
 	AstParamsReturnsGrp * pParamsReturnsGrp;
 	AstNode * pBodyStmt;
 
-    SCOPEID scopeid;
+    SCOPEID scopeid;		// Scope introduced by this func defn
 
 #if 0
 	static constexpr uint s_nodeSizeDebug = sizeof(AstFuncLiteralExpr);

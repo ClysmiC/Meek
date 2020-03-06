@@ -1696,7 +1696,7 @@ AstErr * tryParseFuncHeader(Parser * pParser, const ParseFuncHeaderParam & param
 
 	if (param.funcheaderk == FUNCHEADERK_Defn)
 	{
-		if (!tryConsumeToken(pParser->pScanner, TOKENK_Identifier))
+		if (!tryConsumeToken(pParser->pScanner, TOKENK_Identifier, ensurePendingToken(pParser)))
 		{
 			auto startEndPrev = prevTokenStartEnd(pParser->pScanner);
 
@@ -1705,7 +1705,7 @@ AstErr * tryParseFuncHeader(Parser * pParser, const ParseFuncHeaderParam & param
 			return UpErr(pErr);
 		}
 
-		setIdent(&param.paramDefn.pioNode->ident, claimPendingToken(pParser), peekScope(pParser).id);
+		setIdentNoScope(&param.paramDefn.pioNode->ident, claimPendingToken(pParser));		// Caller manages setting the scope on this ident.
 	}
 	else
 	{
@@ -2446,13 +2446,19 @@ AstNode * parseFuncDefnStmtOrLiteralExpr(Parser * pParser, FUNCHEADERK funcheade
 
 		if (isDefn)
 		{
-			auto pDefnNodeUnderConstruction = AstNew(pParser, FuncDefnStmt, startEndPlaceholder);
+			auto * pDefnNodeUnderConstruction = AstNew(pParser, FuncDefnStmt, startEndPlaceholder);
 			pDefnNodeUnderConstruction->pParamsReturnsGrp = pParamsReturnsUnderConstruction;
+			parseFuncHeaderParam.paramDefn.pioNode = pDefnNodeUnderConstruction;
+
+			pNodeUnderConstruction = Up(pDefnNodeUnderConstruction);
 		}
 		else
 		{
-			auto pLiteralNodeUnderConstruction = AstNew(pParser, FuncLiteralExpr, startEndPlaceholder);
+			auto * pLiteralNodeUnderConstruction = AstNew(pParser, FuncLiteralExpr, startEndPlaceholder);
 			pLiteralNodeUnderConstruction->pParamsReturnsGrp = pParamsReturnsUnderConstruction;
+			parseFuncHeaderParam.paramLiteral.pioNode = pLiteralNodeUnderConstruction;
+
+			pNodeUnderConstruction = Up(pLiteralNodeUnderConstruction);
 		}
 	}
 
@@ -2496,20 +2502,14 @@ AstNode * parseFuncDefnStmtOrLiteralExpr(Parser * pParser, FUNCHEADERK funcheade
 
 	// Success!
 
+	success = true;
+
 	// Replace our start/end placeholder
 
 	int iEnd = prevTokenStartEnd(pParser->pScanner).iEnd;
 	decorate(&pParser->astDecs.startEndDecoration, pNodeUnderConstruction->astid, StartEndIndices(iStart, iEnd));
 
-	if (!isDefn)
-	{
-		AstFuncLiteralExpr * pNode = Down(pNodeUnderConstruction, FuncLiteralExpr);
-		pNode->pBodyStmt = pBody;
-		pNode->scopeid = peekScope(pParser).id;
-
-		return Up(pNode);
-	}
-	else
+	if (isDefn)
 	{
 		AstFuncDefnStmt * pNode = Down(pNodeUnderConstruction, FuncDefnStmt);
 		pNode->pBodyStmt = pBody;
@@ -2522,11 +2522,21 @@ AstNode * parseFuncDefnStmtOrLiteralExpr(Parser * pParser, FUNCHEADERK funcheade
 		//	errors. If doing that need to make sure we have the right scope id! Since we need to push a scope id for the parameters,
 		//	then would have to pop out for the fn name and then go back into the originially pushed scope for the fn body!
 
-		ScopedIdentifier ident = pNode->ident;
+		resolveIdentScope(&pNode->ident, peek(pParser->scopeStack).id);
 
 		SymbolInfo funcDefnInfo;
-		setSymbolInfo(&funcDefnInfo, ident, SYMBOLK_Func, Up(pNode));
-		tryInsert(&pParser->symbTable, ident, funcDefnInfo, pParser->scopeStack);
+		setSymbolInfo(&funcDefnInfo, pNode->ident, SYMBOLK_Func, Up(pNode));
+		tryInsert(&pParser->symbTable, pNode->ident, funcDefnInfo, pParser->scopeStack);
+
+		return Up(pNode);
+	}
+	else
+	{
+		AstFuncLiteralExpr * pNode = Down(pNodeUnderConstruction, FuncLiteralExpr);
+		pNode->pBodyStmt = pBody;
+		pNode->scopeid = peekScope(pParser).id;
+
+		popScope(pParser);
 
 		return Up(pNode);
 	}
