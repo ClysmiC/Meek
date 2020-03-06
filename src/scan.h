@@ -109,7 +109,8 @@ inline bool isLetterOrUnderscore(char c)
 	return c == '_' || isLetter(c);
 }
 
-// SYNC: Switch statement in scanner
+// SYNC: Switch statement in scanner for chewing thru white space
+// SYNC: Charcters we check for to end //inline comment
 inline bool isWhitespace(char c)
 {
     return c == ' ' || c == '\n' || c == '\t' || c == '\r';

@@ -325,21 +325,41 @@ TOKENK produceNextToken(Scanner * pScanner, Token * poToken)
 				//	to the parser? Parser could mostly ignore it, but could be useful for
 				//	supporting comments w/ semantics, maybe some form of metaprogramming
 
-				bool isComment = false;
 				if (tryConsumeChar(pScanner, '/'))
 				{
-					isComment = true;
-
-					while (!checkEndOfFile(pScanner))
+					if (tryConsumeChar(pScanner, ' ') || tryConsumeChar(pScanner, '\t'))
 					{
-						if (tryConsumeChar(pScanner, '\n')) break;
-						else consumeChar(pScanner);
+						// Entire line comments start with '// ' (slash, slash, space) or '//\t'
+
+						while (!checkEndOfFile(pScanner))
+						{
+							if (tryConsumeChar(pScanner, '\n')) break;
+							else consumeChar(pScanner);
+						}
+					}
+					else
+					{
+						// Inline comments start with '//' (slash, slash) and go until the next space. Example:
+						//	doWebRequest(url, //isAsync: true);
+
+						while (!checkEndOfFile(pScanner))
+						{
+							if (tryConsumeChar(pScanner, ' ') ||
+								tryConsumeChar(pScanner, '\n') ||
+								tryConsumeChar(pScanner, '\t') ||
+								tryConsumeChar(pScanner, '\r'))
+							{
+								break;
+							}
+							else
+							{
+								consumeChar(pScanner);
+							}
+						}
 					}
 				}
 				else if (tryConsumeChar(pScanner, '*'))
 				{
-					isComment = true;
-
 					pScanner->cNestedBlockComment++;
 					Assert(pScanner->cNestedBlockComment == 1);
 

@@ -556,6 +556,7 @@ AstNode * parseVarDeclStmt(Parser * pParser, EXPECTK expectkName, EXPECTK expect
 	AssertInfo(expectkSemicolon != EXPECTK_Optional, "Semicolon should either be required or forbidden");
 
 	AstErr * pErr = nullptr;
+	Token * pVarIdent = nullptr;
 
 	int iStart = peekTokenStartEnd(pParser->pScanner).iStart;
 
@@ -574,8 +575,6 @@ AstNode * parseVarDeclStmt(Parser * pParser, EXPECTK expectkName, EXPECTK expect
 	}
 
 	// Parse name
-
-	Token * pVarIdent = nullptr;
 
 	if (expectkName == EXPECTK_Optional || expectkName == EXPECTK_Required)
 	{
@@ -653,7 +652,7 @@ AstNode * parseVarDeclStmt(Parser * pParser, EXPECTK expectkName, EXPECTK expect
 			auto * pErrExpectedTokenk = AstNewErr1Child(pParser, ExpectedTokenkErr, makeStartEnd(startEndPrev.iEnd + 1), pInitExpr);
 			append(&pErrExpectedTokenk->aTokenkValid, TOKENK_Semicolon);
 
-			pErr = UpErr(pErr);
+			pErr = UpErr(pErrExpectedTokenk);
 			goto LFailCleanup;
 		}
 	}
@@ -1312,7 +1311,7 @@ ParseTypeResult tryParseType(Parser * pParser)
 				append(&pErr->aTokenkValid, TOKENK_CloseBracket);
 
 				result.success = false;
-				result.pErr = DownErr(pSubscriptExpr);
+				result.pErr = UpErr(pErr);
 				goto LFailCleanup;
 			}
 
@@ -1422,6 +1421,8 @@ LFailCleanup:
 		dispose(pFnTypeUnderConstruction);
 		releaseType(pParser, pFnTypeUnderConstruction);
 	}
+
+	return result;
 }
 
 AstErr * tryParseFuncHeader(Parser * pParser, const ParseFuncHeaderParam & param)
