@@ -6,8 +6,6 @@ fn newVector() -> ^Vector
 
 fn add(Vector v1 = 6, Vector v2) -> Vector
 <
-	&*%^&;
-
 	Vector v3;
 	v3.x = add(v1.x, v2.x);
 	v3.y = add(v1.y, v2.y);

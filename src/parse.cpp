@@ -76,8 +76,12 @@ AstNode * parseProgram(Parser * pParser, bool * poSuccess)
 
 		if (isErrorNode(*pNode))
 		{
-			bool recovered = tryRecoverFromPanic(pParser, TOKENK_Semicolon);
-			Assert(Implies(!recovered, isFinished(pParser->pScanner)));
+			TOKENK tokenkPrev = prevToken(pParser->pScanner);
+			if (tokenkPrev != TOKENK_Semicolon)
+			{
+				bool recovered = tryRecoverFromPanic(pParser, TOKENK_Semicolon);
+				Assert(Implies(!recovered, isFinished(pParser->pScanner)));
+			}
 		}
 
 		if (apNodes.cItem == 0)
