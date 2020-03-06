@@ -16,19 +16,7 @@ struct BinopInfo
 	int precedence;
 	TOKENK aTokenkMatch[s_cTokenMatchMax];
 	int cTokenMatch;
-
-    // NOTE (andrews): All implemented binops are left-associative. Assignment is not yet implemented, and I believe
-    //  it is the only one that will likely be right associative.
 };
-
-//enum PARSECTX
-//{
-//	PARSECTX_TopLevel,
-//	PARSECTX_StructDefnBody,
-//	PARSECTX_FuncDefnBody,
-//
-//	PARSECTX_Max
-//};
 
 struct Parser
 {
@@ -111,9 +99,6 @@ AstNode * parseProgram(Parser * pParser, bool * poSuccess);
 void reportScanAndParseErrors(const Parser & parser);
 
 
-// HMM: Are these really public?
-
-
 
 // Internal
 
@@ -184,44 +169,11 @@ struct ParseTypeResult
 	union
 	{
 		TypePendingResolve * pTypePendingResolve;		// success
-		AstNode * pErr;									// !success
+		AstErr * pErr;									// !success
 	};
 };
 
 ParseTypeResult tryParseType(Parser * pParser);
-
-//struct ParseFuncHeaderResult
-//{
-//	bool success;
-//	FUNCHEADERK funcheaderk;
-//
-//	union
-//	{
-//		// success:
-//
-//		struct _FuncHeaderType			// FUNCHEADERK_Type
-//		{
-//			FuncType * pFuncType;
-//		} typeResult;
-//
-//		struct _FuncHeaderDefn			// FUNCHEADERK_Defn
-//		{
-//			DynamicArray<AstNode *> * papParamVarDecls;
-//			DynamicArray<AstNode *> * papReturnVarDecls;
-//			Token * pTokenName;
-//		} defnResult;
-//
-//		struct _FuncHeaderLiteral		// FUNCHEADERK_Literal
-//		{
-//			DynamicArray<AstNode *> * papParamVarDecls;
-//			DynamicArray<AstNode *> * papReturnVarDecls;
-//		} literalResult;
-//
-//		// !success:
-//
-//		AstNode * pErr;
-//	};
-//};
 
 struct ParseFuncHeaderParam
 {
@@ -248,82 +200,14 @@ struct ParseFuncHeaderParam
 
 NULLABLE AstErr * tryParseFuncHeader(Parser * pParser, const ParseFuncHeaderParam & param);
 
-// GRP
-
-//AstNode * parseFuncHeaderGrp(               // Defn or literal, depending on FUNCHEADERK
-//    Parser * pParser,
-//    FUNCHEADERK funcheaderk,
-//    bool * pHadErrorButRecovered);
-//
-//AstNode * parseParamOrReturnListGrp(        // Param or return, depending on PARAMK
-//	Parser * pParser,
-//	PARAMK paramk,
-//	bool * pHadErrorButRecovered);
-
-
-// enum PARSETYPERESULT
-// {
-//     PARSETYPERESULT_ParseFailed,
-// 	PARSETYPERESULT_ParseFailedButRecovered,
-//     PARSETYPERESULT_ParseSucceededTypeResolveFailed,
-//     PARSETYPERESULT_ParseSucceededTypeResolveSucceeded
-// };
-
-// - Any subscript expressions are appended to papNodeChildren for bookkeeping.
-// - Any errors are also appended to papNodeChildren
-
-//PARSETYPERESULT tryParseType(
-//    Parser * pParser,
-//    DynamicArray<AstNode *> * papNodeChildren,
-//    TYPID * poTypidResolved,
-//    TypePendingResolution ** ppoTypePendingResolution);
-
-// HMM: Is there any reason why this is "tryParse" and returning the node via out-param instead of just being
-//	like the rest of the parse functions? I guess because it can return a stmt or an expr so it's a little
-//	bit different?
-
-
-
-// Func headers in function definitions and literals are full var decls for params/returns
-// NOTE: Errors are embedded in the pap's for tryParseFuncDefnOrLiteralHeader and tryParseFuncDefnOrLiteralHeaderParamList
-
-// bool tryParseFuncDefnOrLiteralHeader(
-// 	Parser * pParser,
-// 	FUNCHEADERK funcheaderk,
-// 	DynamicArray<AstNode *> * papParamVarDecls,
-// 	DynamicArray<AstNode *> * papReturnVarDecls,
-// 	ScopedIdentifier * poDefnIdent=nullptr);
-
-// bool tryParseFuncDefnOrLiteralHeaderParamList(Parser * pParser, FUNCHEADERK funcheaderk, PARAMK paramk, DynamicArray<AstNode *> * papParamVarDecls);
-
-
-// Func headers as the type of a variable only require type information. Variable names are optional and ignored.
-//	Initializers are disallowed (they don't make any sense when we are talking about *types*).
-// TODO: Consider combining with tryParseFuncDefnOrLiteralHeader... the problem is that they
-//	have different kinds of out parameters, despite the parsing pattern being very similar!
-
-//enum PARSEFUNCHEADERTYPEONLYRESULT
-//{
-//    PARSEFUNCHEADERTYPEONLYRESULT_Succeeded,
-//    PARSEFUNCHEADERTYPEONLYRESULT_Failed,
-//    PARSEFUNCHEADERTYPEONLYRESULT_FailedButRecovered
-//};
-//
-//PARSEFUNCHEADERTYPEONLYRESULT
-//tryParseFuncHeaderTypeOnly(
-//	Parser * pParser,
-//	FuncType * poFuncType,
-//	AstErr ** ppoErr
-//);
-
 
 // NOTE: This moves the children into the AST
 
 AstNode * handleScanOrUnexpectedTokenkErr(Parser * pParser, DynamicArray<AstNode *> * papChildren = nullptr);
 
 
-// Only claimed tokens will stay by the parser. If you merely peek, the
-//  node's memory will be overwritten next time you consume a token.
+// Only claimed tokens are safe to stick in the AST. If you merely peek, the
+//  pending token's memory will be overwritten next time you consume a token.
 
 Token * ensurePendingToken(Parser * pParser);
 Token * claimPendingToken(Parser * pParser);

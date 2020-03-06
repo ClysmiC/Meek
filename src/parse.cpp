@@ -555,26 +555,19 @@ AstNode * parseVarDeclStmt(Parser * pParser, EXPECTK expectkName, EXPECTK expect
 	AssertInfo(expectkName != EXPECTK_Forbidden, "Function does not support being called with expectkName forbidden. Variables usually require names, but are optional for return values");
 	AssertInfo(expectkSemicolon != EXPECTK_Optional, "Semicolon should either be required or forbidden");
 
-	// This list already kind of exists embedded in the modifiers and func types,
-	//	but we store it separately here to make it easier to attach them to an error
-	//	node should we ultimately produce an error.
-
-	//DynamicArray<AstNode *> apNodeChildren;
-	//init(&apNodeChildren);
-	//Defer(dispose(&apNodeChildren););
-
-	bool success = false;
+	AstErr * pErr = nullptr;
 
 	int iStart = peekTokenStartEnd(pParser->pScanner).iStart;
 
 	// Parse type
 
-	TypePendingResolve *  pTypePendingResolve;
+	TypePendingResolve * pTypePendingResolve = nullptr;
 	{
 		ParseTypeResult parseTypeResult = tryParseType(pParser);
 		if (!parseTypeResult.success)
 		{
-			return Up(parseTypeResult.pErr);
+			pErr = parseTypeResult.pErr;
+			goto LFailCleanup;
 		}
 
 		pTypePendingResolve = parseTypeResult.pTypePendingResolve;
@@ -583,9 +576,6 @@ AstNode * parseVarDeclStmt(Parser * pParser, EXPECTK expectkName, EXPECTK expect
 	// Parse name
 
 	Token * pVarIdent = nullptr;
-	Defer(
-		if (!success && pVarIdent) release(&pParser->tokenAlloc, pVarIdent);
-	);
 
 	if (expectkName == EXPECTK_Optional || expectkName == EXPECTK_Required)
 	{
@@ -598,12 +588,11 @@ AstNode * parseVarDeclStmt(Parser * pParser, EXPECTK expectkName, EXPECTK expect
 		{
 			auto startEndPrev = prevTokenStartEnd(pParser->pScanner);
 
-			// FIXME (andrew) There might be AST nodes snuggled into TypePendingResolve, which won't get parented to this error. Need to do AstTypeDescriptionGrp
-			//	refactor to handle this properly.
+			auto * pExpectedTokenErr = AstNewErr0Child(pParser, ExpectedTokenkErr, makeStartEnd(startEndPrev.iEnd + 1));
+			append(&pExpectedTokenErr->aTokenkValid, TOKENK_Identifier);
 
-			auto * pErr = AstNewErr0Child(pParser, ExpectedTokenkErr, makeStartEnd(startEndPrev.iEnd + 1));
-			append(&pErr->aTokenkValid, TOKENK_Identifier);
-			return Up(pErr);
+			pErr = UpErr(pExpectedTokenErr);
+			goto LFailCleanup;
 		}
 	}
 	else
@@ -624,23 +613,21 @@ AstNode * parseVarDeclStmt(Parser * pParser, EXPECTK expectkName, EXPECTK expect
 
 		if (isErrorNode(*pInitExpr))
 		{
-			// FIXME (andrew) There might be AST nodes snuggled into TypePendingResolve, which won't get parented to this error. Need to do AstTypeDescriptionGrp
-			//	refactor to handle this properly.
-
-			return pInitExpr;
+			pErr = DownErr(pInitExpr);
+			goto LFailCleanup;
 		}
 
 		if (tryConsumeToken(pParser->pScanner, TOKENK_Equal))
 		{
 			// NOTE: This check isn't necessary for correctness, but it gives a better error message for a common case.
 
-			auto * pErr = AstNewErr1Child(
+			pErr = UpErr(AstNewErr1Child(
 							pParser,
 							ChainedAssignErr,
 							makeStartEnd(iStart, prevTokenStartEnd(pParser->pScanner).iEnd),
-							pInitExpr);
+							pInitExpr));
 
-			return Up(pErr);
+			goto LFailCleanup;
 		}
 	}
 
@@ -651,8 +638,8 @@ AstNode * parseVarDeclStmt(Parser * pParser, EXPECTK expectkName, EXPECTK expect
 		Assert(iEqualStart != -1);
 		auto startEndPrev = prevTokenStartEnd(pParser->pScanner);
 
-		auto * pErr = AstNewErr1Child(pParser, InitUnnamedVarErr, makeStartEnd(iEqualStart, startEndPrev.iEnd), pInitExpr);
-		return Up(pErr);
+		pErr = UpErr(AstNewErr1Child(pParser, InitUnnamedVarErr, makeStartEnd(iEqualStart, startEndPrev.iEnd), pInitExpr));
+		goto LFailCleanup;
 	}
 
 	// Parse semicolon
@@ -663,15 +650,16 @@ AstNode * parseVarDeclStmt(Parser * pParser, EXPECTK expectkName, EXPECTK expect
 		{
 			auto startEndPrev = prevTokenStartEnd(pParser->pScanner);
 
-			auto * pErr = AstNewErr1Child(pParser, ExpectedTokenkErr, makeStartEnd(startEndPrev.iEnd + 1), pInitExpr);
-			append(&pErr->aTokenkValid, TOKENK_Semicolon);
-			return Up(pErr);
+			auto * pErrExpectedTokenk = AstNewErr1Child(pParser, ExpectedTokenkErr, makeStartEnd(startEndPrev.iEnd + 1), pInitExpr);
+			append(&pErrExpectedTokenk->aTokenkValid, TOKENK_Semicolon);
+
+			pErr = UpErr(pErr);
+			goto LFailCleanup;
 		}
 	}
 
 	// Success!
 
-	success = true;
 	int iEnd = prevTokenStartEnd(pParser->pScanner).iEnd;
 
 	SCOPEID declScope = peekScope(pParser).id;
@@ -692,6 +680,29 @@ AstNode * parseVarDeclStmt(Parser * pParser, EXPECTK expectkName, EXPECTK expect
 	}
 
 	return Up(pNode);
+
+LFailCleanup:
+
+	Assert(pErr);
+	if (pVarIdent)
+	{
+		release(&pParser->tokenAlloc, pVarIdent);
+	}
+
+	if (pTypePendingResolve)
+	{
+		for (int iModifier = 0; iModifier < pTypePendingResolve->pType->aTypemods.cItem; iModifier++)
+		{
+			TypeModifier * pTypemod = &pTypePendingResolve->pType->aTypemods[iModifier];
+
+			if (pTypemod->typemodk == TYPEMODK_Array)
+			{
+				append(&pErr->apChildren, pTypemod->pSubscriptExpr);
+			}
+		}
+	}
+
+	return Up(pErr);
 }
 
 AstNode * parseIfStmt(Parser * pParser)
@@ -1270,12 +1281,12 @@ AstNode * parseVarExpr(Parser * pParser, AstNode * pOwnerExpr)
 
 ParseTypeResult tryParseType(Parser * pParser)
 {
-	DynamicArray<TypeModifier> aModifiers;
-	init(&aModifiers);
-	Defer(dispose(&aModifiers););
+	DynamicArray<TypeModifier> aTypemods;
+	init(&aTypemods);
+	Defer(dispose(&aTypemods););
 
-	// NOTE; Since all nodes are stored in papNodeChildren, error nodes do not need to attach any children. It is the
-	//	responsibility of the caller to add papNodeChildren to a bubble error if we return false
+	ParseTypeResult result { 0 };
+	Type * pFnTypeUnderConstruction = nullptr;
 
 	while (peekToken(pParser->pScanner) != TOKENK_Identifier &&
 		   peekToken(pParser->pScanner) != TOKENK_Fn)
@@ -1288,10 +1299,9 @@ ParseTypeResult tryParseType(Parser * pParser)
 
 			if (isErrorNode(*pSubscriptExpr))
 			{
-				ParseTypeResult result;
 				result.success = false;
-				result.pErr = pSubscriptExpr;
-				return result;
+				result.pErr = DownErr(pSubscriptExpr);
+				goto LFailCleanup;
 			}
 
 			if (!tryConsumeToken(pParser->pScanner, TOKENK_CloseBracket))
@@ -1301,16 +1311,15 @@ ParseTypeResult tryParseType(Parser * pParser)
 				auto * pErr = AstNewErr1Child(pParser, ExpectedTokenkErr, makeStartEnd(startEndPrev.iEnd + 1), pSubscriptExpr);
 				append(&pErr->aTokenkValid, TOKENK_CloseBracket);
 
-				ParseTypeResult result;
 				result.success = false;
-				result.pErr = pSubscriptExpr;
-				return result;
+				result.pErr = DownErr(pSubscriptExpr);
+				goto LFailCleanup;
 			}
 
 			TypeModifier mod;
 			mod.typemodk = TYPEMODK_Array;
 			mod.pSubscriptExpr = pSubscriptExpr;
-			append(&aModifiers, mod);
+			append(&aTypemods, mod);
 		}
 		else if (tryConsumeToken(pParser->pScanner, TOKENK_Carat))
 		{
@@ -1318,69 +1327,17 @@ ParseTypeResult tryParseType(Parser * pParser)
 
 			TypeModifier mod;
 			mod.typemodk = TYPEMODK_Pointer;
-			append(&aModifiers, mod);
+			append(&aTypemods, mod);
 		}
 		else
 		{
 			AstNode * pErr = handleScanOrUnexpectedTokenkErr(pParser, nullptr);
 
-			ParseTypeResult result;
 			result.success = false;
-			result.pErr = pErr;
-			return result;
+			result.pErr = DownErr(pErr);
+			goto LFailCleanup;
 		}
 	}
-
-	//if (recoveredFromPanic)
-	//{
-	//	// Parse through but don't actually try to resolve a type
-
-	//	TOKENK tokenkPeek = peekToken(pParser->pScanner);
-	//	if (tokenkPeek == TOKENK_Identifier)
-	//	{
-	//		consumeToken(pParser->pScanner);
-	//		return PARSETYPERESULT_ParseFailedButRecovered;
-	//	}
-	//	else if (tokenkPeek == TOKENK_Fn)
-	//	{
- //           FuncType dummy;
- //           init(&dummy);
- //           Defer(dispose(&dummy));
-
-	//		AstErr * pErr = nullptr;
-	//		auto headerResult = tryParseFuncHeaderTypeOnly(pParser, &dummy, &pErr);
-
-	//		Assert(Implies(headerResult != PARSEFUNCHEADERTYPEONLYRESULT_Failed, !pErr));
-
- //           switch (headerResult)
- //           {
-	//		    case PARSEFUNCHEADERTYPEONLYRESULT_Failed:
- //               {
- //                   append(papNodeChildren, Up(pErr));
- //                   return PARSETYPERESULT_ParseFailed;
- //               } break;
-
- //               case PARSEFUNCHEADERTYPEONLYRESULT_FailedButRecovered:
- //               case PARSEFUNCHEADERTYPEONLYRESULT_Succeeded:
- //               {
- //                   return PARSETYPERESULT_ParseFailedButRecovered;
- //               } break;
-
- //               default:
- //               {
- //                   reportIceAndExit("Unknown PARSEFUNCHEADERTYPEONLYRESULT %d", headerResult);
- //                   return PARSETYPERESULT_ParseFailed;
- //               } break;
- //           }
-	//	}
-	//	else
-	//	{
-	//		AstNode * pErr = handleScanOrUnexpectedTokenkErr(pParser, nullptr);
-	//		append(papNodeChildren, pErr);
-	//		return PARSETYPERESULT_ParseFailed;
-	//	}
-	//}
- //   else
 
 	TOKENK tokenkPeek = peekToken(pParser->pScanner);
 	if (tokenkPeek == TOKENK_Identifier)
@@ -1389,7 +1346,7 @@ ParseTypeResult tryParseType(Parser * pParser)
 
 		Type * pType = newType(pParser);
 		init(pType, false /* isFuncType */);
-		reinitMove(&pType->aTypemods, &aModifiers);
+		reinitMove(&pType->aTypemods, &aTypemods);
 
 		Token * pTypeIdent = ensureAndClaimPendingToken(pParser);
 		consumeToken(pParser->pScanner, pTypeIdent);
@@ -1401,7 +1358,6 @@ ParseTypeResult tryParseType(Parser * pParser)
 		pTypePendingResolve->pTypidUpdateOnResolve = nullptr;    // NOTE: Caller sets this value
 		initCopy(&pTypePendingResolve->scopeStack, pParser->scopeStack);
 
-		ParseTypeResult result;
 		result.success = true;
 		result.pTypePendingResolve = pTypePendingResolve;
 		return result;
@@ -1410,43 +1366,27 @@ ParseTypeResult tryParseType(Parser * pParser)
 	{
 		// Func type
 
-		ParseTypeResult result;
+		pFnTypeUnderConstruction = newType(pParser);
+		init(pFnTypeUnderConstruction, true /* isFuncType */);
 
-		Type * pType = newType(pParser);
-		init(pType, true /* isFuncType */);
-
-		reinitMove(&pType->aTypemods, &aModifiers);
-
-		Defer
-		(
-			if (!result.success)
-			{
-				dispose(pType);
-				releaseType(pParser, pType);
-			}
-		);
-
-		/*AstErr * pErr = nullptr;
-		headerResult = tryParseFuncHeaderTypeOnly(pParser, &pType->funcType, &pErr);
-
-		Assert(Implies(headerResult != PARSEFUNCHEADERTYPEONLYRESULT_Failed, !pErr));*/
+		reinitMove(&pFnTypeUnderConstruction->aTypemods, &aTypemods);
 
 		ParseFuncHeaderParam param;
 		param.funcheaderk = FUNCHEADERK_Type;
-		param.paramType.pioFuncType = &pType->funcType;
+		param.paramType.pioFuncType = &pFnTypeUnderConstruction->funcType;
 
 		AstErr * pErr = tryParseFuncHeader(pParser, param);
 		if (pErr)
 		{
 			result.success = false;
-			result.pErr = Up(pErr);
-			return result;
+			result.pErr = pErr;
+			goto LFailCleanup;
 		}
 
 		// Success!
 
 		TypePendingResolve * pTypePendingResolve = appendNew(&pParser->typeTable.typesPendingResolution);
-		pTypePendingResolve->pType = pType;
+		pTypePendingResolve->pType = pFnTypeUnderConstruction;
 		pTypePendingResolve->pTypidUpdateOnResolve = nullptr;    // NOTE: Caller sets this value
 		initCopy(&pTypePendingResolve->scopeStack, pParser->scopeStack);
 
@@ -1457,11 +1397,30 @@ ParseTypeResult tryParseType(Parser * pParser)
 	else
 	{
 		AstNode * pErr = handleScanOrUnexpectedTokenkErr(pParser, nullptr);
+		
+		result.success = false;
+		result.pErr = DownErr(pErr);
+		goto LFailCleanup;
+	}
 
-		ParseTypeResult result;
-		result.success = true;
-		result.pErr = pErr;
-		return result;
+LFailCleanup:
+	Assert(result.success == false);
+	Assert(result.pErr);
+
+	DynamicArray<TypeModifier> * paTypemods = (pFnTypeUnderConstruction) ? &pFnTypeUnderConstruction->aTypemods : &aTypemods;
+	for (int iTypemod = 0; iTypemod < paTypemods->cItem; iTypemod++)
+	{
+		TypeModifier * pTypemod = &(*paTypemods)[iTypemod];
+		if (pTypemod->typemodk == TYPEMODK_Array)
+		{
+			append(&result.pErr->apChildren, pTypemod->pSubscriptExpr);
+		}
+	}
+
+	if (pFnTypeUnderConstruction)
+	{
+		dispose(pFnTypeUnderConstruction);
+		releaseType(pParser, pFnTypeUnderConstruction);
 	}
 }
 
