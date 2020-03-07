@@ -236,7 +236,7 @@ struct DynamicPoolAllocator
 
 	static constexpr int s_cRecentlyReleasedMax = _Als_Helper::max(16, CapacityPerBucket / 4);
 
-	T * aRecentlyReleased[s_cRecentlyReleasedMax];
+    T * aRecentlyReleased[s_cRecentlyReleasedMax] = { 0 };
 	int cRecentlyReleased = 0;
 };
 

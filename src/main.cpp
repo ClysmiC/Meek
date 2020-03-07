@@ -4,10 +4,9 @@
 #include "ast_print.h"
 #include "error.h"
 #include "parse.h"
+#include "print.h"
 #include "resolve_pass.h"
 #include "scan.h"
-
-#include <stdio.h>
 
 int main()
 {
@@ -44,15 +43,8 @@ int main()
 		return 1;
 	}
 
-	// NOTE: Lexeme buffer size is multiplied by 2 to handle worst case scenario where each byte is its own lexeme,
-	//  which gets written into the buffer and then null terminated.
-
-	int lexemeBufferSize = bytesRead * 2;
-	char * lexemeBuffer = new char[(u64)bytesRead * 2];
-	Defer(delete[] lexemeBuffer);
-
 	Scanner scanner;
-	if (!init(&scanner, buffer, bytesRead, lexemeBuffer, lexemeBufferSize))
+	if (!init(&scanner, buffer, bytesRead))
 	{
 		reportIceAndExit("Failed to initialize scanner");
 		return 1;
@@ -93,7 +85,8 @@ int main()
 			}
 			else
 			{
-				printf("%s\n", pType->ident.pToken->lexeme);
+				print(pType->ident.pToken->lexeme);
+				println();
 			}
 		}
 
@@ -125,7 +118,7 @@ int main()
 	init(&debugPrintCtx.mpLevelSkip);
 	debugPrintCtx.pTypeTable = &parser.typeTable;
 
-	// debugPrintAst(&debugPrintCtx, *pAst);
+	debugPrintAst(&debugPrintCtx, *pAst);
 
 
 	printf("\n");

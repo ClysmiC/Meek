@@ -2,23 +2,19 @@
 
 #include <stdlib.h> // For strncpy and related functions
 
-bool init(Scanner * pScanner, char * pText, uint textSize, char * pLexemeBuffer, uint lexemeBufferSize)
+bool init(Scanner * pScanner, char * pText, uint textSize)
 {
-	if (!pScanner || !pText || !pLexemeBuffer || lexemeBufferSize < textSize) return false;
-
 	ClearStruct(pScanner);
 
 	pScanner->pText = pText;
 	pScanner->textSize = textSize;
-	pScanner->pLexemeBuffer = pLexemeBuffer;
-	pScanner->lexemeBufferSize = lexemeBufferSize;
 	pScanner->scanexitk = SCANEXITK_Nil;
 	init(&pScanner->newLineIndices);
 
 	return true;
 }
 
-TOKENK consumeToken(Scanner * pScanner, Token * poToken)
+TOKENK consumeToken(Scanner * pScanner, NULLABLE Token * poToken)
 {
 	Token throwaway;
 	Token * pToken = (poToken) ? poToken : &throwaway;
@@ -34,7 +30,7 @@ TOKENK consumeToken(Scanner * pScanner, Token * poToken)
 	}
 }
 
-TOKENK peekToken(Scanner * pScanner, Token * poToken, uint lookahead)
+TOKENK peekToken(Scanner * pScanner, NULLABLE Token * poToken, uint lookahead)
 {
 	Assert(lookahead < Scanner::s_lookMax);
 	auto & rbuf = pScanner->peekBuffer;
@@ -65,7 +61,7 @@ TOKENK peekToken(Scanner * pScanner, Token * poToken, uint lookahead)
 	return pToken->tokenk;
 }
 
-TOKENK prevToken(Scanner * pScanner, Token * poToken, uint lookbehind)
+TOKENK prevToken(Scanner * pScanner, NULLABLE Token * poToken, uint lookbehind)
 {
 	Assert(lookbehind < Scanner::s_lookMax);
 	auto & rbuf = pScanner->prevBuffer;
@@ -101,7 +97,7 @@ StartEndIndices prevTokenStartEnd(Scanner * pScanner, uint lookbehind)
 	return throwaway.startEnd;
 }
 
-bool tryConsumeToken(Scanner * pScanner, TOKENK tokenkMatch, Token * poToken)
+bool tryConsumeToken(Scanner * pScanner, TOKENK tokenkMatch, NULLABLE Token * poToken)
 {
 	Token throwaway;
 	Token * pToken = (poToken) ? poToken : &throwaway;
@@ -117,7 +113,7 @@ bool tryConsumeToken(Scanner * pScanner, TOKENK tokenkMatch, Token * poToken)
 	return false;
 }
 
-bool tryConsumeToken(Scanner * pScanner, const TOKENK * aTokenkMatch, int cTokenkMatch, Token * poToken)
+bool tryConsumeToken(Scanner * pScanner, const TOKENK * aTokenkMatch, int cTokenkMatch, NULLABLE Token * poToken)
 {
 	Token throwaway;
 	Token * pToken = (poToken) ? poToken : &throwaway;
@@ -136,7 +132,7 @@ bool tryConsumeToken(Scanner * pScanner, const TOKENK * aTokenkMatch, int cToken
 	return false;
 }
 
-bool tryPeekToken(Scanner * pScanner, const TOKENK * aTokenkMatch, int cTokenkMatch, Token * poToken)
+bool tryPeekToken(Scanner * pScanner, const TOKENK * aTokenkMatch, int cTokenkMatch, NULLABLE Token * poToken)
 {
 	Token throwaway;
 	Token * pToken = (poToken) ? poToken : &throwaway;
@@ -484,37 +480,29 @@ TOKENK produceNextToken(Scanner * pScanner, Token * poToken)
 						{
 							// Try consume fails into here if end of file
 
-							// Write current lexeme into buffer so that we have a null terminated string to
-							//	strncpm with
-
-							int iLexemeBufferPreWrite = pScanner->iLexemeBuffer;
-							char * lexeme = pScanner->pLexemeBuffer + pScanner->iLexemeBuffer;
-							writeCurrentLexemeIntoBuffer(pScanner);
-
-							int lexemeLength = pScanner->iLexemeBuffer - iLexemeBufferPreWrite;
-
 							// @Slow
 
 							bool isReservedWord = false;
+							StringView lexeme = currentLexeme(*pScanner);
+
 							for (int i = 0; i < g_cReservedWord; i++)
 							{
 								const ReservedWord * pReservedWord = g_aReservedWord + i;
 
-								if (strncmp(lexeme, pReservedWord->lexeme, lexemeLength) == 0)
+								if (lexeme == pReservedWord->lexeme)
 								{
 									// Move lexeme buffer cursor back, since we don't need to write
 									//	known reserved words to it. We can just use the global.
 
                                     isReservedWord = true;
-									pScanner->iLexemeBuffer = iLexemeBufferPreWrite;
-									makeTokenWithLexeme(pScanner, pReservedWord->tokenk, pReservedWord->lexeme, poToken);
+									makeToken(pScanner, pReservedWord->tokenk, pReservedWord->lexeme, poToken);
                                     break;
 								}
 							}
 
 							if (!isReservedWord)
 							{
-								makeTokenWithLexeme(pScanner, TOKENK_Identifier, lexeme, poToken);
+								makeToken(pScanner, TOKENK_Identifier, lexeme, poToken);
 							}
 
 							break;
@@ -705,33 +693,20 @@ void _finishAfterConsumeDigit(Scanner * pScanner, char firstDigit, bool startsWi
 	}
 }
 
-void writeCurrentLexemeIntoBuffer(Scanner * pScanner)
+StringView currentLexeme(const Scanner & scanner)
 {
-	int lexemeSize = pScanner->iText - pScanner->iTextTokenStart;
-	char * dest = pScanner->pLexemeBuffer + pScanner->iLexemeBuffer;
-	memcpy(
-		dest,
-		pScanner->pText + pScanner->iTextTokenStart,
-		lexemeSize
-	);
-
-	// Null terminate
-
-	pScanner->pLexemeBuffer[pScanner->iLexemeBuffer + lexemeSize] = '\0';
-	pScanner->iLexemeBuffer += lexemeSize + 1;
-
-    Assert(pScanner->iLexemeBuffer < pScanner->lexemeBufferSize);
+	StringView result;
+	result.pCh = scanner.pText + scanner.iTextTokenStart;
+	result.cCh = scanner.iText - scanner.iTextTokenStart;
+	return result;
 }
 
 void makeToken(Scanner * pScanner, TOKENK tokenk, Token * poToken)
 {
-	char * lexeme = pScanner->pLexemeBuffer + pScanner->iLexemeBuffer;
-	writeCurrentLexemeIntoBuffer(pScanner);
-
-	makeTokenWithLexeme(pScanner, tokenk, lexeme, poToken);
+	makeToken(pScanner, tokenk, currentLexeme(*pScanner), poToken);
 }
 
-void makeTokenWithLexeme(Scanner * pScanner, TOKENK tokenk, char * lexeme, Token * poToken)
+void makeToken(Scanner * pScanner, TOKENK tokenk, StringView lexeme, Token * poToken)
 {
 	Assert(!pScanner->madeToken);
 
@@ -756,7 +731,8 @@ void makeErrorToken(Scanner * pScanner, GRFERRTOK grferrtok, Token * poToken)
 
 void makeEofToken(Scanner * pScanner, Token * poToken)
 {
-	makeTokenWithLexeme(pScanner, TOKENK_Eof, nullptr, poToken);
+	StringView lexeme = { 0 };
+	makeToken(pScanner, TOKENK_Eof, lexeme, poToken);
 }
 
 char consumeChar(Scanner * pScanner)

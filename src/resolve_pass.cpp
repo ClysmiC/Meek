@@ -2,6 +2,7 @@
 
 #include "ast.h"
 #include "error.h"
+#include "print.h"
 #include "symbol.h"
 #include "type.h"
 
@@ -36,7 +37,7 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 {
 	Assert(category(pNode->astk) == ASTCATK_Expr);
 
-	TYPID typidResult;
+	TYPID typidResult = TYPID_Unresolved;
 
 	switch (pNode->astk)
 	{
@@ -175,9 +176,11 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 				if (!pSymbInfo)
 				{
 					// Unresolved
+					// TODO: Add this to a resolve error list... don't print inline right here!
 
-					// TODO: report unresolved member ident
-					printf("Unresolved member variable %s\n", pExpr->pTokenIdent->lexeme);
+					print("Unresolved member variable ");
+					print(pExpr->pTokenIdent->lexeme );
+					println();
 
 					typidResult = TYPID_Unresolved;
 					goto end;
@@ -214,9 +217,11 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 				if (!found)
 				{
 					// Unresolved
+					// TODO: Add this to a resolve error list... don't print inline right here!
 
-					// TODO: report unresolved var ident
-					printf("Unresolved variable %s\n", pExpr->pTokenIdent->lexeme);
+					print("Unresolved variable ");
+					print(pExpr->pTokenIdent->lexeme);
+					println();
 
 					// HMM: Is this the right result value? This isn't really a type error since it is more of an unresolved identifier error
 
@@ -375,9 +380,11 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 
 					if (!pFuncDefnStmtMatch)
 					{
-						// TODO: report error
+						// TODO: Add this to a resolve error list... don't print inline right here!
 
-						printf("Could not find function definition for %s that had expected types\n", pFuncExpr->pTokenIdent->lexeme);
+						print("Could not find function definition for ");
+						print(pFuncExpr->pTokenIdent->lexeme);
+						print(" that had expected types\n");
 						typidResult = TYPID_Unresolved;
 						goto end;
 					}
@@ -455,6 +462,7 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 	}
 
 end:
+
     AstExpr * pExpr = DownExpr(pNode);
     pExpr->typid = typidResult;
     return typidResult;

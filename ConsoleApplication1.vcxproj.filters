@@ -92,6 +92,9 @@
     <ClInclude Include="src\als\macro_util.h">
       <Filter>Header Files\als</Filter>
     </ClInclude>
+    <ClInclude Include="src\print.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\ast.cpp">
@@ -125,6 +128,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="src\error.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\print.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

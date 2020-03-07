@@ -8,54 +8,126 @@ int intValue(AstLiteralExpr * pLiteralExpr)
 
 	if (!pLiteralExpr->isValueSet)
 	{
-		char * lexeme = pLiteralExpr->pToken->lexeme;
+		StringView lexeme = pLiteralExpr->pToken->lexeme;
 		int base = 10;
 
 		// NOTE: Scanner will assign at most one '-' to
 		//	a number. Any other '-' (as in ---5) will be
 		//	considered unary minus operator.
 
-		int iCursor = 0;
-		bool isNeg = lexeme[0] == '-';
-		if (isNeg) iCursor++;
-
-		if (lexeme[iCursor] == '0')
+		int iChPostPrefix = 0;
+		bool isNeg = false;
 		{
-			iCursor++;
-			switch (lexeme[iCursor])
+			int iCh = 0;
+			isNeg = lexeme.pCh[0] == '-';
+			if (isNeg) iCh++;
+
+			if (lexeme.pCh[iCh] == '0')
 			{
-				case 'b': base = 2; iCursor++; break;
-				case 'o': base = 8; iCursor++; break;
-				case 'x': base = 16; iCursor++; break;
-				default: iCursor--;		// the leading 0 is part of the actual number
+				iCh++;
+				switch (lexeme.pCh[iCh])
+				{
+					case 'b': base = 2; iCh++; break;
+					case 'o': base = 8; iCh++; break;
+					case 'x': base = 16; iCh++; break;
+					default: iCh--;		// the leading 0 is part of the actual number
+				}
+			}
+
+			iChPostPrefix = iCh;
+		}
+
+		// NOTE (andrew) Handle different widths
+
+		static const char * s_int32MaxDigits = "2147483647";
+		static const char * s_int32MinDigits = "2147483648";
+		static int s_cDigitInt32Limit = 10;
+
+		// Detect out of range by analyzing individual digits
+
+		{
+			int iChFirstNonZero = -1;
+			int cDigitNoLeadingZeros = 0;
+			for (int iCh = iChPostPrefix; iCh < lexeme.cCh; iCh++)
+			{
+				if (lexeme.pCh[iCh] != '0')
+				{
+					cDigitNoLeadingZeros = lexeme.cCh - iCh;
+					iChFirstNonZero = iCh;
+					break;
+				}
+			}
+
+			Assert(Iff(iChFirstNonZero == -1, cDigitNoLeadingZeros == 0));
+
+			if (cDigitNoLeadingZeros > s_cDigitInt32Limit)
+			{
+				goto LOutOfRangeFail;
+			}
+			else if (cDigitNoLeadingZeros == s_cDigitInt32Limit)
+			{
+				const char * int32Digits = (isNeg) ? s_int32MinDigits : s_int32MaxDigits;
+
+				int iDigit = 0;
+				for (int iCh = iChFirstNonZero; iCh < lexeme.cCh; iCh++)
+				{
+
+					if (lexeme.pCh[iCh] > int32Digits[iDigit])
+					{
+						goto LOutOfRangeFail;
+					}
+					else if (lexeme.pCh[iCh] < int32Digits[iDigit])
+					{
+						break;
+					}
+
+					iDigit++;
+				}
 			}
 		}
 
-		char * end;
-		long value = strtol(lexeme, &end, base);
+		// Build value digit by digit now that we know it's in range
 
-		if (errno == ERANGE || value > S32_MAX || value < S32_MIN)
+		int value = 0;
+		for (int iCh = iChPostPrefix; iCh < lexeme.cCh; iCh++)
 		{
-			// TODO: Report out of range error
+			char c = lexeme.pCh[iCh];
+			int nDigit = 0;
 
-			pLiteralExpr->isValueErroneous = true;
-		}
-		else if (errno || end == lexeme)
-		{
-			// TODO: Report unspecified error
+			if (c >= '0' && c <= '9')
+			{
+				nDigit = c - '0';
+			}
+			else
+			{
+				// NOTE (andrew) Scanner makes sure that only legal digits are in the literal based on the prefix
 
-			pLiteralExpr->isValueErroneous = true;
-		}
-		else
-		{
-			pLiteralExpr->intValue = (int)value;
-			pLiteralExpr->isValueErroneous = false;
+				Assert((c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F'));
+
+				if (c >= 'a')
+				{
+					c = c - ('a' - 'A');
+				}
+
+				nDigit = c - 'A';
+			}
+
+			value *= base;
+			value += nDigit;
 		}
 
 		pLiteralExpr->isValueSet = true;
+		pLiteralExpr->isValueErroneous = false;
+		pLiteralExpr->intValue = value;
 	}
 
 	return pLiteralExpr->intValue;
+
+LOutOfRangeFail:
+	pLiteralExpr->isValueSet = true;
+	pLiteralExpr->isValueErroneous = true;
+	pLiteralExpr->intValue = 0;
+	return 0;
 }
 
 bool isLValue(ASTK astk)

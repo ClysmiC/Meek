@@ -58,7 +58,7 @@ ReservedWord g_aReservedWord[] = {
 };
 int g_cReservedWord = ArrayLen(g_aReservedWord);
 
-const char * g_mpTokenkDisplay[] = {
+const char * g_mpTokenkStrDisplay[] = {
 	"<error>",				// TOKENK_Error
 	"identifier",			// TOKENK_Identifier
 	"int literal",			// TOKENK_IntLiteral
@@ -122,7 +122,7 @@ const char * g_mpTokenkDisplay[] = {
     "'func'",               // TOKENK_Func
 	"<end of file>",		// TOKENK_Eof
 };
-StaticAssert(ArrayLen(g_mpTokenkDisplay) == TOKENK_Max);
+StaticAssert(ArrayLen(g_mpTokenkStrDisplay) == TOKENK_Max);
 
 void errMessagesFromGrferrtok(GRFERRTOK grferrtok, DynamicArray<String> * poMessages)
 {

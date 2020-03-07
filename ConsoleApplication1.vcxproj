@@ -39,6 +39,7 @@
     <ClInclude Include="src\id_def.h" />
     <ClInclude Include="src\literal.h" />
     <ClInclude Include="src\parse.h" />
+    <ClInclude Include="src\print.h" />
     <ClInclude Include="src\resolve_pass.h" />
     <ClInclude Include="src\scan.h" />
     <ClInclude Include="src\symbol.h" />
@@ -52,6 +53,7 @@
     <ClCompile Include="src\literal.cpp" />
     <ClCompile Include="src\main.cpp" />
     <ClCompile Include="src\parse.cpp" />
+    <ClCompile Include="src\print.cpp" />
     <ClCompile Include="src\resolve_pass.cpp" />
     <ClCompile Include="src\scan.cpp" />
     <ClCompile Include="src\symbol.cpp" />

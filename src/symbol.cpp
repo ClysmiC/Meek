@@ -93,7 +93,7 @@ void insertBuiltInSymbols(SymbolTable * pSymbolTable)
         intToken.id = -1;
         intToken.startEnd = gc_startEndBuiltInPseudoToken;
         intToken.tokenk = TOKENK_Identifier;
-        intToken.lexeme = "int";
+        intToken.lexeme = makeStringView("int");
 
         ScopedIdentifier intIdent;
         setIdent(&intIdent, &intToken, SCOPEID_BuiltIn);
@@ -110,7 +110,7 @@ void insertBuiltInSymbols(SymbolTable * pSymbolTable)
         floatToken.id = -1;
         floatToken.startEnd = gc_startEndBuiltInPseudoToken;
         floatToken.tokenk = TOKENK_Identifier;
-        floatToken.lexeme = "float";
+        floatToken.lexeme = makeStringView("float");
 
         ScopedIdentifier floatIdent;
         setIdent(&floatIdent, &floatToken, SCOPEID_BuiltIn);
@@ -127,7 +127,7 @@ void insertBuiltInSymbols(SymbolTable * pSymbolTable)
         boolToken.id = -1;
         boolToken.startEnd = gc_startEndBuiltInPseudoToken;
         boolToken.tokenk = TOKENK_Identifier;
-        boolToken.lexeme = "bool";
+        boolToken.lexeme = makeStringView("bool");
 
         ScopedIdentifier boolIdent;
         setIdent(&boolIdent, &boolToken, SCOPEID_BuiltIn);
@@ -383,7 +383,7 @@ void resolveIdentScope(ScopedIdentifier * pIdentifier, SCOPEID declScopeid)
 u32 scopedIdentHash(const ScopedIdentifier & ident)
 {
 	auto hash = startHash(&ident.defnclScopeid, sizeof(ident.defnclScopeid));
-	hash = buildHashCString(ident.pToken->lexeme, hash);
+	hash = buildHash(ident.pToken->lexeme.pCh, ident.pToken->lexeme.cCh, hash);
 
 	return hash;
 }
@@ -402,7 +402,7 @@ bool scopedIdentEq(const ScopedIdentifier & i0, const ScopedIdentifier & i1)
 
 	if (i0.pToken->lexeme == i1.pToken->lexeme)		return true;
 
-	return (strcmp(i0.pToken->lexeme, i1.pToken->lexeme) == 0);
+	return (i0.pToken->lexeme == i1.pToken->lexeme);
 }
 
 bool isDeclarationOrderIndependent(const SymbolInfo & info)
@@ -419,14 +419,14 @@ bool isDeclarationOrderIndependent(SYMBOLK symbolk)
 
 #if DEBUG
 
-#include <stdio.h>
+#include "print.h"
 
 void debugPrintSymbolTable(const SymbolTable & symbTable)
 {
-	printf("===============\n");
-	printf("====SYMBOLS====\n");
-	printf("===============\n\n");
-    printf("===Variables===\n\n");
+	print("===============\n");
+	print("====SYMBOLS====\n");
+	print("===============\n\n");
+    print("===Variables===\n\n");
 
     for (auto it = iter(symbTable.varTable); it.pValue; iterNext(&it))
     {
@@ -435,20 +435,25 @@ void debugPrintSymbolTable(const SymbolTable & symbTable)
 
 		Assert(pSymbInfo->symbolk == SYMBOLK_Var);
 
-		printf("name: %s\n", pIdent->pToken->lexeme);
-		printf("typid: %u\n", pSymbInfo->pVarDeclStmt->typid);
-		printf("scopeid: %d\n", pIdent->defnclScopeid);
-		printf("\n");
+		print("name: ");
+		print(pIdent->pToken->lexeme);
+		println();
+
+		printfmt("typid: %u\n", pSymbInfo->pVarDeclStmt->typid);
+		printfmt("scopeid: %d\n", pIdent->defnclScopeid);
+		println();
     }
 
-	printf("\n===Functions===\n\n");
+	print("\n===Functions===\n\n");
 
 	for (auto it = iter(symbTable.funcTable); it.pValue; iterNext(&it))
 	{
 		const ScopedIdentifier * pIdent = it.pKey;
 		DynamicArray<SymbolInfo> * paSymbInfo = it.pValue;
 
-		printf("name: %s\n", pIdent->pToken->lexeme);
+		print("name: ");
+		print(pIdent->pToken->lexeme);
+		println();
 
         for (int i = 0; i < paSymbInfo->cItem; i++)
         {
@@ -461,7 +466,7 @@ void debugPrintSymbolTable(const SymbolTable & symbTable)
 
             if (paSymbInfo->cItem > 1)
             {
-                printf("\t(overload %d)\n", i);
+                printfmt("\t(overload %d)\n", i);
             }
 
 		    for (int j = 0; j < papParamVarDecls->cItem; j++)
@@ -470,8 +475,8 @@ void debugPrintSymbolTable(const SymbolTable & symbTable)
                 Assert(pNode->astk == ASTK_VarDeclStmt);
                 auto * pVarDecl = Down(pNode, VarDeclStmt);
 
-                if (paSymbInfo->cItem > 1) printf("\t\t"); else printf("\t");
-			    printf("param %d typeid: %d\n", j, pVarDecl->typid);
+                if (paSymbInfo->cItem > 1) print("\t\t"); else print("\t");
+			    printfmt("param %d typeid: %d\n", j, pVarDecl->typid);
 		    }
 
 		    for (int j = 0; j < papReturnVarDecls->cItem; j++)
@@ -480,21 +485,21 @@ void debugPrintSymbolTable(const SymbolTable & symbTable)
                 Assert(pNode->astk == ASTK_VarDeclStmt);
                 auto * pVarDecl = Down(pNode, VarDeclStmt);
 
-                if (paSymbInfo->cItem > 1) printf("\t\t"); else printf("\t");
-			    printf("return %d typid: %d\n", j, pVarDecl->typid);
+                if (paSymbInfo->cItem > 1) print("\t\t"); else print("\t");
+			    printfmt("return %d typid: %d\n", j, pVarDecl->typid);
 		    }
 
-            if (paSymbInfo->cItem > 1) printf("\t\t"); else printf("\t");
-            printf("scopeid defn: %d\n", pIdent->defnclScopeid);
+            if (paSymbInfo->cItem > 1) print("\t\t"); else print("\t");
+            printfmt("scopeid defn: %d\n", pIdent->defnclScopeid);
 
-            if (paSymbInfo->cItem > 1) printf("\t\t"); else printf("\t");
-            printf("scopeid body: %d\n", pFuncDefnStmt->scopeid);
+            if (paSymbInfo->cItem > 1) printfmt("\t\t"); else printfmt("\t");
+            printfmt("scopeid body: %d\n", pFuncDefnStmt->scopeid);
         }
 
-        printf("\n");
+        println();
 	}
 
-    printf("\n===Types===\n\n");
+    print("\n===Types===\n\n");
 
     for (auto it = iter(symbTable.typeTable); it.pValue; iterNext(&it))
     {
@@ -505,20 +510,26 @@ void debugPrintSymbolTable(const SymbolTable & symbTable)
 
         if (pSymbInfo->symbolk == SYMBOLK_Struct)
         {
-            printf("name: %s\n", pIdent->pToken->lexeme);
-            printf("typid: %u\n", pSymbInfo->pStructDefnStmt->typidSelf);
-            printf("scopeid: %d\n", pIdent->defnclScopeid);
+            print("name: ");
+			print(pIdent->pToken->lexeme);
+			println();
+
+            printfmt("typid: %u\n", pSymbInfo->pStructDefnStmt->typidSelf);
+            printfmt("scopeid: %d\n", pIdent->defnclScopeid);
         }
         else
         {
             Assert(pSymbInfo->symbolk == SYMBOLK_BuiltInType);
 
-            printf("name: %s\n", pIdent->pToken->lexeme);
-            printf("typid: %u\n", pSymbInfo->typid);
-            printf("scopeid: %d\n", pIdent->defnclScopeid);
+            print("name: ");
+			print(pIdent->pToken->lexeme);
+			println();
+
+            printfmt("typid: %u\n", pSymbInfo->typid);
+            printfmt("scopeid: %d\n", pIdent->defnclScopeid);
         }
 
-        printf("\n");
+        println();
     }
 }
 #endif

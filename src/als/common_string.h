@@ -153,6 +153,22 @@ struct StringView
 	int cCh = 0;
 };
 
+inline StringView makeStringView(const char * pStr)
+{
+	StringView result;
+	result.pCh = pStr;
+	result.cCh = 0;
+
+	const char * pCursor = pStr;
+	while (*pCursor)
+	{
+		result.cCh++;
+		pCursor++;
+	}
+
+	return result;
+}
+
 inline bool operator==(const StringView& strv0, const StringView& strv1)
 {
 	if (strv0.cCh != strv1.cCh)		return false;

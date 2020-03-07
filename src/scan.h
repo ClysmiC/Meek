@@ -17,10 +17,8 @@ struct Scanner
 {
 	// Init state
 
-	char *		pText = nullptr;
+	char *	pText = nullptr;
 	int		textSize = 0;
-	char *		pLexemeBuffer = nullptr;		// Must be as large as pText
-	int		lexemeBufferSize = 0;
 
 	// Scan state
 
@@ -45,10 +43,6 @@ struct Scanner
 	RingBuffer<Token, s_lookMax> peekBuffer;
 	RingBuffer<Token, s_lookMax> prevBuffer;    // More recent tokens are at the end of the buffer
 
-	// Lexeme buffer management
-
-	int		iLexemeBuffer = 0;
-
 	// Exit kind
 
 	SCANEXITK	scanexitk = SCANEXITK_Nil;
@@ -58,15 +52,15 @@ struct Scanner
 
 // Public
 
-bool init(Scanner * pScanner, char * pText, uint textSize, char * pLexemeBuffer, uint lexemeBufferSize);
-TOKENK peekToken(Scanner * pScanner, Token * poToken=nullptr, uint lookahead=0);
-TOKENK prevToken(Scanner * pScanner, Token * poToken=nullptr, uint lookbehind=0);
+bool init(Scanner * pScanner, char * pText, uint textSize);
+TOKENK peekToken(Scanner * pScanner, NULLABLE Token * poToken=nullptr, uint lookahead=0);
+TOKENK prevToken(Scanner * pScanner, NULLABLE Token * poToken=nullptr, uint lookbehind=0);
 StartEndIndices peekTokenStartEnd(Scanner * pScanner, uint lookahead=0);
 StartEndIndices prevTokenStartEnd(Scanner * pScanner, uint lookbehind=0);
-bool tryConsumeToken(Scanner * pScanner, TOKENK tokenk, Token * poToken=nullptr);
-bool tryConsumeToken(Scanner * pScanner, const TOKENK * aTokenk, int cTokenk, Token * poToken=nullptr);
-bool tryPeekToken(Scanner * pScanner, const TOKENK * aTokenk, int cTokenk, Token * poToken=nullptr);
-TOKENK consumeToken(Scanner * pScanner, Token * poToken=nullptr);
+bool tryConsumeToken(Scanner * pScanner, TOKENK tokenk, NULLABLE Token * poToken=nullptr);
+bool tryConsumeToken(Scanner * pScanner, const TOKENK * aTokenk, int cTokenk, NULLABLE Token * poToken=nullptr);
+bool tryPeekToken(Scanner * pScanner, const TOKENK * aTokenk, int cTokenk, NULLABLE Token * poToken=nullptr);
+TOKENK consumeToken(Scanner * pScanner, NULLABLE Token * poToken=nullptr);
 bool isFinished(Scanner * pScanner);
 int lineFromI(const Scanner & scanner, int iText);
 
@@ -83,9 +77,9 @@ bool tryPeekChar(Scanner * pScanner, char rangeMin, char rangeMax, char * poMatc
 char peekChar(Scanner * pScanner, int lookahead=0);
 
 void onStartToken(Scanner * pScanner);
-void writeCurrentLexemeIntoBuffer(Scanner * pScanner);
+StringView currentLexeme(const Scanner & pScanner);
 void makeToken(Scanner * pScanner, TOKENK tokenk, Token * poToken);
-void makeTokenWithLexeme(Scanner * pScanner, TOKENK tokenk, char * lexeme, Token * poToken);
+void makeToken(Scanner * pScanner, TOKENK tokenk, StringView lexeme, Token * poToken);
 void makeErrorToken(Scanner * pScanner, GRFERRTOK ferrtok, Token * poToken);
 void makeEofToken(Scanner * pScanner, Token * poToken);
 void finishAfterConsumeDotAndDigit(Scanner * pScanner, char firstDigit, Token * poToken);

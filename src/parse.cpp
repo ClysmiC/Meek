@@ -2135,7 +2135,7 @@ void reportScanAndParseErrors(const Parser & parser)
 			case ASTK_UnexpectedTokenkErr:
 			{
 				auto * pErr = Down(pNode, UnexpectedTokenkErr);
-				reportParseError(parser, *pNode, "Unexpected %s", g_mpTokenkDisplay[pErr->pErrToken->tokenk]);
+				reportParseError(parser, *pNode, "Unexpected %s", g_mpTokenkStrDisplay[pErr->pErrToken->tokenk]);
 			}
 			break;
 
@@ -2147,17 +2147,17 @@ void reportScanAndParseErrors(const Parser & parser)
 
 				if (pErr->aTokenkValid.cItem == 1)
 				{
-					reportParseError(parser, *pNode, "Expected %s", g_mpTokenkDisplay[pErr->aTokenkValid[0]]);
+					reportParseError(parser, *pNode, "Expected %s", g_mpTokenkStrDisplay[pErr->aTokenkValid[0]]);
 				}
 				else if (pErr->aTokenkValid.cItem == 2)
 				{
-					reportParseError(parser, *pNode, "Expected %s or %s", g_mpTokenkDisplay[pErr->aTokenkValid[0]], g_mpTokenkDisplay[pErr->aTokenkValid[1]]);
+					reportParseError(parser, *pNode, "Expected %s or %s", g_mpTokenkStrDisplay[pErr->aTokenkValid[0]], g_mpTokenkStrDisplay[pErr->aTokenkValid[1]]);
 				}
 				else
 				{
 					String strError;
 					init(&strError, "Expected ");
-					append(&strError, g_mpTokenkDisplay[pErr->aTokenkValid[0]]);
+					append(&strError, g_mpTokenkStrDisplay[pErr->aTokenkValid[0]]);
 
 					for (uint i = 1; i < pErr->aTokenkValid.cItem; i++)
 					{
@@ -2167,7 +2167,7 @@ void reportScanAndParseErrors(const Parser & parser)
 						if (isLast) append(&strError, "or ");
 
 
-						append(&strError, g_mpTokenkDisplay[pErr->aTokenkValid[i]]);
+						append(&strError, g_mpTokenkStrDisplay[pErr->aTokenkValid[i]]);
 					}
 
 					reportParseError(parser, *pNode, strError.pBuffer);

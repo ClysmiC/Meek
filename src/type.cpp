@@ -4,8 +4,6 @@
 #include "parse.h"
 #include "type.h"
 
-#include <string.h>
-
 void init(Type * pType, bool isFuncType)
 {
 	pType->isFuncType = isFuncType;
@@ -89,7 +87,7 @@ bool isFuncTypeResolved(const FuncType & funcType)
 
 bool isTypeInferred(const Type & type)
 {
-	bool result = (strcmp(type.ident.pToken->lexeme, "var") == 0);
+	bool result = (type.ident.pToken->lexeme == "var");
     return result;
 }
 
@@ -357,7 +355,7 @@ void insertBuiltInTypes(TypeTable * pTable)
         voidToken.id = -1;
         voidToken.startEnd = gc_startEndBuiltInPseudoToken;
         voidToken.tokenk = TOKENK_Identifier;
-        voidToken.lexeme = "void";
+        voidToken.lexeme = makeStringView("void");
 
         ScopedIdentifier voidIdent;
         setIdent(&voidIdent, &voidToken, SCOPEID_BuiltIn);
@@ -376,7 +374,7 @@ void insertBuiltInTypes(TypeTable * pTable)
         intToken.id = -1;
         intToken.startEnd = gc_startEndBuiltInPseudoToken;
         intToken.tokenk = TOKENK_Identifier;
-        intToken.lexeme = "int";
+        intToken.lexeme = makeStringView("int");
 
         ScopedIdentifier intIdent;
         setIdent(&intIdent, &intToken, SCOPEID_BuiltIn);
@@ -395,7 +393,7 @@ void insertBuiltInTypes(TypeTable * pTable)
         floatToken.id = -1;
         floatToken.startEnd = gc_startEndBuiltInPseudoToken;
         floatToken.tokenk = TOKENK_Identifier;
-        floatToken.lexeme = "float";
+        floatToken.lexeme = makeStringView("float");
 
         ScopedIdentifier floatIdent;
         setIdent(&floatIdent, &floatToken, SCOPEID_BuiltIn);
@@ -414,7 +412,7 @@ void insertBuiltInTypes(TypeTable * pTable)
         boolToken.id = -1;
         boolToken.startEnd = gc_startEndBuiltInPseudoToken;
         boolToken.tokenk = TOKENK_Identifier;
-        boolToken.lexeme = "bool";
+        boolToken.lexeme = makeStringView("bool");
 
         ScopedIdentifier boolIdent;
         setIdent(&boolIdent, &boolToken, SCOPEID_BuiltIn);
@@ -433,7 +431,7 @@ void insertBuiltInTypes(TypeTable * pTable)
         stringToken.id = -1;
         stringToken.startEnd = gc_startEndBuiltInPseudoToken;
         stringToken.tokenk = TOKENK_Identifier;
-        stringToken.lexeme = "string";
+        stringToken.lexeme = makeStringView("string");
 
         ScopedIdentifier stringIdent;
         setIdent(&stringIdent, &stringToken, SCOPEID_BuiltIn);
@@ -565,7 +563,7 @@ TYPID typidFromLiteralk(LITERALK literalk)
 
 #if DEBUG
 
-#include <stdio.h>
+#include "print.h"
 
 void debugPrintType(const Type& type)
 {
@@ -580,7 +578,7 @@ void debugPrintType(const Type& type)
 				// TODO: Change this when arbitrary compile time expressions are allowed
 				//	as the array size expression
 
-				printf("[");
+				print("[");
 
 				Assert(tmod.pSubscriptExpr && tmod.pSubscriptExpr->astk == ASTK_LiteralExpr);
 
@@ -591,43 +589,44 @@ void debugPrintType(const Type& type)
 				Assert(pNode->isValueSet);
 				AssertInfo(!pNode->isValueErroneous, "Just for sake of testing... in reality if it was erroneous then we don't really care/bother about the symbol table");
 
-				printf("%d", value);
+				printfmt("%d", value);
 
-				printf("]");
+				print("]");
 			} break;
 
 			case TYPEMODK_Pointer:
 			{
-				printf("^");
+				print("^");
 			} break;
 		}
 	}
 
 	if (!type.isFuncType)
 	{
-		printf("%s (scopeid: %d)", type.ident.pToken->lexeme, type.ident.defnclScopeid);
+		print(type.ident.pToken->lexeme);
+		printfmt(" (scopeid: %d)", type.ident.defnclScopeid);
 	}
 	else
 	{
 		// TODO: :) ... will need to set up tab/new line stuff so that it
 		//	can nest arbitrarily. Can't be bothered right now!!!
 
-		printf("(function type... CBA to print)");
+		print("(function type... CBA to print LOL)");
 	}
 }
 
 void debugPrintTypeTable(const TypeTable& typeTable)
 {
-	printf("===============\n");
-	printf("=====TYPES=====\n");
-	printf("===============\n\n");
+	print("===============\n");
+	print("=====TYPES=====\n");
+	print("===============\n\n");
 
 	for (auto it = iter(typeTable.table); it.pValue; iterNext(&it))
 	{
 		const Type * pType = it.pValue;
 		debugPrintType(*pType);
 
-		printf("\n");
+		println();
 	}
 }
 

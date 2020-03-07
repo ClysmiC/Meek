@@ -175,19 +175,18 @@ struct Token
 	TOKENK tokenk = TOKENK_Nil;
     GRFERRTOK grferrtok = GRFERRTOK_None;      // TOKENK_Error
 
-    // TODO: store lexeme length? I *do* make sure that they are null-terminated so
-    //  I can always just strlen them but that is pretty lame.
-	// TOO: change this into a string view into the original source? Then I could get rid of the lexeme buffer
-
-	char * lexeme = nullptr;
+	StringView lexeme = { 0 };
 };
 
 struct ReservedWord
 {
-	char *		lexeme = nullptr;
+	StringView	lexeme = { 0 };
 	TOKENK		tokenk = TOKENK_Nil;
 
-	ReservedWord(char * lexeme, TOKENK tokenk) : lexeme(lexeme), tokenk(tokenk) { ; }
+	ReservedWord(char * lexeme, TOKENK tokenk) : lexeme(), tokenk(tokenk)
+	{
+		this->lexeme = makeStringView(lexeme);
+	}
 };
 
 inline bool isLiteral(TOKENK tokenk)
@@ -205,7 +204,8 @@ inline void nillify(Token * poToken)
 	poToken->tokenk = TOKENK_Nil;
     poToken->grferrtok = GRFERRTOK_None;
 
-	poToken->lexeme = nullptr;
+	poToken->lexeme.pCh = nullptr;
+	poToken->lexeme.cCh = 0;
 }
 
 // TODO: use a dict or trie for reserved words
@@ -220,4 +220,4 @@ extern int g_cTokenkLiteral;
 extern TOKENK g_aTokenkUnopPre[];
 extern int g_cTokenkUnopPre;
 
-extern const char * g_mpTokenkDisplay[];
+extern const char * g_mpTokenkStrDisplay[];

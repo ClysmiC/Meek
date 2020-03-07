@@ -1,9 +1,8 @@
 #include "ast_print.h"
 
 #include "ast.h"
+#include "print.h"
 #include "type.h"
-
-#include <stdio.h>
 
 #if DEBUG
 
@@ -15,7 +14,7 @@ void debugPrintAst(DebugPrintCtx * pCtx, const AstNode & root)
     Defer(dispose(&mpLevelSkip));
 
     debugPrintSubAst(pCtx, root, 0, false);
-    printf("\n");
+    println();
 }
 
 void setSkip(DebugPrintCtx * pCtx, int level, bool skip) {
@@ -37,15 +36,15 @@ void printTabs(DebugPrintCtx * pCtx, int level, bool printArrows, bool skipAfter
     {
         if (pCtx->mpLevelSkip[i])
         {
-            printf("   ");
+            print("   ");
         }
         else
         {
-            printf("|");
+            print("|");
 
             if (printArrows && i == level - 1)
             {
-                printf("- ");
+                print("- ");
 
                 if (skipAfterArrow)
                 {
@@ -54,7 +53,7 @@ void printTabs(DebugPrintCtx * pCtx, int level, bool printArrows, bool skipAfter
             }
             else
             {
-                printf("  ");
+                print("  ");
             }
         }
     }
@@ -67,10 +66,10 @@ void printChildren(DebugPrintCtx * pCtx, const DynamicArray<AstNode *> & apChild
         bool isLastChild = i == apChildren.cItem - 1;
         bool shouldSetSkip = setSkipOnLastChild && isLastChild;
 
-        printf("\n");
+        println();
         printTabs(pCtx, level, false, false);
 
-        printf("(%s %d):", label, i);
+        printfmt("(%s %d):", label, i);
         debugPrintSubAst(
             pCtx,
             *apChildren[i],
@@ -80,7 +79,7 @@ void printChildren(DebugPrintCtx * pCtx, const DynamicArray<AstNode *> & apChild
 
         if (!isLastChild)
         {
-            printf("\n");
+            println();
             printTabs(pCtx, level, false, false);
         }
     }
@@ -95,9 +94,9 @@ void debugPrintFuncHeader(DebugPrintCtx * pCtx, const DynamicArray<AstNode *> & 
 {
     if (apParamVarDecls.cItem == 0)
     {
-        printf("\n");
+        println();
         printTabs(pCtx, level, true, false);
-        printf("(no params)");
+        print("(no params)");
     }
     else
     {
@@ -106,9 +105,9 @@ void debugPrintFuncHeader(DebugPrintCtx * pCtx, const DynamicArray<AstNode *> & 
 
     if (apReturnVarDecls.cItem == 0)
     {
-        printf("\n");
+        println();
         printTabs(pCtx, level, true, skipAfterArrow);
-        printf("(no return vals)");
+        print("(no return vals)");
     }
     else
     {
@@ -123,10 +122,10 @@ void debugPrintType(DebugPrintCtx * pCtx, TYPID typid, int level, bool skipAfter
 
     if (!isTypeResolved(typid))
     {
-        printf("\n");
+        println();
         printTabs(pCtx, level, false, false);
 
-        printf("!! unresolved type !!\n");
+        print("!! unresolved type !!\n");
 
         return;
     }
@@ -136,60 +135,60 @@ void debugPrintType(DebugPrintCtx * pCtx, TYPID typid, int level, bool skipAfter
 
     for (int i = 0; i < pType->aTypemods.cItem; i++)
     {
-        printf("\n");
+        println();
         printTabs(pCtx, level, false, false);
 
         TypeModifier tmod = pType->aTypemods[i];
 
         if (tmod.typemodk == TYPEMODK_Array)
         {
-            printf("(array of)");
+            print("(array of)");
             debugPrintSubAst(pCtx, *tmod.pSubscriptExpr, levelNext, false);
         }
         else
         {
             Assert(tmod.typemodk == TYPEMODK_Pointer);
-            printf("(pointer to)");
+            print("(pointer to)");
         }
     }
 
     if (pType->isFuncType)
     {
-        printf("\n");
+        println();
         printTabs(pCtx, level, false, false);
-        printf("(func)");
+        print("(func)");
 
-        printf("\n");
-        printTabs(pCtx, level, false, false);
-
-        printf("\n");
+        println();
         printTabs(pCtx, level, false, false);
 
-        printf("(params)");
+        println();
+        printTabs(pCtx, level, false, false);
+
+        print("(params)");
         printTabs(pCtx, level, false, false);
 
         for (int i = 0; i < pType->funcType.paramTypids.cItem; i++)
         {
             bool isLastChild = i == pType->funcType.paramTypids.cItem - 1;
 
-            printf("\n");
+            println();
             printTabs(pCtx, level, false, false);
 
-            printf("(%s %d):", "param", i);
+            printfmt("(%s %d):", "param", i);
 
             debugPrintType(pCtx, pType->funcType.paramTypids[i], levelNext, false);
 
             if (!isLastChild)
             {
-                printf("\n");
+                println();
                 printTabs(pCtx, level, false, false);
             }
         }
 
-        printf("\n");
+        println();
         printTabs(pCtx, level, false, false);
 
-        printf("(return values)");
+        print("(return values)");
         printTabs(pCtx, level, false, false);
 
         for (int i = 0; i < pType->funcType.returnTypids.cItem; i++)
@@ -197,25 +196,25 @@ void debugPrintType(DebugPrintCtx * pCtx, TYPID typid, int level, bool skipAfter
             bool isLastChild = i == pType->funcType.returnTypids.cItem - 1;
             bool shouldSetSkip = skipAfterArrow && isLastChild;
 
-            printf("\n");
+            println();
             printTabs(pCtx, level, false, false);
 
-            printf("(%s %d):", "return", i);
+            printfmt("(%s %d):", "return", i);
 
             debugPrintType(pCtx, pType->funcType.returnTypids[i], levelNext, isLastChild);
 
             if (!isLastChild)
             {
-                printf("\n");
+                println();
                 printTabs(pCtx, level, false, false);
             }
         }
     }
     else
     {
-        printf("\n");
+        println();
         printTabs(pCtx, level, true, skipAfterArrow);
-        printf("%s", pType->ident.pToken->lexeme);
+        print(pType->ident.pToken->lexeme);
     }
 };
 
@@ -225,7 +224,7 @@ void debugPrintSubAst(DebugPrintCtx * pCtx, const AstNode & node, int level, boo
     static const char * parseErrorString = "[parse error]:";
 
     setSkip(pCtx, level, false);
-    printf("\n");
+    println();
     printTabs(pCtx, level, true, skipAfterArrow);
 
     int levelNext = level + 1;
@@ -253,17 +252,17 @@ void debugPrintSubAst(DebugPrintCtx * pCtx, const AstNode & node, int level, boo
 
             if (errMsgs.cItem == 1)
             {
-                printf("%s %s", scanErrorString, errMsgs[0].pBuffer);
+                printfmt("%s %s", scanErrorString, errMsgs[0].pBuffer);
             }
             else
             {
-                printf("%s", scanErrorString);
+                printfmt("%s", scanErrorString);
 
                 for (int i = 0; i < errMsgs.cItem; i++)
                 {
-                    printf("\n");
+                    println();
                     printTabs(pCtx, level, true, skipAfterArrow);
-                    printf("- %s", errMsgs[i].pBuffer);
+                    printfmt("- %s", errMsgs[i].pBuffer);
                 }
             }
 
@@ -275,14 +274,14 @@ void debugPrintSubAst(DebugPrintCtx * pCtx, const AstNode & node, int level, boo
             auto * pErr = DownConst(&node, BubbleErr);
             auto * pErrCasted = UpErrConst(pErr);
 
-            printf("%s (bubble)", parseErrorString);
+            printfmt("%s (bubble)", parseErrorString);
 
             if (pErrCasted->apChildren.cItem > 0)
             {
                 // Sloppy... printChildren should probably handle the new line spacing so that if you pass
                 //	it an empty array of children it will still just work.
 
-                printf("\n");
+                println();
 
                 printTabs(pCtx, levelNext, false, false);
                 printErrChildren(pCtx, *pErrCasted, levelNext);
@@ -294,14 +293,14 @@ void debugPrintSubAst(DebugPrintCtx * pCtx, const AstNode & node, int level, boo
             auto * pErr = DownConst(&node, UnexpectedTokenkErr);
             auto * pErrCasted = UpErrConst(pErr);
 
-            printf("%s unexpected %s", parseErrorString, g_mpTokenkDisplay[pErr->pErrToken->tokenk]);
+            printfmt("%s unexpected %s", parseErrorString, g_mpTokenkStrDisplay[pErr->pErrToken->tokenk]);
 
             if (pErrCasted->apChildren.cItem > 0)
             {
                 // Sloppy... printChildren should probably handle the new line spacing so that if you pass
                 //	it an empty array of children it will still just work.
 
-                printf("\n");
+                println();
 
                 printTabs(pCtx, levelNext, false, false);
                 printErrChildren(pCtx, *pErrCasted, levelNext);
@@ -315,25 +314,25 @@ void debugPrintSubAst(DebugPrintCtx * pCtx, const AstNode & node, int level, boo
 
             if (pErr->aTokenkValid.cItem == 1)
             {
-                printf("%s expected %s", parseErrorString, g_mpTokenkDisplay[pErr->aTokenkValid[0]]);
+                printfmt("%s expected %s", parseErrorString, g_mpTokenkStrDisplay[pErr->aTokenkValid[0]]);
             }
             else if (pErr->aTokenkValid.cItem == 2)
             {
-                printf("%s expected %s or %s", parseErrorString, g_mpTokenkDisplay[pErr->aTokenkValid[0]], g_mpTokenkDisplay[pErr->aTokenkValid[1]]);
+                printfmt("%s expected %s or %s", parseErrorString, g_mpTokenkStrDisplay[pErr->aTokenkValid[0]], g_mpTokenkStrDisplay[pErr->aTokenkValid[1]]);
             }
             else
             {
                 Assert(pErr->aTokenkValid.cItem > 2);
 
-                printf("%s expected %s", parseErrorString, g_mpTokenkDisplay[pErr->aTokenkValid[0]]);
+                printfmt("%s expected %s", parseErrorString, g_mpTokenkStrDisplay[pErr->aTokenkValid[0]]);
 
                 for (uint i = 1; i < pErr->aTokenkValid.cItem; i++)
                 {
                     bool isLast = (i == pErr->aTokenkValid.cItem - 1);
 
-                    printf(", ");
-                    if (isLast) printf("or ");
-                    printf("%s", g_mpTokenkDisplay[pErr->aTokenkValid[i]]);
+                    print(", ");
+                    if (isLast) print("or ");
+                    printfmt("%s", g_mpTokenkStrDisplay[pErr->aTokenkValid[i]]);
                 }
             }
 
@@ -342,7 +341,7 @@ void debugPrintSubAst(DebugPrintCtx * pCtx, const AstNode & node, int level, boo
                 // Sloppy... printChildren should probably handle the new line spacing so that if you pass
                 //	it an empty array of children it will still just work.
 
-                printf("\n");
+                println();
 
                 printTabs(pCtx, levelNext, false, false);
                 printErrChildren(pCtx, *pErrCasted, levelNext);
@@ -354,14 +353,14 @@ void debugPrintSubAst(DebugPrintCtx * pCtx, const AstNode & node, int level, boo
             auto * pErr = DownConst(&node, InitUnnamedVarErr);
             auto * pErrCasted = UpErrConst(pErr);
 
-            printf("%s attempt to assign initial value to unnamed variable", parseErrorString);
+            printfmt("%s attempt to assign initial value to unnamed variable", parseErrorString);
 
             if (pErrCasted->apChildren.cItem > 0)
             {
                 // Sloppy... printChildren should probably handle the new line spacing so that if you pass
                 //	it an empty array of children it will still just work.
 
-                printf("\n");
+                println();
 
                 printTabs(pCtx, levelNext, false, false);
                 printErrChildren(pCtx, *pErrCasted, levelNext);
@@ -373,14 +372,14 @@ void debugPrintSubAst(DebugPrintCtx * pCtx, const AstNode & node, int level, boo
             auto * pErr = DownConst(&node, ChainedAssignErr);
             auto * pErrCasted = UpErrConst(pErr);
 
-            printf("%s chaining assignments is not permitted", parseErrorString);
+            printfmt("%s chaining assignments is not permitted", parseErrorString);
 
             if (pErrCasted->apChildren.cItem > 0)
             {
                 // Sloppy... printChildren should probably handle the new line spacing so that if you pass
                 //	it an empty array of children it will still just work.
 
-                printf("\n");
+                println();
 
                 printTabs(pCtx, levelNext, false, false);
                 printErrChildren(pCtx, *pErrCasted, levelNext);
@@ -392,14 +391,14 @@ void debugPrintSubAst(DebugPrintCtx * pCtx, const AstNode & node, int level, boo
             auto * pErr = DownConst(&node, IllegalDoStmtErr);
             auto * pErrCasted = UpErrConst(pErr);
 
-            printf("%s %s is not permitted following 'do'", parseErrorString, displayString(pErr->astkStmt));
+            printfmt("%s %s is not permitted following 'do'", parseErrorString, displayString(pErr->astkStmt));
 
             if (pErrCasted->apChildren.cItem > 0)
             {
                 // Sloppy... printChildren should probably handle the new line spacing so that if you pass
                 //	it an empty array of children it will still just work.
 
-                printf("\n");
+                println();
 
                 printTabs(pCtx, levelNext, false, false);
                 printErrChildren(pCtx, *pErrCasted, levelNext);
@@ -411,14 +410,14 @@ void debugPrintSubAst(DebugPrintCtx * pCtx, const AstNode & node, int level, boo
             auto * pErr = DownConst(&node, IllegalDoStmtErr);
             auto * pErrCasted = UpErrConst(pErr);
 
-            printf("%s %s is not permitted as a top level statement", parseErrorString, displayString(pErr->astkStmt));
+            printfmt("%s %s is not permitted as a top level statement", parseErrorString, displayString(pErr->astkStmt));
 
             if (pErrCasted->apChildren.cItem > 0)
             {
                 // Sloppy... printChildren should probably handle the new line spacing so that if you pass
                 //	it an empty array of children it will still just work.
 
-                printf("\n");
+                println();
 
                 printTabs(pCtx, levelNext, false, false);
                 printErrChildren(pCtx, *pErrCasted, levelNext);
@@ -430,14 +429,14 @@ void debugPrintSubAst(DebugPrintCtx * pCtx, const AstNode & node, int level, boo
             auto * pErr = DownConst(&node, InvokeFuncLiteralErr);
             auto * pErrCasted = UpErrConst(pErr);
 
-            printf("%s function literals can not be directly invoked", parseErrorString);
+            printfmt("%s function literals can not be directly invoked", parseErrorString);
 
             if (pErrCasted->apChildren.cItem > 0)
             {
                 // Sloppy... printChildren should probably handle the new line spacing so that if you pass
                 //	it an empty array of children it will still just work.
 
-                printf("\n");
+                println();
 
                 printTabs(pCtx, levelNext, false, false);
                 printErrChildren(pCtx, *pErrCasted, levelNext);
@@ -452,12 +451,12 @@ void debugPrintSubAst(DebugPrintCtx * pCtx, const AstNode & node, int level, boo
         {
             auto * pExpr = DownConst(&node, BinopExpr);
 
-            printf("%s ", pExpr->pOp->lexeme);
-            printf("\n");
+            print(pExpr->pOp->lexeme);
+            println();
 
             printTabs(pCtx, levelNext, false, false);
             debugPrintSubAst(pCtx, *pExpr->pLhsExpr, levelNext, false);
-            printf("\n");
+            println();
 
             printTabs(pCtx, levelNext, false, false);
             debugPrintSubAst(pCtx, *pExpr->pRhsExpr, levelNext, true);
@@ -467,8 +466,8 @@ void debugPrintSubAst(DebugPrintCtx * pCtx, const AstNode & node, int level, boo
         {
             auto * pExpr = DownConst(&node, GroupExpr);
 
-            printf("()");
-            printf("\n");
+            print("()");
+            println();
 
             printTabs(pCtx, levelNext, false, false);
             debugPrintSubAst(pCtx, *pExpr->pExpr, levelNext, true);
@@ -478,15 +477,15 @@ void debugPrintSubAst(DebugPrintCtx * pCtx, const AstNode & node, int level, boo
         {
             auto * pExpr = DownConst(&node, LiteralExpr);
 
-            printf("%s", pExpr->pToken->lexeme);
+            print(pExpr->pToken->lexeme);
         } break;
 
         case ASTK_UnopExpr:
         {
             auto * pExpr = DownConst(&node, UnopExpr);
 
-            printf("%s ", pExpr->pOp->lexeme);
-            printf("\n");
+            print(pExpr->pOp->lexeme);
+            println();
 
             printTabs(pCtx, levelNext, false, false);
             debugPrintSubAst(pCtx, *pExpr->pExpr, levelNext, true);
@@ -498,66 +497,66 @@ void debugPrintSubAst(DebugPrintCtx * pCtx, const AstNode & node, int level, boo
 
             if (pExpr->pOwner)
             {
-                printf(". %s", pExpr->pTokenIdent->lexeme);
-                printf("\n");
+                print(pExpr->pTokenIdent->lexeme);
+                println();
 
                 printTabs(pCtx, levelNext, false, false);
-                printf("\n");
+                println();
 
                 printTabs(pCtx, levelNext, false, false);
-                printf("(owner):");
+                print("(owner):");
                 debugPrintSubAst(pCtx, *pExpr->pOwner, levelNext, true);
             }
             else
             {
-                printf("%s", pExpr->pTokenIdent->lexeme);
+                print(pExpr->pTokenIdent->lexeme);
             }
         } break;
 
 		case ASTK_PointerDereferenceExpr:
 		{
 			auto * pExpr = DownConst(&node, PointerDereferenceExpr);
-			printf("<dereference>");
-			printf("\n");
+			print("<dereference>");
+			println();
 
 			printTabs(pCtx, levelNext, false, false);
-            printf("\n");
+            println();
 
 			printTabs(pCtx, levelNext, false, false);
-            printf("(pointer):");
+            print("(pointer):");
             debugPrintSubAst(pCtx, *pExpr->pPointerExpr, levelNext, true);
 		} break;
 
         case ASTK_ArrayAccessExpr:
         {
             auto * pExpr = DownConst(&node, ArrayAccessExpr);
-            printf("[]");
-            printf("\n");
+            print("[]");
+            println();
 
             printTabs(pCtx, levelNext, false, false);
-            printf("\n");
+            println();
 
             printTabs(pCtx, levelNext, false, false);
-            printf("(array):");
+            print("(array):");
             debugPrintSubAst(pCtx, *pExpr->pArrayExpr, levelNext, false);
 
-            printf("\n");
+            println();
             printTabs(pCtx, levelNext, false, false);
-            printf("(subscript):");
+            print("(subscript):");
             debugPrintSubAst(pCtx, *pExpr->pSubscriptExpr, levelNext, true);
         } break;
 
         case ASTK_FuncCallExpr:
         {
             auto * pExpr = DownConst(&node, FuncCallExpr);
-            printf("(func call)");
-            printf("\n");
+            print("(func call)");
+            println();
 
             printTabs(pCtx, levelNext, false, false);
-            printf("\n");
+            println();
 
             printTabs(pCtx, levelNext, false, false);
-            printf("(func):");
+            print("(func):");
 
             bool noArgs = pExpr->apArgs.cItem == 0;
 
@@ -570,9 +569,9 @@ void debugPrintSubAst(DebugPrintCtx * pCtx, const AstNode & node, int level, boo
         {
             auto * pStmt = DownConst(&node, FuncLiteralExpr);
 
-            printf("(func literal)");
+            print("(func literal)");
 
-            printf("\n");
+            println();
             printTabs(pCtx, levelNext, false, false);
 
             debugPrintFuncHeader(
@@ -593,8 +592,8 @@ void debugPrintSubAst(DebugPrintCtx * pCtx, const AstNode & node, int level, boo
         {
             auto * pStmt = DownConst(&node, ExprStmt);
 
-            printf("(expr stmt)");
-            printf("\n");
+            print("(expr stmt)");
+            println();
 
             printTabs(pCtx, levelNext, false, false);
 
@@ -605,24 +604,24 @@ void debugPrintSubAst(DebugPrintCtx * pCtx, const AstNode & node, int level, boo
         {
             auto * pStmt = DownConst(&node, AssignStmt);
 
-            printf("%s", pStmt->pAssignToken->lexeme);
-            printf("\n");
+            print(pStmt->pAssignToken->lexeme);
+            println();
 
             printTabs(pCtx, levelNext, false, false);
-            printf("\n");
+            println();
 
             printTabs(pCtx, levelNext, false, false);
-            printf("(lhs):");
+            print("(lhs):");
 
             debugPrintSubAst(pCtx, *pStmt->pLhsExpr, levelNext, false);
-            printf("\n");
+            println();
 
             printTabs(pCtx, levelNext, false, false);
-            printf("\n");
+            println();
 
             printTabs(pCtx, levelNext, false, false);
-            printf("(rhs):");
-            printf("\n");
+            print("(rhs):");
+            println();
 
             printTabs(pCtx, levelNext, false, false);
             debugPrintSubAst(pCtx, *pStmt->pRhsExpr, levelNext, true);
@@ -632,41 +631,41 @@ void debugPrintSubAst(DebugPrintCtx * pCtx, const AstNode & node, int level, boo
         {
             auto * pStmt = DownConst(&node, VarDeclStmt);
 
-            printf("(var decl)");
-            printf("\n");
+            print("(var decl)");
+            println();
 
             printTabs(pCtx, levelNext, false, false);
-            printf("\n");
+            println();
 
             if (pStmt->ident.pToken)
             {
                 printTabs(pCtx, levelNext, false, false);
-                printf("(ident):");
-                printf("\n");
+                print("(ident):");
+                println();
 
                 printTabs(pCtx, levelNext, true, false);
-                printf("%s", pStmt->ident.pToken->lexeme);
-                printf("\n");
+                print(pStmt->ident.pToken->lexeme);
+                println();
 
                 printTabs(pCtx, levelNext, false, false);
-                printf("\n");
+                println();
             }
 
             printTabs(pCtx, levelNext, false, false);
-            printf("(type):");
+            print("(type):");
 
             bool hasInitExpr = (pStmt->pInitExpr != nullptr);
 
             debugPrintType(pCtx, pStmt->typid, levelNext, !hasInitExpr);
-            printf("\n");
+            println();
             printTabs(pCtx, levelNext, false, false);
 
 
             if (hasInitExpr)
             {
-                printf("\n");
+                println();
                 printTabs(pCtx, levelNext, false, false);
-                printf("(init):");
+                print("(init):");
                 debugPrintSubAst(pCtx, *pStmt->pInitExpr, levelNext, true);
             }
         } break;
@@ -675,20 +674,20 @@ void debugPrintSubAst(DebugPrintCtx * pCtx, const AstNode & node, int level, boo
         {
             auto * pStmt = DownConst(&node, StructDefnStmt);
 
-            printf("(struct defn)");
+            print("(struct defn)");
 
-            printf("\n");
+            println();
             printTabs(pCtx, levelNext, false, false);
 
-            printf("\n");
+            println();
             printTabs(pCtx, levelNext, false, false);
-            printf("(name):");
+            print("(name):");
 
-            printf("\n");
+            println();
             printTabs(pCtx, levelNext, true, false);
-            printf("%s", pStmt->ident.pToken->lexeme);
+            print(pStmt->ident.pToken->lexeme);
 
-            printf("\n");
+            println();
             printTabs(pCtx, levelNext, false, false);
 
             printChildren(pCtx, pStmt->apVarDeclStmt, levelNext, "vardecl", true);
@@ -698,20 +697,20 @@ void debugPrintSubAst(DebugPrintCtx * pCtx, const AstNode & node, int level, boo
         {
             auto * pStmt = DownConst(&node, FuncDefnStmt);
 
-            printf("(func defn)");
+            print("(func defn)");
 
-            printf("\n");
+            println();
             printTabs(pCtx, levelNext, false, false);
 
-            printf("\n");
+            println();
             printTabs(pCtx, levelNext, false, false);
-            printf("(name):");
+            print("(name):");
 
-            printf("\n");
+            println();
             printTabs(pCtx, levelNext, true, false);
-            printf("%s", pStmt->ident.pToken->lexeme);
+            print(pStmt->ident.pToken->lexeme);
 
-            printf("\n");
+            println();
             printTabs(pCtx, levelNext, false, false);
 
             debugPrintFuncHeader(
@@ -728,11 +727,11 @@ void debugPrintSubAst(DebugPrintCtx * pCtx, const AstNode & node, int level, boo
         {
             auto * pStmt = DownConst(&node, BlockStmt);
 
-            printf("(block)");
+            print("(block)");
 
             if (pStmt->apStmts.cItem > 0)
             {
-                printf("\n");
+                println();
                 printTabs(pCtx, levelNext, false, false);
             }
 
@@ -743,18 +742,18 @@ void debugPrintSubAst(DebugPrintCtx * pCtx, const AstNode & node, int level, boo
         {
             auto * pStmt = DownConst(&node, WhileStmt);
 
-            printf("(while)");
+            print("(while)");
 
-            printf("\n");
+            println();
             printTabs(pCtx, levelNext, false, false);
 
-            printf("\n");
+            println();
             printTabs(pCtx, levelNext, false, false);
-            printf("(cond):");
+            print("(cond):");
 
             debugPrintSubAst(pCtx, *pStmt->pCondExpr, levelNext, false);
 
-            printf("\n");
+            println();
             printTabs(pCtx, levelNext, false, false);
 
             debugPrintSubAst(pCtx, *pStmt->pBodyStmt, levelNext, true);
@@ -764,30 +763,30 @@ void debugPrintSubAst(DebugPrintCtx * pCtx, const AstNode & node, int level, boo
         {
             auto * pStmt = DownConst(&node, IfStmt);
 
-            printf("(if)");
+            print("(if)");
 
-            printf("\n");
+            println();
             printTabs(pCtx, levelNext, false, false);
 
-            printf("\n");
+            println();
             printTabs(pCtx, levelNext, false, false);
-            printf("(cond):");
+            print("(cond):");
 
             debugPrintSubAst(pCtx, *pStmt->pCondExpr, levelNext, false);
 
-            printf("\n");
+            println();
             printTabs(pCtx, levelNext, false, false);
 
             debugPrintSubAst(pCtx, *pStmt->pThenStmt, levelNext, !pStmt->pElseStmt);
 
             if (pStmt->pElseStmt)
             {
-                printf("\n");
+                println();
                 printTabs(pCtx, levelNext, false, false);
 
-                printf("\n");
+                println();
                 printTabs(pCtx, levelNext, false, false);
-                printf("(else):");
+                print("(else):");
 
                 debugPrintSubAst(pCtx, *pStmt->pElseStmt, levelNext, true);
             }
@@ -796,11 +795,11 @@ void debugPrintSubAst(DebugPrintCtx * pCtx, const AstNode & node, int level, boo
         case ASTK_ReturnStmt:
         {
             auto * pStmt = DownConst(&node, ReturnStmt);
-            printf("(return)");
+            print("(return)");
 
             if (pStmt->pExpr)
             {
-                printf("\n");
+                println();
                 printTabs(pCtx, levelNext, false, false);
 
                 debugPrintSubAst(pCtx, *pStmt->pExpr, levelNext, true);
@@ -810,13 +809,13 @@ void debugPrintSubAst(DebugPrintCtx * pCtx, const AstNode & node, int level, boo
         case ASTK_BreakStmt:
         {
             auto * pStmt = DownConst(&node, BreakStmt);
-            printf("(break)");
+            print("(break)");
         } break;
 
         case ASTK_ContinueStmt:
         {
             auto * pStmt = DownConst(&node, ContinueStmt);
-            printf("(continue)");
+            print("(continue)");
         } break;
 
 
@@ -827,8 +826,8 @@ void debugPrintSubAst(DebugPrintCtx * pCtx, const AstNode & node, int level, boo
         {
             auto * pNode = DownConst(&node, Program);
 
-            printf("(program)");
-            printf("\n");
+            print("(program)");
+            println();
 
             printTabs(pCtx, levelNext, false, false);
 
