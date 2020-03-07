@@ -62,7 +62,7 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 			{
 				// TODO: report error
 
-				printf("Binary operator type mismatch. L: %d, R: %d\n", typidLhs, typidRhs);
+				printfmt("Binary operator type mismatch. L: %d, R: %d\n", typidLhs, typidRhs);
 				typidResult = TYPID_TypeError;
 				goto end;
 			}
@@ -247,7 +247,7 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 
 			if (!isPointerType(*pTypePtr))
 			{
-				printf("Trying to dereference a non-pointer\n");
+				print("Trying to dereference a non-pointer\n");
 				typidResult = TYPID_TypeError;
 				goto end;
 			}
@@ -282,7 +282,7 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 				// TODO: report error here, but keep on chugging with the resolve... despite the incorrect subscript, we still
 				//	know what type an array access will end up as.
 
-				printf("Trying to access array with a non integer\n");
+				print("Trying to access array with a non integer\n");
 			}
 
 			const Type * pTypeArray = lookupType(*pPass->pTypeTable, typidArray);
@@ -294,7 +294,7 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 				//	How am I going to report these errors? Should I just maintain a list separate from the
 				//	fact that I am returning error TYPID's?
 
-				printf("Trying to access non-array as if it were an array...\n");
+				print("Trying to access non-array as if it were an array...\n");
 				typidResult = TYPID_TypeError;
 				goto end;
 			}
@@ -333,7 +333,7 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 					// TODO: report error here while I don't support UFCS
 					// NOTE: We aren't ever visiting the parent(s) here or setting their typids to unresolved.... bleh.
 
-					printf("Member function looking thingy... not supported\n");
+					print("Member function looking thingy... not supported\n");
 
 					typidResult = TYPID_Unresolved;	// Is this right?
 					goto end;
@@ -492,7 +492,7 @@ void resolveStmt(ResolvePass * pPass, AstNode * pNode)
 			if (!isLValue(pStmt->pLhsExpr->astk))
 			{
 				// TOOD: report error
-				printf("Assigning to non-lvalue\n");
+				print("Assigning to non-lvalue\n");
 			}
 			else
 			{
@@ -501,7 +501,7 @@ void resolveStmt(ResolvePass * pPass, AstNode * pNode)
 					if (typidLhs != typidRhs)
 					{
 						// TODO: report error
-						printf("Assignment type error. L: %d, R: %d\n", typidLhs, typidRhs);
+						printfmt("Assignment type error. L: %d, R: %d\n", typidLhs, typidRhs);
 					}
 				}
 			}
@@ -546,7 +546,7 @@ void resolveStmt(ResolvePass * pPass, AstNode * pNode)
 				if (isTypeResolved(typidInit) && typidInit != pStmt->typid)
 				{
 					// TODO: report better error
-					printf("Cannot initialize variable of type %d with expression of type %d\n", pStmt->typid, typidInit);
+					printfmt("Cannot initialize variable of type %d with expression of type %d\n", pStmt->typid, typidInit);
 				}
 			}
 		} break;
@@ -717,11 +717,11 @@ void resolveStmt(ResolvePass * pPass, AstNode * pNode)
 
 			if (pFnCtx->aTypidReturn.cItem == 0 && pStmt->pExpr)
 			{
-				printf("Cannot return value from function expecting void\n");
+				print("Cannot return value from function expecting void\n");
 			}
 			else if (pFnCtx->aTypidReturn.cItem != 0 && !pStmt->pExpr)
 			{
-				printf("Function expecting a return value\n");
+				print("Function expecting a return value\n");
 			}
 
 			if (pStmt->pExpr)
@@ -732,7 +732,7 @@ void resolveStmt(ResolvePass * pPass, AstNode * pNode)
 
 				if (typidReturn != pFnCtx->aTypidReturn[0])
 				{
-					printf("Return type mismatch\n");
+					print("Return type mismatch\n");
 				}
 			}
 		} break;
@@ -741,7 +741,7 @@ void resolveStmt(ResolvePass * pPass, AstNode * pNode)
 		{
 			if (pPass->cNestedBreakable == 0)
 			{
-				printf("Cannot break from current context");
+				print("Cannot break from current context");
 			}
 			else
 			{
@@ -753,7 +753,7 @@ void resolveStmt(ResolvePass * pPass, AstNode * pNode)
 		{
 			if (pPass->cNestedBreakable == 0)
 			{
-				printf("Cannot continue from current context");
+				print("Cannot continue from current context");
 			}
 			else
 			{

@@ -2,9 +2,6 @@
 
 #include "als.h"
 
-#include <stdarg.h>
-#include <stdio.h>
-
 struct AstNode;
 struct Parser;
 struct Scanner;

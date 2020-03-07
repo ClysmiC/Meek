@@ -8,21 +8,25 @@
 #include "resolve_pass.h"
 #include "scan.h"
 
+#include <stdio.h>
+
 int main()
 {
-	Defer(char c = getchar());		// Hack to see output at end
+	// TODO: Read file in from command line
 
 #if 1
 	// Desktop setup
 
-	char * filename = "W:/Meek/examples/test.meek";		// TODO: Read this in from command line
+	char * filename = "W:/Meek/examples/test.meek";
 #else
 	// Laptop setup
 
 	char * filename = "C:/Users/Andrew/Desktop/clylang/test.meek";		// TODO: Read this in from command line
 #endif
 
-	int bufferSize = 1024 * 1024;										// TODO: Support files bigger than 1 mb. Maybe have scanner return a special value when its buffer is full and it will ask you to pass it a new buffer?
+	// TODO: Support files bigger than 1 mb. Maybe have scanner return a special value when its buffer is full and it will ask you to pass it a new buffer?
+
+	int bufferSize = 1024 * 1024;
 
 	char * buffer = new char[bufferSize];
 	Defer(delete[] buffer);
@@ -34,12 +38,16 @@ int main()
 
 	if (bytesRead < 0)
 	{
-		fprintf(stderr, "Error opening file\n");
+		// TODO: print to stderr
+
+		print("Error opening file\n");
 		return 1;
 	}
 	else if (bytesRead == bufferSize)
 	{
-		fprintf(stderr, "Files larger than %d bytes are not yet supported", bufferSize);
+		// TOOD: print to stderr
+
+		printfmt("Files larger than %d bytes are not yet supported", bufferSize);
 		return 1;
 	}
 
@@ -73,7 +81,7 @@ int main()
 
 	if (!tryResolveAllTypes(&parser))
 	{
-		printf("Unable to resolve following type(s):\n");
+		print("Unable to resolve following type(s):\n");
 
 		for (int i = 0; i < parser.typeTable.typesPendingResolution.cItem; i++)
 		{
@@ -81,7 +89,7 @@ int main()
 
 			if (pType->isFuncType)
 			{
-				printf("(skipping func type)\n");
+				print("(skipping func type)\n");
 			}
 			else
 			{
@@ -95,7 +103,7 @@ int main()
 
 	if (!tryResolvePendingFuncSymbolsAfterTypesResolved(&parser.symbTable))
 	{
-		printf("Couldn't resolve all func symbols\n");
+		print("Couldn't resolve all func symbols\n");
 		return 1;
 	}
 
@@ -105,12 +113,13 @@ int main()
 	resolvePass.pTypeTable = &parser.typeTable;
 	doResolvePass(&resolvePass, pAstRoot);
 
-	printf("Resolve pass all done\n");
+	print("Resolve pass all done\n");
 
-	printf("\n\n");
+	println();
+	println();
 	debugPrintSymbolTable(parser.symbTable);
 
-	printf("\n");
+	println();
 	debugPrintTypeTable(parser.typeTable);
 
 #if DEBUG && 1
@@ -121,14 +130,14 @@ int main()
 	debugPrintAst(&debugPrintCtx, *pAstRoot);
 
 
-	printf("\n");
+	println();
 	if (parser.apErrorNodes.cItem > 0)
 	{
-		printf("Parse had error(s)!\n");
+		print("Parse had error(s)!\n");
 	}
 	else
 	{
-		printf("No parse errors :)\n");
+		print("No parse errors :)\n");
 	}
 
 #endif

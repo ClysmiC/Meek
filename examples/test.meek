@@ -11,9 +11,6 @@ fn doOperation(
 -> Vector
 {
 	return operation(v1, v2);
-	
-	"This is a test of the
-	multi error system
 }
 
 fn add(Vector v1, Vector v2) -> Vector
@@ -64,5 +61,5 @@ fn main(int a)
 	// float c = add(a, b);		// This would be an error since the float add(..) function is scoped inside the vector add(..) function
 
 	newVector()^ = add(v1, v2);
-	// newVector()^ = doOperation(v1, v2, add);
+	newVector()^ = doOperation(v1, v2, add);
 }

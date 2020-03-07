@@ -10,3 +10,4 @@ void print(float f);
 void print(StringView stringView);
 void println();
 void printfmt(const char * pStrFormat, ...);
+void vprintfmt(const char * pStrFormat, va_list arg);

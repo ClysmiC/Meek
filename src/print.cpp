@@ -42,3 +42,8 @@ void printfmt(const char * pStrFormat, ...)
 	vprintf(pStrFormat, arglist);
 	va_end(arglist);
 }
+
+void vprintfmt(const char * pStrFormat, va_list arg)
+{
+	vprintf(pStrFormat, arg);
+}
