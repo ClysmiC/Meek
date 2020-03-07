@@ -52,18 +52,10 @@ int main()
 	}
 
 	Scanner scanner;
-	if (!init(&scanner, buffer, bytesRead))
-	{
-		reportIceAndExit("Failed to initialize scanner");
-		return 1;
-	}
+	init(&scanner, buffer, bytesRead);
 
 	Parser parser;
-	if (!init(&parser, &scanner))
-	{
-		reportIceAndExit("Failed to initialize parser");
-		return 1;
-	}
+	init(&parser, &scanner);
 
 	AstNode * pAstRoot = nullptr;
 	{

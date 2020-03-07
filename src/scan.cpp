@@ -2,7 +2,7 @@
 
 #include <stdlib.h> // For strncpy and related functions
 
-bool init(Scanner * pScanner, char * pText, uint textSize)
+void init(Scanner * pScanner, char * pText, uint textSize)
 {
 	ClearStruct(pScanner);
 
@@ -10,8 +10,6 @@ bool init(Scanner * pScanner, char * pText, uint textSize)
 	pScanner->textSize = textSize;
 	pScanner->scanexitk = SCANEXITK_Nil;
 	init(&pScanner->newLineIndices);
-
-	return true;
 }
 
 TOKENK consumeToken(Scanner * pScanner, NULLABLE Token * poToken)

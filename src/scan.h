@@ -52,7 +52,7 @@ struct Scanner
 
 // Public
 
-bool init(Scanner * pScanner, char * pText, uint textSize);
+void init(Scanner * pScanner, char * pText, uint textSize);
 TOKENK peekToken(Scanner * pScanner, NULLABLE Token * poToken=nullptr, uint lookahead=0);
 TOKENK prevToken(Scanner * pScanner, NULLABLE Token * poToken=nullptr, uint lookbehind=0);
 StartEndIndices peekTokenStartEnd(Scanner * pScanner, uint lookahead=0);

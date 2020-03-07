@@ -32,22 +32,17 @@ static const BinopInfo s_aParseOp[] = {
 };
 static constexpr int s_iParseOpMax = ArrayLen(s_aParseOp);
 
-bool init(Parser * pParser, Scanner * pScanner)
+void init(Parser * pParser, Scanner * pScanner)
 {
-	if (!pParser || !pScanner) return false;
-
 	pParser->pScanner = pScanner;
 	init(&pParser->astAlloc);
 	init(&pParser->tokenAlloc);
 	init(&pParser->typeAlloc);
-	// init(&pParser->astNodes);
 	init(&pParser->scopeStack);
 	init(&pParser->symbTable);
 	init(&pParser->typeTable);
 	init(&pParser->astDecs);
 	init(&pParser->apErrorNodes);
-
-	return true;
 }
 
 AstNode * parseProgram(Parser * pParser, bool * poSuccess)
@@ -1575,9 +1570,13 @@ AstErr * tryParseFuncHeader(Parser * pParser, const ParseFuncHeaderParam & param
 				
 				// Note that we don't actually bind this name to anything. It is recommended to be omitted for type definitions,
 				//	but is permitted to keep the syntax as close to the same as possible in all 3 cases.
-				// HMM (andrew) Might not allow a name here. Maybe if you want a name you can use an //InlineComment
+				// It is disallowed in naked single returns because this func header is the type of a variable, and it would
+				//	be ambiguous whether the next identifier is the optional return value name or the name of the variable!
 
-				tryConsumeToken(pParser->pScanner, TOKENK_Identifier);
+				if (!isNakedSingleReturn)
+				{
+					tryConsumeToken(pParser->pScanner, TOKENK_Identifier);
+				}
 
 				if (param.paramk == PARAMK_Param)
 				{

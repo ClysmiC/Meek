@@ -94,7 +94,7 @@ enum PARAMK
 //	have no need to want to free AST nodes. If we ever find that need then we can offer an interface to
 //	deallocate stuff through the pool allocator's deallocate functions.
 
-bool init(Parser * pParser, Scanner * pScanner);
+void init(Parser * pParser, Scanner * pScanner);
 AstNode * parseProgram(Parser * pParser, bool * poSuccess);
 void reportScanAndParseErrors(const Parser & parser);
 

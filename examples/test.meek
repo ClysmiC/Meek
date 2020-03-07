@@ -13,6 +13,7 @@ fn doOperation(
 	return operation(v1, v2);
 }
 
+
 fn add(Vector v1, Vector v2) -> Vector
 {
 	Vector v3;
