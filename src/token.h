@@ -134,7 +134,7 @@ enum FERRTOK : u32
 };
 typedef u32 GRFERRTOK;
 
-void errMessagesFromGrferrtok(GRFERRTOK grferrtok, DynamicArray<String> * poMessages);
+const char * errMessageFromFerrtok(FERRTOK ferrtok);
 
 struct StartEndIndices
 {

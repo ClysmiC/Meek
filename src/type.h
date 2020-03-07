@@ -140,7 +140,7 @@ TYPID ensureInTypeTable(TypeTable * pTable, const Type & type, bool debugAssertI
 
 bool tryResolveType(Type * pType, const SymbolTable & symbolTable, const Stack<Scope> & scopeStack);
 
-bool tryResolveAllPendingTypesIntoTypeTable(Parser * pParser);
+bool tryResolveAllTypes(Parser * pParser);
 
 TYPID typidFromLiteralk(LITERALK literalk);
 

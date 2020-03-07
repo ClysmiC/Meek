@@ -57,21 +57,21 @@ int main()
 		return 1;
 	}
 
-	bool success;
-	AstNode * pAst = parseProgram(&parser, &success);
-
-	if (!success)
+	AstNode * pAstRoot = nullptr;
 	{
-		// TODO: Still try to do semantic analysis on non-erroneous parts of the program so that we can report better errors?
+		bool success;
+		pAstRoot = parseProgram(&parser, &success);
 
-		reportScanAndParseErrors(parser);
-		return 1;
+		if (!success)
+		{
+			// TODO: Still try to do semantic analysis on non-erroneous parts of the program so that we can report better errors?
+
+			reportScanAndParseErrors(parser);
+			return 1;
+		}
 	}
 
-	bool allTypesResolved = tryResolveAllPendingTypesIntoTypeTable(&parser);
-	bool allFuncSymbolsResolved = tryResolvePendingFuncSymbolsAfterTypesResolved(&parser.symbTable);
-
-	if (!allTypesResolved)
+	if (!tryResolveAllTypes(&parser))
 	{
 		printf("Unable to resolve following type(s):\n");
 
@@ -93,7 +93,7 @@ int main()
 		return 1;
 	}
 
-	if (!allFuncSymbolsResolved)
+	if (!tryResolvePendingFuncSymbolsAfterTypesResolved(&parser.symbTable))
 	{
 		printf("Couldn't resolve all func symbols\n");
 		return 1;
@@ -103,7 +103,7 @@ int main()
 	init(&resolvePass);
 	resolvePass.pSymbTable = &parser.symbTable;
 	resolvePass.pTypeTable = &parser.typeTable;
-	doResolvePass(&resolvePass, pAst);
+	doResolvePass(&resolvePass, pAstRoot);
 
 	printf("Resolve pass all done\n");
 
@@ -118,7 +118,7 @@ int main()
 	init(&debugPrintCtx.mpLevelSkip);
 	debugPrintCtx.pTypeTable = &parser.typeTable;
 
-	debugPrintAst(&debugPrintCtx, *pAst);
+	debugPrintAst(&debugPrintCtx, *pAstRoot);
 
 
 	printf("\n");

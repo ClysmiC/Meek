@@ -2111,17 +2111,14 @@ void reportScanAndParseErrors(const Parser & parser)
 			{
 				auto * pErr = Down(pNode, ScanErr);
 				Assert(pErr->pErrToken->tokenk == TOKENK_Error);
+				Assert(pErr->pErrToken->grferrtok);
 
-				DynamicArray<String> aStrScanError;
-				init(&aStrScanError);
-				Defer(dispose(&aStrScanError));
-
-				errMessagesFromGrferrtok(pErr->pErrToken->grferrtok, &aStrScanError);
-
-				Assert(aStrScanError.cItem > 0);
-				for (int i = 0; i < aStrScanError.cItem; i++)
+				ForFlag(FERRTOK, ferrtok)
 				{
-					reportScanError(*parser.pScanner, *pErr->pErrToken, aStrScanError[i].pBuffer);
+					if (pErr->pErrToken->grferrtok & ferrtok)
+					{
+						reportScanError(*parser.pScanner, *pErr->pErrToken, errMessageFromFerrtok(ferrtok));
+					}
 				}
 			}
 			break;

@@ -243,26 +243,11 @@ void debugPrintSubAst(DebugPrintCtx * pCtx, const AstNode & node, int level, boo
             auto * pErr = DownConst(&node, ScanErr);
             auto * pErrCasted = UpErrConst(pErr);
 
-            DynamicArray<String> errMsgs;
-            init(&errMsgs);
-            Defer(dispose(&errMsgs));
-
-            errMessagesFromGrferrtok(pErr->pErrToken->grferrtok, &errMsgs);
-            Assert(errMsgs.cItem > 0);
-
-            if (errMsgs.cItem == 1)
+            ForFlag(FERRTOK, ferrtok)
             {
-                printfmt("%s %s", scanErrorString, errMsgs[0].pBuffer);
-            }
-            else
-            {
-                printfmt("%s", scanErrorString);
-
-                for (int i = 0; i < errMsgs.cItem; i++)
+                if (pErr->pErrToken->grferrtok & ferrtok)
                 {
-                    println();
-                    printTabs(pCtx, level, true, skipAfterArrow);
-                    printfmt("- %s", errMsgs[i].pBuffer);
+                    printfmt("%s %s", scanErrorString, errMessageFromFerrtok(ferrtok));
                 }
             }
 

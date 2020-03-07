@@ -518,7 +518,7 @@ bool tryResolveType(Type * pType, const SymbolTable & symbolTable, const Stack<S
 	}
 }
 
-bool tryResolveAllPendingTypesIntoTypeTable(Parser * pParser)
+bool tryResolveAllTypes(Parser * pParser)
 {
 	// NOTE: This *should* be doable in a single pass after we have inserted all declared type symbols into the symbol table.
 	//	That might change if I add typedefs, since typedefs may form big dependency chains.

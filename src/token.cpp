@@ -124,64 +124,56 @@ const char * g_mpTokenkStrDisplay[] = {
 };
 StaticAssert(ArrayLen(g_mpTokenkStrDisplay) == TOKENK_Max);
 
-void errMessagesFromGrferrtok(GRFERRTOK grferrtok, DynamicArray<String> * poMessages)
+const char * errMessageFromFerrtok(FERRTOK ferrtok)
 {
+	Assert(ferrtok);
 
-    if (grferrtok == FERRTOK_Unspecified)
+    if (ferrtok == FERRTOK_Unspecified)
     {
-		String * pStr = appendNew(poMessages);
-		init(pStr, "Unspecified error");
-        return;
+		return "Unspecified error";
     }
 
-    ForFlag(FERRTOK, ferrtok)
+    switch (ferrtok)
     {
-        if (grferrtok & ferrtok)
+        case FERRTOK_InvalidCharacter:
         {
-			String * pStr = appendNew(poMessages);
+			return "Invalid character";
+        } break;
 
-            switch (ferrtok)
-            {
-                case FERRTOK_InvalidCharacter:
-                {
-					init(pStr, "Invalid character");
-                } break;
+        case FERRTOK_IntLiteralNonBase10WithDecimal:
+        {
+            return "Numeric literal may only contain a decimal if it is in base-10";
+        } break;
 
-                case FERRTOK_IntLiteralNonBase10WithDecimal:
-                {
-                    init(pStr, "Numeric literal may only contain a decimal if it is in base-10");
-                } break;
+        case FERRTOK_IntLiteralNonBase10NoDigits:
+        {
+            return "Numeric literal with non-base-10 prefix must contain at least one digit";
+        } break;
 
-                case FERRTOK_IntLiteralNonBase10NoDigits:
-                {
-                    init(pStr, "Numeric literal with non-base-10 prefix must contain at least one digit");
-                } break;
+        case FERRTOK_NumberLiteralMultipleDecimals:
+        {
+            return "Numeric literal cannot contain more than one decimal";
+        } break;
 
-                case FERRTOK_NumberLiteralMultipleDecimals:
-                {
-                    init(pStr, "Numeric literal cannot contain more than one decimal");
-                } break;
+        case FERRTOK_MultilineString:
+        {
+            return "Multiline string literals are not permitted";
+        } break;
 
-                case FERRTOK_MultilineString:
-                {
-                    init(pStr, "Multiline string literals are not permitted");
-                } break;
+        case FERRTOK_UnterminatedString:
+        {
+            return "Unterminated string literal";
+        } break;
 
-                case FERRTOK_UnterminatedString:
-                {
-                    init(pStr, "Unterminated string literal");
-                } break;
+        case FERRTOK_UnterminatedBlockComment:
+        {
+            return "Unterminated block comment";
+        } break;
 
-                case FERRTOK_UnterminatedBlockComment:
-                {
-                    init(pStr, "Unterminated block comment");
-                } break;
-
-                default:
-                {
-					reportIceAndExit("Unknown FERRTOK value %d", ferrtok);
-                } break;
-            }
-        }
+        default:
+        {
+			reportIceAndExit("Unknown FERRTOK value %d", ferrtok);
+			return "";
+        } break;
     }
 }
