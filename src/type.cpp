@@ -520,44 +520,10 @@ bool tryResolveType(Type * pType, const SymbolTable & symbolTable, const Stack<S
 	}
 }
 
-//TYPID resolveIntoTypeTableOrSetPending(
-//	Parser * pParser,
-//	Type * pType,
-//	TypePendingResolve ** ppoTypePendingResolution)
-//{
-//	Assert(!isTypeResolved(*pType));
-//    AssertInfo(ppoTypePendingResolution, "You must have a plan for handling types that are pending resolution if you call this function!");
-//
-//	if (tryResolveType(pType, pParser->symbTable, pParser->scopeStack))
-//	{
-//		TYPID typid = ensureInTypeTable(&pParser->typeTable, *pType);
-//        Assert(isTypeResolved(typid));
-//
-//        *ppoTypePendingResolution = nullptr;
-//
-//		releaseType(pParser, pType);
-//
-//        return typid;
-//	}
-//	else
-//	{
-//        TypePendingResolve * pTypePending = appendNew(&pParser->typeTable.typesPendingResolution);
-//        pTypePending->pType = pType;
-//        pTypePending->pTypidUpdateOnResolve = nullptr;    // NOTE: Caller sets this value via the pointer that we return in an out param
-//		initCopy(&pTypePending->scopeStack, pParser->scopeStack);
-//
-//        *ppoTypePendingResolution = pTypePending;
-//
-//        return TYPID_Unresolved;
-//	}
-//}
-
 bool tryResolveAllPendingTypesIntoTypeTable(Parser * pParser)
 {
 	// NOTE: This *should* be doable in a single pass after we have inserted all declared type symbols into the symbol table.
 	//	That might change if I add typedefs, since typedefs may form big dependency chains.
-
-	// Iterate backwards to perform removals w/o any fuss
 
 	for (int i = pParser->typeTable.typesPendingResolution.cItem - 1; i >= 0; i--)
 	{
@@ -596,3 +562,73 @@ TYPID typidFromLiteralk(LITERALK literalk)
 
 	return s_mpLiteralkTypid[literalk];
 }
+
+#if DEBUG
+
+#include <stdio.h>
+
+void debugPrintType(const Type& type)
+{
+	for (int i = 0; i < type.aTypemods.cItem; i++)
+	{
+		TypeModifier tmod = type.aTypemods[i];
+
+		switch (tmod.typemodk)
+		{
+			case TYPEMODK_Array:
+			{
+				// TODO: Change this when arbitrary compile time expressions are allowed
+				//	as the array size expression
+
+				printf("[");
+
+				Assert(tmod.pSubscriptExpr && tmod.pSubscriptExpr->astk == ASTK_LiteralExpr);
+
+				auto* pNode = Down(tmod.pSubscriptExpr, LiteralExpr);
+				Assert(pNode->literalk == LITERALK_Int);
+
+				int value = intValue(pNode);
+				Assert(pNode->isValueSet);
+				AssertInfo(!pNode->isValueErroneous, "Just for sake of testing... in reality if it was erroneous then we don't really care/bother about the symbol table");
+
+				printf("%d", value);
+
+				printf("]");
+			} break;
+
+			case TYPEMODK_Pointer:
+			{
+				printf("^");
+			} break;
+		}
+	}
+
+	if (!type.isFuncType)
+	{
+		printf("%s (scopeid: %d)", type.ident.pToken->lexeme, type.ident.defnclScopeid);
+	}
+	else
+	{
+		// TODO: :) ... will need to set up tab/new line stuff so that it
+		//	can nest arbitrarily. Can't be bothered right now!!!
+
+		printf("(function type... CBA to print)");
+	}
+}
+
+void debugPrintTypeTable(const TypeTable& typeTable)
+{
+	printf("===============\n");
+	printf("=====TYPES=====\n");
+	printf("===============\n\n");
+
+	for (auto it = iter(typeTable.table); it.pValue; iterNext(&it))
+	{
+		const Type * pType = it.pValue;
+		debugPrintType(*pType);
+
+		printf("\n");
+	}
+}
+
+#endif

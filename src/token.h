@@ -177,6 +177,7 @@ struct Token
 
     // TODO: store lexeme length? I *do* make sure that they are null-terminated so
     //  I can always just strlen them but that is pretty lame.
+	// TOO: change this into a string view into the original source? Then I could get rid of the lexeme buffer
 
 	char * lexeme = nullptr;
 };

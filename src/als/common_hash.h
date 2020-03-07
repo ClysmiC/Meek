@@ -633,6 +633,53 @@ bool insert(BiHashMap<K, V> * pBimap, const K & key, const V & value)
 }
 
 template <typename K, typename V>
+struct BiHashMapIter
+{
+	const HashMap<K, V *> * pMapKV;
+	int iItem;
+
+	const K * pKey;
+	const V * pValue;
+};
+
+template <typename K, typename V>
+void iterNext(BiHashMapIter<K, V> * pIter)
+{
+	typedef HashMap<K, V *> hm;
+
+	bool hadNext = false;
+	for (pIter->iItem += 1; pIter->iItem < pIter->pMapKV->cCapacity; pIter->iItem += 1)
+	{
+		hm::Bucket* pBucket = pIter->pMapKV->pBuffer + pIter->iItem;
+		if (pBucket->infoBits & AlsHash::s_infoOccupiedMask)
+		{
+			pIter->pKey = &pBucket->key;
+			pIter->pValue = pBucket->value;
+			hadNext = true;
+			break;
+		}
+	}
+
+	if (!hadNext)
+	{
+		pIter->pKey = nullptr;
+		pIter->pValue = nullptr;
+	}
+}
+
+template <typename K, typename V>
+BiHashMapIter<K, V> iter(const BiHashMap<K, V> & bimap)
+{
+	BiHashMapIter<K, V> it;
+	it.pMapKV = &bimap.mapKV;
+	it.iItem = -1;
+
+	iterNext(&it);
+
+	return it;
+}
+
+template <typename K, typename V>
 const V * lookupByKey(const BiHashMap<K, V> & bimap, const K & key)
 {
 	V ** ppResult = lookup(bimap.mapKV, key);

@@ -117,12 +117,15 @@ int main()
 	printf("\n\n");
 	debugPrintSymbolTable(parser.symbTable);
 
+	printf("\n");
+	debugPrintTypeTable(parser.typeTable);
+
 #if DEBUG && 1
 	DebugPrintCtx debugPrintCtx;
 	init(&debugPrintCtx.mpLevelSkip);
 	debugPrintCtx.pTypeTable = &parser.typeTable;
 
-	debugPrintAst(&debugPrintCtx, *pAst);
+	// debugPrintAst(&debugPrintCtx, *pAst);
 
 
 	printf("\n");

@@ -421,57 +421,11 @@ bool isDeclarationOrderIndependent(SYMBOLK symbolk)
 
 #include <stdio.h>
 
-void debugPrintType(const Type & type)
-{
-	for (int i = 0; i < type.aTypemods.cItem; i++)
-	{
-		TypeModifier tmod = type.aTypemods[i];
-
-		switch (tmod.typemodk)
-		{
-			case TYPEMODK_Array:
-			{
-				// TODO: Change this when arbitrary compile time expressions are allowed
-				//	as the array size expression
-
-				printf("[");
-
-				Assert(tmod.pSubscriptExpr && tmod.pSubscriptExpr->astk == ASTK_LiteralExpr);
-
-				auto * pNode = Down(tmod.pSubscriptExpr, LiteralExpr);
-				Assert(pNode->literalk == LITERALK_Int);
-
-				int value = intValue(pNode);
-				Assert(pNode->isValueSet);
-				AssertInfo(pNode->isValueErroneous, "Just for sake of testing... in reality if it was erroneous then we don't really care/bother about the symbol table");
-
-				printf("%d", value);
-
-				printf("]");
-			} break;
-
-			case TYPEMODK_Pointer:
-			{
-				printf("^");
-			} break;
-		}
-	}
-
-	if (!type.isFuncType)
-	{
-		printf("%s (scopeid: %d)", type.ident.pToken->lexeme, type.ident.defnclScopeid);
-	}
-	else
-	{
-		// TODO: :) ... will need to set up tab/new line stuff so that it
-		//	can nest arbitrarily. Can't be bothered right now!!!
-
-		printf("(function type... CBA to print)");
-	}
-}
-
 void debugPrintSymbolTable(const SymbolTable & symbTable)
 {
+	printf("===============\n");
+	printf("====SYMBOLS====\n");
+	printf("===============\n\n");
     printf("===Variables===\n\n");
 
     for (auto it = iter(symbTable.varTable); it.pValue; iterNext(&it))

@@ -123,6 +123,5 @@ bool tryInsert(SymbolTable * pSymbolTable, const ScopedIdentifier & ident, const
 bool tryResolvePendingFuncSymbolsAfterTypesResolved(SymbolTable * pSymbTable);
 
 #if DEBUG
-void debugPrintType(const Type & type);
 void debugPrintSymbolTable(const SymbolTable & symbTable);
 #endif

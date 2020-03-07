@@ -37,17 +37,17 @@
 
 // A fairly dumb string implementation
 
-struct String
+struct StringBuilder
 {
 	const static char gc_zeroString = '\0';
 	constexpr static float gc_growthFactor = 1.5f;
 
 	int cChar;
 	int capacity;		// NOTE: Actual buffer is at least this + 1 to make sure we can always null terminate
-	char * pBuffer;     // NOTE: If you mutate the buffer when it is pointing at the zero string then you will break everything!
+	char * pBuffer;
 };
 
-inline void ensureCapacity(String * pStr, int requestedCapacity)
+inline void ensureCapacity(StringBuilder * pStr, int requestedCapacity)
 {
 	if (requestedCapacity <= pStr->capacity) return;
 
@@ -57,7 +57,7 @@ inline void ensureCapacity(String * pStr, int requestedCapacity)
 	while (newCapacity < requestedCapacity)
 	{
 		int prevNewCapacity = newCapacity;
-		newCapacity = static_cast<int>((newCapacity * String::gc_growthFactor) + 1.0f);       // + 1 to force round up
+		newCapacity = static_cast<int>((newCapacity * StringBuilder::gc_growthFactor) + 1.0f);       // + 1 to force round up
 
 		// Overflow check... probably overkill
 
@@ -69,7 +69,7 @@ inline void ensureCapacity(String * pStr, int requestedCapacity)
 
 	int actualRequestCapacity = newCapacity + 1;	// Always make sure we have room to write a null terminator, even if cChar = capacity
 
-	if (pStr->pBuffer == &String::gc_zeroString)
+	if (pStr->pBuffer == &StringBuilder::gc_zeroString)
 	{
 		pStr->pBuffer = static_cast<char *>(malloc(actualRequestCapacity * sizeof(char)));
 	}
@@ -88,16 +88,16 @@ inline void ensureCapacity(String * pStr, int requestedCapacity)
 	pStr->capacity = newCapacity;
 }
 
-inline void init(String * pStr)
+inline void init(StringBuilder * pStr)
 {
 	pStr->cChar = 0;
 	pStr->capacity = 0;
-	pStr->pBuffer = const_cast<char *>(&String::gc_zeroString);
+	pStr->pBuffer = const_cast<char *>(&StringBuilder::gc_zeroString);
 }
 
-inline void init(String * pStr, char * chars)
+inline void init(StringBuilder * pStr, char * chars)
 {
-    pStr->pBuffer = const_cast<char *>(&String::gc_zeroString);
+    pStr->pBuffer = const_cast<char *>(&StringBuilder::gc_zeroString);
 
 	char * cursor = chars;
 	while (*cursor)
@@ -118,7 +118,7 @@ inline void init(String * pStr, char * chars)
 	pStr->pBuffer[pStr->cChar] = '\0';
 }
 
-inline void append(String * pString, const char * charsToAppend)
+inline void append(StringBuilder * pString, const char * charsToAppend)
 {
     const char * cursor = charsToAppend;
     while (*cursor)
@@ -136,15 +136,124 @@ inline void append(String * pString, const char * charsToAppend)
     pString->pBuffer[pString->cChar] = '\0';
 }
 
-inline void dispose(String * pStr)
+inline void dispose(StringBuilder * pStr)
 {
 	ALS_COMMON_STRING_Assert(pStr->pBuffer);		// Even the empty string should point to our global "zero" buffer
 
-	if (pStr->pBuffer != &String::gc_zeroString)
+	if (pStr->pBuffer != &StringBuilder::gc_zeroString)
 	{
 		free(pStr->pBuffer);
-		pStr->pBuffer = const_cast<char *>(&String::gc_zeroString);
+		pStr->pBuffer = const_cast<char *>(&StringBuilder::gc_zeroString);
 	}
+}
+
+struct StringView
+{
+	const char* pCh = nullptr;
+	int cCh = 0;
+};
+
+inline bool operator==(const StringView& strv0, const StringView& strv1)
+{
+	if (strv0.cCh != strv1.cCh)		return false;
+	for (int iCh = 0; iCh < strv0.cCh; iCh++)
+	{
+		// NOTE (andrew) Capitalization matters
+
+		if (strv0.pCh[iCh] != strv1.pCh[iCh])		return false;
+	}
+
+	return true;
+}
+
+inline bool operator!=(const StringView& strv0, const StringView& strv1)
+{
+	return !(strv0 == strv1);
+}
+
+inline bool operator==(const StringView& strv, const char* pchz)
+{
+	if (pchz[strv.cCh] != '\0')		return false;
+
+	for (int iCh = 0; iCh < strv.cCh; iCh++)
+	{
+		// NOTE (andrew) Capitalization matters
+
+		if (pchz[iCh] == '\0')				return false;
+		if (strv.pCh[iCh] != pchz[iCh])		return false;
+	}
+
+	return true;
+}
+
+inline bool operator!=(const StringView& strv, const char* pchz)
+{
+	return !(strv == pchz);
+}
+
+inline void trim(StringView* pStrv)
+{
+	// Trim start
+
+	while (pStrv->cCh > 0)
+	{
+		// TODO: Better IsWhitespace test
+
+		switch (pStrv->pCh[0])
+		{
+			case ' ':
+			case '\t':
+			case '\r':
+			case '\n':
+			{
+				pStrv->pCh++;
+				pStrv->cCh--;
+			} break;
+
+			default:
+				goto LTrimStartDone;
+		}
+	}
+
+LTrimStartDone:
+
+	// Trim end
+
+	while (pStrv->cCh > 0)
+	{
+		// TODO: Better IsWhitespace test
+
+		switch (pStrv->pCh[pStrv->cCh - 1])
+		{
+			case ' ':
+			case '\t':
+			case '\r':
+			case '\n':
+			{
+				pStrv->cCh--;
+			} break;
+
+			default:
+				goto LTrimEndDone;
+		}
+	}
+
+LTrimEndDone:
+
+	return;
+}
+
+inline bool startsWith(const StringView& strv, const char* pChz)
+{
+	for (int iCh = 0; iCh < strv.cCh; iCh++)
+	{
+		// NOTE (andrew) Capitalization matters
+
+		if (pChz[iCh] == '\0')				return true;
+		if (strv.pCh[iCh] != pChz[iCh])		return false;
+	}
+
+	return pChz[strv.cCh] == '\0';
 }
 
 #undef ALS_COMMON_STRING_StaticAssert

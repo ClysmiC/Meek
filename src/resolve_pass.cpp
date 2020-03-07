@@ -349,6 +349,7 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 				}
 
 				// Find func with matching ident and param types
+				// TODO: We need to look at variable definitions too, if the variables are function types.
 
 				{
 					DynamicArray<SymbolInfo> aFuncCandidates;

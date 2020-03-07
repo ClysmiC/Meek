@@ -114,11 +114,9 @@ struct TypePendingResolve
 
 // Life-cycle of a type
 //	- During parse, types are allocated by a pool allocator and filled out w/ all known info.
-//	- If type can be fully resolved during parse, we ensure that a copy is in the table (copying it in if needed) and then
-//		release the original
-//	- If it can't be fully resolved, we store a pointer to it in the "pending resolution" list. After parsing,
+//	- We store a pointer to it in the "pending resolution" list. After parsing,
 //		we iterate over the list as many times as needed to insert all types pending resolution. Once resolved,
-//		we do the same thing as types that get resolved during the parse (copy into table then dispose/release original)
+//		we copy them into table then dispose/release the original.
 
 struct TypeTable
 {
@@ -137,15 +135,17 @@ void init(TypeTable * pTable);
 void insertBuiltInTypes(TypeTable * pTable);
 const Type * lookupType(const TypeTable & table, TYPID typid);
 
-// NOTE: This function releases pType
+
 TYPID ensureInTypeTable(TypeTable * pTable, const Type & type, bool debugAssertIfAlreadyInTable=false);
 
 bool tryResolveType(Type * pType, const SymbolTable & symbolTable, const Stack<Scope> & scopeStack);
-//TYPID resolveIntoTypeTableOrSetPending(
-//	Parser * pParser,
-//	Type * pType,
-//	TypePendingResolve ** ppoTypePendingResolution);
 
 bool tryResolveAllPendingTypesIntoTypeTable(Parser * pParser);
 
 TYPID typidFromLiteralk(LITERALK literalk);
+
+
+#if DEBUG
+void debugPrintType(const Type& type);
+void debugPrintTypeTable(const TypeTable& typeTable);
+#endif
