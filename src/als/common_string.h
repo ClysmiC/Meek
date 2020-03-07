@@ -37,7 +37,7 @@
 
 // A fairly dumb string implementation
 
-struct StringBuilder
+struct String
 {
 	const static char gc_zeroString = '\0';
 	constexpr static float gc_growthFactor = 1.5f;
@@ -47,7 +47,7 @@ struct StringBuilder
 	char * pBuffer;
 };
 
-inline void ensureCapacity(StringBuilder * pStr, int requestedCapacity)
+inline void ensureCapacity(String * pStr, int requestedCapacity)
 {
 	if (requestedCapacity <= pStr->capacity) return;
 
@@ -57,7 +57,7 @@ inline void ensureCapacity(StringBuilder * pStr, int requestedCapacity)
 	while (newCapacity < requestedCapacity)
 	{
 		int prevNewCapacity = newCapacity;
-		newCapacity = static_cast<int>((newCapacity * StringBuilder::gc_growthFactor) + 1.0f);       // + 1 to force round up
+		newCapacity = static_cast<int>((newCapacity * String::gc_growthFactor) + 1.0f);       // + 1 to force round up
 
 		// Overflow check... probably overkill
 
@@ -69,7 +69,7 @@ inline void ensureCapacity(StringBuilder * pStr, int requestedCapacity)
 
 	int actualRequestCapacity = newCapacity + 1;	// Always make sure we have room to write a null terminator, even if cChar = capacity
 
-	if (pStr->pBuffer == &StringBuilder::gc_zeroString)
+	if (pStr->pBuffer == &String::gc_zeroString)
 	{
 		pStr->pBuffer = static_cast<char *>(malloc(actualRequestCapacity * sizeof(char)));
 	}
@@ -88,16 +88,16 @@ inline void ensureCapacity(StringBuilder * pStr, int requestedCapacity)
 	pStr->capacity = newCapacity;
 }
 
-inline void init(StringBuilder * pStr)
+inline void init(String * pStr)
 {
 	pStr->cChar = 0;
 	pStr->capacity = 0;
-	pStr->pBuffer = const_cast<char *>(&StringBuilder::gc_zeroString);
+	pStr->pBuffer = const_cast<char *>(&String::gc_zeroString);
 }
 
-inline void init(StringBuilder * pStr, char * chars)
+inline void init(String * pStr, char * chars)
 {
-    pStr->pBuffer = const_cast<char *>(&StringBuilder::gc_zeroString);
+    pStr->pBuffer = const_cast<char *>(&String::gc_zeroString);
 
 	char * cursor = chars;
 	while (*cursor)
@@ -118,7 +118,7 @@ inline void init(StringBuilder * pStr, char * chars)
 	pStr->pBuffer[pStr->cChar] = '\0';
 }
 
-inline void append(StringBuilder * pString, const char * charsToAppend)
+inline void append(String * pString, const char * charsToAppend)
 {
     const char * cursor = charsToAppend;
     while (*cursor)
@@ -136,14 +136,14 @@ inline void append(StringBuilder * pString, const char * charsToAppend)
     pString->pBuffer[pString->cChar] = '\0';
 }
 
-inline void dispose(StringBuilder * pStr)
+inline void dispose(String * pStr)
 {
 	ALS_COMMON_STRING_Assert(pStr->pBuffer);		// Even the empty string should point to our global "zero" buffer
 
-	if (pStr->pBuffer != &StringBuilder::gc_zeroString)
+	if (pStr->pBuffer != &String::gc_zeroString)
 	{
 		free(pStr->pBuffer);
-		pStr->pBuffer = const_cast<char *>(&StringBuilder::gc_zeroString);
+		pStr->pBuffer = const_cast<char *>(&String::gc_zeroString);
 	}
 }
 
