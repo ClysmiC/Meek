@@ -14,8 +14,8 @@ struct TypeTable;
 
 struct DebugPrintCtx
 {
-    TypeTable * pTypeTable;
-    DynamicArray<bool> mpLevelSkip;
+	TypeTable * pTypeTable;
+	DynamicArray<bool> mpLevelSkip;
 };
 
 // Public

@@ -61,6 +61,7 @@
     <ClCompile Include="src\type.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="cpp.hint" />
     <None Include="examples\test.meek" />
   </ItemGroup>
   <PropertyGroup Label="Globals">

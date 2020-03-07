@@ -36,8 +36,8 @@ struct TypeModifier
 
 struct FuncType
 {
-    DynamicArray<TYPID> paramTypids;
-    DynamicArray<TYPID> returnTypids;		// A.k.a. output params
+	DynamicArray<TYPID> paramTypids;
+	DynamicArray<TYPID> returnTypids;		// A.k.a. output params
 };
 
 struct Type
@@ -66,7 +66,7 @@ bool isFuncTypeResolved(const FuncType & funcType);
 
 inline bool isTypeResolved(TYPID typid)
 {
-    return typid >= TYPID_ActualTypesStart;
+	return typid >= TYPID_ActualTypesStart;
 }
 
 bool typeEq(const Type & t0, const Type & t1);
@@ -128,7 +128,7 @@ struct TypeTable
 
 	DynamicArray<TypePendingResolve> typesPendingResolution;
 
-    TYPID typidNext = TYPID_ActualTypesStart;
+	TYPID typidNext = TYPID_ActualTypesStart;
 };
 
 void init(TypeTable * pTable);

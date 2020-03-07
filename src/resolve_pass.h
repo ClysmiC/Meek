@@ -13,11 +13,11 @@ struct ResolvePass
 		DynamicArray<TYPID> aTypidReturn;
 	};
 
-    SYMBSEQID lastSymbseqid = SYMBSEQID_Unset;      // TODO: USE THIS
+	SYMBSEQID lastSymbseqid = SYMBSEQID_Unset;      // TODO: USE THIS
 
 	Stack<Scope> scopeStack;
 	SymbolTable * pSymbTable;
-    TypeTable * pTypeTable;
+	TypeTable * pTypeTable;
 
 	DynamicArray<ScopedIdentifier> unresolvedIdents;
 	Stack<FnCtx> fnCtxStack;

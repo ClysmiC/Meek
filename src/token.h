@@ -7,39 +7,39 @@
 
 enum TOKENK
 {
-    TOKENK_Error,
+	TOKENK_Error,
 
-    TOKENK_Identifier,
-    TOKENK_IntLiteral,
-    TOKENK_FloatLiteral,
-    TOKENK_BoolLiteral,
-    TOKENK_StringLiteral,		// TODO: Provide ways to specify more specific kinds of literals? Like s8 or u64?
+	TOKENK_Identifier,
+	TOKENK_IntLiteral,
+	TOKENK_FloatLiteral,
+	TOKENK_BoolLiteral,
+	TOKENK_StringLiteral,		// TODO: Provide ways to specify more specific kinds of literals? Like s8 or u64?
 
-    // Punctuation symbols
+	// Punctuation symbols
 
-    TOKENK_OpenParen,
-    TOKENK_CloseParen,
-    TOKENK_OpenBrace,
-    TOKENK_CloseBrace,
-    TOKENK_OpenBracket,
-    TOKENK_CloseBracket,
-    TOKENK_Dot,
-    TOKENK_Comma,
-    TOKENK_Semicolon,
-    TOKENK_Colon,
-    TOKENK_SingleQuote,
-    TOKENK_Plus,
-    TOKENK_Minus,
-    TOKENK_Star,
-    TOKENK_Slash,
-    TOKENK_Percent,
-    TOKENK_Equal,
-    TOKENK_Bang,
-    TOKENK_Lesser,
-    TOKENK_Greater,
-    TOKENK_Carat,
+	TOKENK_OpenParen,
+	TOKENK_CloseParen,
+	TOKENK_OpenBrace,
+	TOKENK_CloseBrace,
+	TOKENK_OpenBracket,
+	TOKENK_CloseBracket,
+	TOKENK_Dot,
+	TOKENK_Comma,
+	TOKENK_Semicolon,
+	TOKENK_Colon,
+	TOKENK_SingleQuote,
+	TOKENK_Plus,
+	TOKENK_Minus,
+	TOKENK_Star,
+	TOKENK_Slash,
+	TOKENK_Percent,
+	TOKENK_Equal,
+	TOKENK_Bang,
+	TOKENK_Lesser,
+	TOKENK_Greater,
+	TOKENK_Carat,
 
-    TOKENK_MinusGreater,
+	TOKENK_MinusGreater,
 
 	TOKENK_MinusMinus,
 	TOKENK_PlusPlus,
@@ -65,16 +65,16 @@ enum TOKENK
 	TOKENK_LesserEqual,
 	TOKENK_GreaterEqual,
 
-    // #words
+	// #words
 
-    TOKENK_HashAnd,
-    TOKENK_HashOr,
-    TOKENK_HashXor,
+	TOKENK_HashAnd,
+	TOKENK_HashOr,
+	TOKENK_HashXor,
 
 	// Reserved words (control flow)
 
 	TOKENK_If,
-    TOKENK_Else,
+	TOKENK_Else,
 	TOKENK_For,
 	TOKENK_While,
 	TOKENK_Break,		// IDEA: a way to specify the "number" of loops we are breaking out of? break(2) for example? Not very friendly for refactoring though... but I also don't really like labels
@@ -84,7 +84,7 @@ enum TOKENK
 
 	TOKENK_Struct,
 	TOKENK_Enum,
-    TOKENK_Fn,
+	TOKENK_Fn,
 						// TODO: union?
 						// TODO: char? string? mstring? (i.e., mutable string... would mainly just be a dynamic array of bytes assuming we have a dynamic array built in type!)
 
@@ -119,7 +119,7 @@ enum FERRTOK : u32
 
 	FERRTOK_UnterminatedBlockComment			= 1 << 7,
 
-    FERRTOK_UnknownHashToken                    = 1 << 8,
+	FERRTOK_UnknownHashToken                    = 1 << 8,
 
 	// TODO: Report these kinds of errors at semantic analysis
 
@@ -127,7 +127,7 @@ enum FERRTOK : u32
 	// FERRTOK_NumberLiteralOutOfRange
 
 	FERRTOK_DummyValue,
-    FERRTOK_LowestFlag = 1,
+	FERRTOK_LowestFlag = 1,
 	FERRTOK_HighestFlag = FERRTOK_DummyValue - 1,
 
 	GRFERRTOK_None = 0
@@ -138,13 +138,13 @@ const char * errMessageFromFerrtok(FERRTOK ferrtok);
 
 struct StartEndIndices
 {
-    StartEndIndices() {}
-    StartEndIndices(int iStart, int iEnd) : iStart(iStart), iEnd(iEnd) {}
+	StartEndIndices() {}
+	StartEndIndices(int iStart, int iEnd) : iStart(iStart), iEnd(iEnd) {}
 
-    // Char indices in source file
+	// Char indices in source file
 
-    int iStart = 0;
-    int iEnd = 0;       // (inclusive)
+	int iStart = 0;
+	int iEnd = 0;       // (inclusive)
 };
 
 extern const StartEndIndices gc_startEndBubble;
@@ -152,28 +152,28 @@ extern const StartEndIndices gc_startEndBuiltInPseudoToken;
 
 inline StartEndIndices makeStartEnd(int start, int end)
 {
-    Assert(end >= start);
-    AssertInfo(Implies(start < 0, start == -1 && end == -1), "Bubble errors (which don't really have good lexical locations) use -1 for start/end");
+	Assert(end >= start);
+	AssertInfo(Implies(start < 0, start == -1 && end == -1), "Bubble errors (which don't really have good lexical locations) use -1 for start/end");
 
-    StartEndIndices result;
-    result.iStart = start;
-    result.iEnd = end;
-    return result;
+	StartEndIndices result;
+	result.iStart = start;
+	result.iEnd = end;
+	return result;
 }
 
 inline StartEndIndices makeStartEnd(int startAndEnd)
 {
-    return makeStartEnd(startAndEnd, startAndEnd);
+	return makeStartEnd(startAndEnd, startAndEnd);
 }
 
 struct Token
 {
 	int id = 0;
 
-    StartEndIndices startEnd;
+	StartEndIndices startEnd;
 
 	TOKENK tokenk = TOKENK_Nil;
-    GRFERRTOK grferrtok = GRFERRTOK_None;      // TOKENK_Error
+	GRFERRTOK grferrtok = GRFERRTOK_None;      // TOKENK_Error
 
 	StringView lexeme = { 0 };
 };
@@ -202,7 +202,7 @@ inline void nillify(Token * poToken)
 	poToken->startEnd.iEnd = 0;
 
 	poToken->tokenk = TOKENK_Nil;
-    poToken->grferrtok = GRFERRTOK_None;
+	poToken->grferrtok = GRFERRTOK_None;
 
 	poToken->lexeme.pCh = nullptr;
 	poToken->lexeme.cCh = 0;

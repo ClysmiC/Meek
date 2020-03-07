@@ -47,7 +47,7 @@ bool scopedIdentEq(const ScopedIdentifier & i0, const ScopedIdentifier & i1);
 
 inline bool isScopeSet(const ScopedIdentifier & ident)
 {
-    return ident.defnclScopeid != SCOPEID_Unresolved;
+	return ident.defnclScopeid != SCOPEID_Unresolved;
 }
 
 enum SYMBOLK
@@ -56,7 +56,7 @@ enum SYMBOLK
 	SYMBOLK_Func,
 	SYMBOLK_Struct,
 
-    SYMBOLK_BuiltInType,
+	SYMBOLK_BuiltInType,
 
 	// SYMBOLK_ErrorProxy	// "Fake" symbol that we put into table after unresolved ident error so that it only gets reported once
 };
@@ -71,7 +71,7 @@ struct SymbolInfo
 		AstVarDeclStmt * pVarDeclStmt;		    // SYMBOLK_Var
 		AstFuncDefnStmt * pFuncDefnStmt;		// SYMBOLK_Func
 		AstStructDefnStmt * pStructDefnStmt;	// SYMBOLK_Struct
-        TYPID typid;                            // SYMBOLK_BuiltInType
+		TYPID typid;                            // SYMBOLK_BuiltInType
 	};
 };
 
@@ -83,8 +83,8 @@ bool isDeclarationOrderIndependent(SYMBOLK symbolk);
 
 struct FuncSymbolPendingResolution
 {
-    Stack<Scope> scopeStack;
-    SymbolInfo symbolInfo;
+	Stack<Scope> scopeStack;
+	SymbolInfo symbolInfo;
 };
 
 void init(FuncSymbolPendingResolution * pPending, const SymbolInfo & symbolInfo, const Stack<Scope> & scopeStack);
@@ -92,17 +92,17 @@ void init(FuncSymbolPendingResolution * pPending, const SymbolInfo & symbolInfo,
 
 struct SymbolTable
 {
-    HashMap<ScopedIdentifier, SymbolInfo> varTable;
+	HashMap<ScopedIdentifier, SymbolInfo> varTable;
 	HashMap<ScopedIdentifier, SymbolInfo> typeTable;
 	HashMap<ScopedIdentifier, DynamicArray<SymbolInfo>> funcTable;
 
-    DynamicArray<FuncSymbolPendingResolution> funcSymbolsPendingResolution;
+	DynamicArray<FuncSymbolPendingResolution> funcSymbolsPendingResolution;
 
 	DynamicArray<SymbolInfo> redefinedVars;
 	DynamicArray<SymbolInfo> redefinedTypes;
 	DynamicArray<SymbolInfo> redefinedFuncs;
 
-    SYMBSEQID symbseqidNext = SYMBSEQID_SetStart;
+	SYMBSEQID symbseqidNext = SYMBSEQID_SetStart;
 };
 
 void init(SymbolTable * pSymbTable);

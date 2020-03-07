@@ -33,10 +33,10 @@ struct Parser
 
 	// Scope
 
-    SCOPEID scopeidNext = SCOPEID_UserDefinedStart;
-    Stack<Scope> scopeStack;
+	SCOPEID scopeidNext = SCOPEID_UserDefinedStart;
+	Stack<Scope> scopeStack;
 
-    // TODO: Move all of these tables out to some god-struct and make these just pointers. No reason for the parser to own this stuff.
+	// TODO: Move all of these tables out to some god-struct and make these just pointers. No reason for the parser to own this stuff.
 
 	// Symbol Table
 
@@ -46,9 +46,9 @@ struct Parser
 
 	TypeTable typeTable;
 
-    // AST decoration
+	// AST decoration
 
-    AstDecorations astDecs;
+	AstDecorations astDecs;
 
 	// Node construction / bookkeeping
 
@@ -83,8 +83,8 @@ enum FUNCHEADERK
 
 enum PARAMK
 {
-    PARAMK_Param,
-    PARAMK_Return
+	PARAMK_Param,
+	PARAMK_Return
 };
 
 

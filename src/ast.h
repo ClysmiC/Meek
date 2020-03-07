@@ -105,7 +105,7 @@ enum ASTK : u8
 
 	ASTK_GrpMax,
 
-    ASTK_Program,
+	ASTK_Program,
 
 	// NOTE: If you add more misc ASTK's down here (i.e., not Stmt, Expr, Err), make sure to update
 	//	the ASTCATK functions
@@ -187,7 +187,7 @@ struct AstErr
 		AstExpectedTokenkErr expectedTokenErr;
 		AstInitUnnamedVarErr unnamedVarErr;
 		AstChainedAssignErr chainedAssignErr;
-        AstIllegalDoStmtErr illegalDoStmtErr;
+		AstIllegalDoStmtErr illegalDoStmtErr;
 		AstIllegalTopLevelStmtErr illegalTopLevelStmt;
 		AstInvokeFuncLiteralErr invokeFuncLiteralErr;
 	};
@@ -239,7 +239,7 @@ struct AstLiteralExpr
 
 struct AstGroupExpr
 {
-    AstNode * pExpr;
+	AstNode * pExpr;
 };
 
 struct AstVarExpr
@@ -248,7 +248,7 @@ struct AstVarExpr
 	//	just a plain old variable without a dot.
 
 	AstNode * pOwner;
-    Token * pTokenIdent;
+	Token * pTokenIdent;
 
 	AstVarDeclStmt * pResolvedDecl;     // Cached (non-child)
 };
@@ -275,7 +275,7 @@ struct AstFuncLiteralExpr
 	AstParamsReturnsGrp * pParamsReturnsGrp;
 	AstNode * pBodyStmt;
 
-    SCOPEID scopeid;		// Scope introduced by this func defn
+	SCOPEID scopeid;		// Scope introduced by this func defn
 
 #if 0
 	static constexpr uint s_nodeSizeDebug = sizeof(AstFuncLiteralExpr);
@@ -284,21 +284,21 @@ struct AstFuncLiteralExpr
 
 struct AstExpr
 {
-    // NOTE: Error kind is encoded in ASTK
+	// NOTE: Error kind is encoded in ASTK
 
-    union
-    {
-        AstUnopExpr					unopExpr;
-        AstBinopExpr				binopExpr;
-        AstLiteralExpr				literalExpr;
-        AstGroupExpr				groupExpr;
-        AstVarExpr					varExpr;
-        AstPointerDereferenceExpr	pointerDereferenceExpr;
-        AstArrayAccessExpr			arrayAccessExpr;
-        AstFuncCallExpr				funcCallExpr;
-    };
+	union
+	{
+		AstUnopExpr					unopExpr;
+		AstBinopExpr				binopExpr;
+		AstLiteralExpr				literalExpr;
+		AstGroupExpr				groupExpr;
+		AstVarExpr					varExpr;
+		AstPointerDereferenceExpr	pointerDereferenceExpr;
+		AstArrayAccessExpr			arrayAccessExpr;
+		AstFuncCallExpr				funcCallExpr;
+	};
 
-    TYPID typid = TYPID_Unresolved;
+	TYPID typid = TYPID_Unresolved;
 };
 
 
@@ -323,7 +323,7 @@ struct AstVarDeclStmt
 
 	NULLABLE AstNode * pInitExpr;
 
-    SYMBSEQID symbseqid;
+	SYMBSEQID symbseqid;
 	TYPID typid;
 };
 
@@ -331,8 +331,8 @@ struct AstStructDefnStmt
 {
 	ScopedIdentifier ident;
 	DynamicArray<AstNode *> apVarDeclStmt;
-    SCOPEID scopeid;        // Scope introduced by this struct defn
-    SYMBSEQID symbseqid;
+	SCOPEID scopeid;        // Scope introduced by this struct defn
+	SYMBSEQID symbseqid;
 	TYPID typidSelf;
 
 };
@@ -347,7 +347,7 @@ struct AstFuncDefnStmt
 	AstParamsReturnsGrp * pParamsReturnsGrp;
 
 	AstNode * pBodyStmt;
-    SCOPEID scopeid;        // Scope introduced by this func defn
+	SCOPEID scopeid;        // Scope introduced by this func defn
 	SYMBSEQID symbseqid;
 	TYPID typid;
 
@@ -359,7 +359,7 @@ struct AstFuncDefnStmt
 struct AstBlockStmt
 {
 	DynamicArray<AstNode *> apStmts;
-    SCOPEID scopeid;
+	SCOPEID scopeid;
 };
 
 struct AstIfStmt
@@ -426,9 +426,9 @@ struct AstProgram
 
 struct AstNode
 {
-    // Compiler implicitly deleted this constructor because of the union trickery it seems. Lame.
+	// Compiler implicitly deleted this constructor because of the union trickery it seems. Lame.
 
-    AstNode() {}
+	AstNode() {}
 
 	// First union trick is to force this struct to 32 bytes
 
@@ -448,15 +448,15 @@ struct AstNode
 
 				// EXPR
 
-                AstExpr					expr;
+				AstExpr					expr;
 
 				// STMT
 
-                AstExprStmt				exprStmt;
+				AstExprStmt				exprStmt;
 				AstAssignStmt			assignExpr;
-                AstVarDeclStmt			varDeclStmt;
-                AstFuncDefnStmt			funcDefnStmt;
-                AstStructDefnStmt		structDefnStmt;
+				AstVarDeclStmt			varDeclStmt;
+				AstFuncDefnStmt			funcDefnStmt;
+				AstStructDefnStmt		structDefnStmt;
 				AstIfStmt				ifStmt;
 				AstWhileStmt			whileStmt;
 				AstBlockStmt			blockStmt;
@@ -477,27 +477,27 @@ struct AstNode
 				AstProgram				program;
 			};
 
-            // NOTE: These fields MUST be after the above union in the struct
+			// NOTE: These fields MUST be after the above union in the struct
 
 			ASTK				astk;
 
 			ASTID			    astid;
 
-            // Indices into source file
+			// Indices into source file
 
 			// int					iStart;
-            // int                 iEnd;
+			// int                 iEnd;
 		};
 
-        char _padding[64];
+		char _padding[64];
 	};
 };
 
 StaticAssert(sizeof(AstNode) <= 64);		// Goal: Make it so each AstNode fits in a cache line.
-                                            //  For any additional per-node data that isn't "hot", use decorator tables. See ast_decorate.h/.cpp
-                                            // TODO: Make sure we have an option for our allocator to align these to cache lines!
-                                            //  (have dynamic allocator allocate an extra 64 bytes and point the "actual" buffer to
-                                            //  an aligned spot?
+											//  For any additional per-node data that isn't "hot", use decorator tables. See ast_decorate.h/.cpp
+											// TODO: Make sure we have an option for our allocator to align these to cache lines!
+											//  (have dynamic allocator allocate an extra 64 bytes and point the "actual" buffer to
+											//  an aligned spot?
 
 
 

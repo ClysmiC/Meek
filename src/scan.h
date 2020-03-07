@@ -39,7 +39,7 @@ struct Scanner
 
 	// Peek and prev buffers
 
-    static constexpr int s_lookMax = 16;
+	static constexpr int s_lookMax = 16;
 	RingBuffer<Token, s_lookMax> peekBuffer;
 	RingBuffer<Token, s_lookMax> prevBuffer;    // More recent tokens are at the end of the buffer
 
@@ -95,7 +95,7 @@ inline bool isDigit(char c)
 
 inline bool isLetter(char c)
 {
-    return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z');
+	return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z');
 }
 
 inline bool isLetterOrUnderscore(char c)
@@ -107,7 +107,7 @@ inline bool isLetterOrUnderscore(char c)
 // SYNC: Charcters we check for to end //inline comment
 inline bool isWhitespace(char c)
 {
-    return c == ' ' || c == '\n' || c == '\t' || c == '\r';
+	return c == ' ' || c == '\n' || c == '\t' || c == '\r';
 }
 
 inline bool isDigitOrLetterOrUnderscore(char c)

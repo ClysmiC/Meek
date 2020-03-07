@@ -15,6 +15,9 @@
     <Filter Include="Meek Examples">
       <UniqueIdentifier>{9d904bfd-0d40-490a-97a5-1b266d72f071}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Misc">
+      <UniqueIdentifier>{b566970c-d994-4ed1-a1bf-8bd1eea4f67a}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\als\als.h">
@@ -137,6 +140,9 @@
   <ItemGroup>
     <None Include="examples\test.meek">
       <Filter>Meek Examples</Filter>
+    </None>
+    <None Include="cpp.hint">
+      <Filter>Misc</Filter>
     </None>
   </ItemGroup>
 </Project>

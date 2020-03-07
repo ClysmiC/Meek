@@ -18,19 +18,19 @@ void init(ResolvePass * pPass)
 	pPass->hadError = false;
 	pPass->cNestedBreakable = 0;
 
-    // HMM: Does this belong in init?
+	// HMM: Does this belong in init?
 
-    {
-        Scope scopeBuiltIn;
-        scopeBuiltIn.id = SCOPEID_BuiltIn;
-        scopeBuiltIn.scopek = SCOPEK_BuiltIn;
-        push(&pPass->scopeStack, scopeBuiltIn);
+	{
+		Scope scopeBuiltIn;
+		scopeBuiltIn.id = SCOPEID_BuiltIn;
+		scopeBuiltIn.scopek = SCOPEK_BuiltIn;
+		push(&pPass->scopeStack, scopeBuiltIn);
 
-        Scope scopeGlobal;
-        scopeGlobal.id = SCOPEID_Global;
-        scopeGlobal.scopek = SCOPEK_Global;
-        push(&pPass->scopeStack, scopeGlobal);
-    }
+		Scope scopeGlobal;
+		scopeGlobal.id = SCOPEID_Global;
+		scopeGlobal.scopek = SCOPEK_Global;
+		push(&pPass->scopeStack, scopeGlobal);
+	}
 }
 
 TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
@@ -41,16 +41,16 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 
 	switch (pNode->astk)
 	{
-        case ASTK_BinopExpr:
-        {
+		case ASTK_BinopExpr:
+		{
 			// NOTE: Assume that binops can only happen between
 			//	exact type matches, and the result becomes that type.
 			//	Will change later?
 
-            auto * pExpr = Down(pNode, BinopExpr);
+			auto * pExpr = Down(pNode, BinopExpr);
 
-            TYPID typidLhs = resolveExpr(pPass, pExpr->pLhsExpr);
-            TYPID typidRhs = resolveExpr(pPass, pExpr->pRhsExpr);
+			TYPID typidLhs = resolveExpr(pPass, pExpr->pLhsExpr);
+			TYPID typidRhs = resolveExpr(pPass, pExpr->pRhsExpr);
 
 			if (!isTypeResolved(typidLhs) || !isTypeResolved(typidRhs))
 			{
@@ -68,41 +68,41 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 			}
 
 			typidResult = typidLhs;
-        } break;
+		} break;
 
-        case ASTK_GroupExpr:
-        {
+		case ASTK_GroupExpr:
+		{
 			// This could technically still be an lvalue, but it would let you do stuff like this:
 			//	(a) = 15;
 			// This is semantically equivalent to:
 			//	a = 15;
 			// But it's kind of dumb, so I'm just going to say that groups are NOT lvalues.
 
-            auto * pExpr = Down(pNode, GroupExpr);
+			auto * pExpr = Down(pNode, GroupExpr);
 
-            typidResult = resolveExpr(pPass, pExpr->pExpr);
+			typidResult = resolveExpr(pPass, pExpr->pExpr);
 			SetBubbleIfUnresolved(typidResult);
-        } break;
+		} break;
 
-        case ASTK_LiteralExpr:
-        {
+		case ASTK_LiteralExpr:
+		{
 			auto * pExpr = Down(pNode, LiteralExpr);
 
 			typidResult = typidFromLiteralk(pExpr->literalk);
 			SetBubbleIfUnresolved(typidResult);
-        } break;
+		} break;
 
-        case ASTK_UnopExpr:
-        {
-            auto * pExpr = Down(pNode, UnopExpr);
+		case ASTK_UnopExpr:
+		{
+			auto * pExpr = Down(pNode, UnopExpr);
 
-            TYPID typidExpr = resolveExpr(pPass, pExpr->pExpr);
+			TYPID typidExpr = resolveExpr(pPass, pExpr->pExpr);
 
-            if (!isTypeResolved(typidExpr))
-            {
-                typidResult = TYPID_BubbleError;
+			if (!isTypeResolved(typidExpr))
+			{
+				typidResult = TYPID_BubbleError;
 				goto end;
-            }
+			}
 
 			switch (pExpr->pOp->tokenk)
 			{
@@ -134,28 +134,28 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 					reportIceAndExit("Unknown binary operator: %d", pExpr->pOp->tokenk);
 				} break;
 			}
-        } break;
+		} break;
 
-        case ASTK_VarExpr:
-        {
+		case ASTK_VarExpr:
+		{
 			// HMM: How to handle func names as VarExprs... FuncCallExpr has special resolve code to took up varexpr's in the func symbol table,
 			//	but if I ever want a func varExpr outside of a function call (like passing a function to an argument or assigning it to a
 			//	variable) then I will need to be smarter here... it's hard though because you need to have some concept of an "expected type"
 			//	to properly handle overloaded function names...
 
-            auto * pExpr = Down(pNode, VarExpr);
+			auto * pExpr = Down(pNode, VarExpr);
 
 			AssertInfo(!pExpr->pResolvedDecl, "This shouldn't be resolved yet because this is the code that should resolve it!");
 
-            if (pExpr->pOwner)
-            {
-                TYPID ownerTypid = resolveExpr(pPass, pExpr->pOwner);
+			if (pExpr->pOwner)
+			{
+				TYPID ownerTypid = resolveExpr(pPass, pExpr->pOwner);
 				SCOPEID ownerScopeid = SCOPEID_Nil;
 
 				if (!isTypeResolved(ownerTypid))
 				{
 					typidResult = TYPID_BubbleError;
-                    goto end;
+					goto end;
 				}
 
 				const Type * pOwnerType = lookupType(*pPass->pTypeTable, ownerTypid);
@@ -190,9 +190,9 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 
 				pExpr->pResolvedDecl = pSymbInfo->pVarDeclStmt;
 				typidResult = pSymbInfo->pVarDeclStmt->typid;
-            }
-            else
-            {
+			}
+			else
+			{
 				bool found = false;
 				for (int i = 0; i < count(pPass->scopeStack); i++)
 				{
@@ -227,8 +227,8 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 
 					typidResult = TYPID_Unresolved;
 				}
-            }
-        } break;
+			}
+		} break;
 
 		case ASTK_PointerDereferenceExpr:
 		{
@@ -261,11 +261,11 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 			typidResult = ensureInTypeTable(pPass->pTypeTable, typeDereferenced);
 		} break;
 
-        case ASTK_ArrayAccessExpr:
-        {
-            auto * pExpr = Down(pNode, ArrayAccessExpr);
+		case ASTK_ArrayAccessExpr:
+		{
+			auto * pExpr = Down(pNode, ArrayAccessExpr);
 
-            TYPID typidArray = resolveExpr(pPass, pExpr->pArrayExpr);
+			TYPID typidArray = resolveExpr(pPass, pExpr->pArrayExpr);
 
 			if (!isTypeResolved(typidArray))
 			{
@@ -306,17 +306,17 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 			remove(&typeElement.aTypemods, 0);
 
 			typidResult = ensureInTypeTable(pPass->pTypeTable, typeElement);
-        } break;
+		} break;
 
-        case ASTK_FuncCallExpr:
-        {
+		case ASTK_FuncCallExpr:
+		{
 			// TODO: For now I am just going to assert that functions return a single value, even though the grammar allows
 			//	multiple return values. I still need to figure out what I want the semantics of MRV to be... do I want a
 			//	more general concept of "tuple" values that MRV leverages, or do I want MRV to be something that is just
 			//	baked in as a special case to things like assignment and parameter lists.
 
 
-            auto * pExpr = Down(pNode, FuncCallExpr);
+			auto * pExpr = Down(pNode, FuncCallExpr);
 
 			if (pExpr->pFunc->astk == ASTK_VarExpr)
 			{
@@ -389,7 +389,7 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 						goto end;
 					}
 
-                    auto * papReturnVarDecls = &pFuncDefnStmtMatch->pParamsReturnsGrp->apReturnVarDecls;
+					auto * papReturnVarDecls = &pFuncDefnStmtMatch->pParamsReturnsGrp->apReturnVarDecls;
 					if (papReturnVarDecls->cItem == 0)
 					{
 						typidResult = TYPID_Void;
@@ -407,11 +407,11 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 				// TODO: It's a non-var being called as a function. Resolve the calling expr,
 				//	make sure it is a function type, then make sure our params match
 			}
-        } break;
+		} break;
 
-        case ASTK_FuncLiteralExpr:
-        {
-            auto * pExpr = Down(pNode, FuncLiteralExpr);
+		case ASTK_FuncLiteralExpr:
+		{
+			auto * pExpr = Down(pNode, FuncLiteralExpr);
 
 			// NOTE: Func literal expressions define a type that we should have already put into the type table when parsing,
 			//	so we just need to make sure we resolve the children here.
@@ -421,20 +421,20 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 
 			// Push scope and resolve children
 
-            Scope scope;
-            scope.id = pExpr->scopeid;
-            scope.scopek = SCOPEK_CodeBlock;
+			Scope scope;
+			scope.id = pExpr->scopeid;
+			scope.scopek = SCOPEK_CodeBlock;
 
 			push(&pPass->scopeStack, scope);
 			Defer(pop(&pPass->scopeStack));
 
-            auto * papParamVarDecls = &pExpr->pParamsReturnsGrp->apParamVarDecls;
+			auto * papParamVarDecls = &pExpr->pParamsReturnsGrp->apParamVarDecls;
 			for (int i = 0; i < papParamVarDecls->cItem; i++)
 			{
 				doResolvePass(pPass, (*papParamVarDecls)[i]);
 			}
 
-            auto * papReturnVarDecls = &pExpr->pParamsReturnsGrp->apReturnVarDecls;
+			auto * papReturnVarDecls = &pExpr->pParamsReturnsGrp->apReturnVarDecls;
 			for (int i = 0; i < papReturnVarDecls->cItem; i++)
 			{
 				doResolvePass(pPass, (*papReturnVarDecls)[i]);
@@ -453,7 +453,7 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 			// Pop ctx
 
 			pop(&pPass->fnCtxStack);
-        } break;
+		} break;
 
 		default:
 		{
@@ -463,9 +463,9 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 
 end:
 
-    AstExpr * pExpr = DownExpr(pNode);
-    pExpr->typid = typidResult;
-    return typidResult;
+	AstExpr * pExpr = DownExpr(pNode);
+	pExpr->typid = typidResult;
+	return typidResult;
 }
 
 void resolveStmt(ResolvePass * pPass, AstNode * pNode)
@@ -513,7 +513,7 @@ void resolveStmt(ResolvePass * pPass, AstNode * pNode)
 			AssertInfo(isScopeSet(pStmt->ident), "The name of the thing you are declaring should be resolved to itself...");
 
 			AssertInfo(isTypeResolved(pStmt->typid), "Inferred types are TODO");
-            const Type * pType = lookupType(*pPass->pTypeTable, pStmt->typid);
+			const Type * pType = lookupType(*pPass->pTypeTable, pStmt->typid);
 
 			if (pStmt->ident.pToken)
 			{
@@ -522,10 +522,10 @@ void resolveStmt(ResolvePass * pPass, AstNode * pNode)
 				AssertInfo(pSymbInfo, "We should have put this var decl in the symbol table when we parsed it...");
 				Assert(pSymbInfo->symbolk == SYMBOLK_Var);
 
-                // HMM: This assert seems like it should be fine, but it fires when we have a redefined variable, since the 2nd defn
-                //  will find the first defn in the symbol table. We *do* report that error elsewhere, so it would be nice to know at this
-                //  point if we have reported the error so that we could assert EITHER that it has been reported, or that the below assert
-                //  is true.
+				// HMM: This assert seems like it should be fine, but it fires when we have a redefined variable, since the 2nd defn
+				//  will find the first defn in the symbol table. We *do* report that error elsewhere, so it would be nice to know at this
+				//  point if we have reported the error so that we could assert EITHER that it has been reported, or that the below assert
+				//  is true.
 
 				// AssertInfo(pSymbInfo->pVarDeclStmt == pStmt, "At var declaration we should be able to look up the var in the symbol table and find ourselves...");
 #endif
@@ -534,21 +534,21 @@ void resolveStmt(ResolvePass * pPass, AstNode * pNode)
 				pPass->lastSymbseqid = pStmt->symbseqid;
 			}
 
-            // Resolve init expr
+			// Resolve init expr
 
 			// TODO: Need to get the type of the initExpr and compare it to the type of the lhs...
 			//	just like in assignment
 
-            if (pStmt->pInitExpr)
-            {
-                TYPID typidInit = resolveExpr(pPass, pStmt->pInitExpr);
+			if (pStmt->pInitExpr)
+			{
+				TYPID typidInit = resolveExpr(pPass, pStmt->pInitExpr);
 
 				if (isTypeResolved(typidInit) && typidInit != pStmt->typid)
 				{
 					// TODO: report better error
 					printf("Cannot initialize variable of type %d with expression of type %d\n", pStmt->typid, typidInit);
 				}
-            }
+			}
 		} break;
 
 		case ASTK_StructDefnStmt:
@@ -571,9 +571,9 @@ void resolveStmt(ResolvePass * pPass, AstNode * pNode)
 
 			// Record scope id
 
-            Scope scope;
-            scope.id = pStmt->scopeid;
-            scope.scopek = SCOPEK_StructDefn;
+			Scope scope;
+			scope.id = pStmt->scopeid;
+			scope.scopek = SCOPEK_StructDefn;
 
 			push(&pPass->scopeStack, scope);
 			Defer(pop(&pPass->scopeStack));
@@ -591,29 +591,29 @@ void resolveStmt(ResolvePass * pPass, AstNode * pNode)
 			auto * pStmt = Down(pNode, FuncDefnStmt);
 
 #if DEBUG
-            {
-                // Verify assumptions
+			{
+				// Verify assumptions
 
-                DynamicArray<SymbolInfo> * paSymbInfo;
-                paSymbInfo = lookupFuncSymb(*pPass->pSymbTable, pStmt->ident);
+				DynamicArray<SymbolInfo> * paSymbInfo;
+				paSymbInfo = lookupFuncSymb(*pPass->pSymbTable, pStmt->ident);
 
-                AssertInfo(paSymbInfo && paSymbInfo->cItem > 0, "We should have put this func decl in the symbol table when we parsed it...");
-                bool found = false;
+				AssertInfo(paSymbInfo && paSymbInfo->cItem > 0, "We should have put this func decl in the symbol table when we parsed it...");
+				bool found = false;
 
-                for (int i = 0; i < paSymbInfo->cItem; i++)
-                {
-                    SymbolInfo * pSymbInfo = &(*paSymbInfo)[i];
-                    Assert(pSymbInfo->symbolk == SYMBOLK_Func);
+				for (int i = 0; i < paSymbInfo->cItem; i++)
+				{
+					SymbolInfo * pSymbInfo = &(*paSymbInfo)[i];
+					Assert(pSymbInfo->symbolk == SYMBOLK_Func);
 
-                    if (pStmt->typid == pSymbInfo->pFuncDefnStmt->typid)
-                    {
-                        found = true;
-                        break;
-                    }
-                }
+					if (pStmt->typid == pSymbInfo->pFuncDefnStmt->typid)
+					{
+						found = true;
+						break;
+					}
+				}
 
-                AssertInfo(found, "At struct definition we should be able to look up the struct in the symbol table and find ourselves...");
-            }
+				AssertInfo(found, "At struct definition we should be able to look up the struct in the symbol table and find ourselves...");
+			}
 #endif
 
 			// Record sequence id
@@ -623,16 +623,16 @@ void resolveStmt(ResolvePass * pPass, AstNode * pNode)
 
 			// Record scope id
 
-            Scope scope;
-            scope.id = pStmt->scopeid;
-            scope.scopek = SCOPEK_CodeBlock;
+			Scope scope;
+			scope.id = pStmt->scopeid;
+			scope.scopek = SCOPEK_CodeBlock;
 
 			push(&pPass->scopeStack, scope);
 			Defer(pop(&pPass->scopeStack));
 
 			// Resolve params
 
-            auto * papParamVarDecls = &pStmt->pParamsReturnsGrp->apParamVarDecls;
+			auto * papParamVarDecls = &pStmt->pParamsReturnsGrp->apParamVarDecls;
 			for (int i = 0; i < papParamVarDecls->cItem; i++)
 			{
 				doResolvePass(pPass, (*papParamVarDecls)[i]);
@@ -640,7 +640,7 @@ void resolveStmt(ResolvePass * pPass, AstNode * pNode)
 
 			// Resolve return values
 
-            auto * papReturnVarDecls = &pStmt->pParamsReturnsGrp->apReturnVarDecls;
+			auto * papReturnVarDecls = &pStmt->pParamsReturnsGrp->apReturnVarDecls;
 			for (int i = 0; i < papReturnVarDecls->cItem; i++)
 			{
 				doResolvePass(pPass, (*papReturnVarDecls)[i]);
@@ -671,14 +671,14 @@ void resolveStmt(ResolvePass * pPass, AstNode * pNode)
 
 			bool shouldPushPop = peek(pPass->scopeStack).id != pStmt->scopeid;
 
-            if (shouldPushPop)
-            {
-                Scope scope;
-                scope.id = pStmt->scopeid;
-                scope.scopek = SCOPEK_CodeBlock;
+			if (shouldPushPop)
+			{
+				Scope scope;
+				scope.id = pStmt->scopeid;
+				scope.scopek = SCOPEK_CodeBlock;
 
-                push(&pPass->scopeStack, scope);
-            }
+				push(&pPass->scopeStack, scope);
+			}
 			Defer(if (shouldPushPop) pop(&pPass->scopeStack));
 
 			for (int i = 0; i < pStmt->apStmts.cItem; i++)
@@ -761,10 +761,10 @@ void resolveStmt(ResolvePass * pPass, AstNode * pNode)
 			}
 		} break;
 
-	    default:
-	    {
-		    reportIceAndExit("Unknown astk in resolveStmt: %d", pNode->astk);
-	    } break;
+		default:
+		{
+			reportIceAndExit("Unknown astk in resolveStmt: %d", pNode->astk);
+		} break;
 	}
 }
 
@@ -776,8 +776,8 @@ void doResolvePass(ResolvePass * pPass, AstNode * pNode)
 		"errors if we ever accidentally have null children in spots where they shouldn't be null"
 	);
 
-    switch (category(pNode->astk))
-    {
+	switch (category(pNode->astk))
+	{
 		case ASTCATK_Expr:
 		{
 			resolveExpr(pPass, pNode);
@@ -788,22 +788,22 @@ void doResolvePass(ResolvePass * pPass, AstNode * pNode)
 			resolveStmt(pPass, pNode);
 		} break;
 
-        // PROGRAM
+		// PROGRAM
 
-        case ASTCATK_Program:
-        {
-            auto * pProgram = Down(pNode, Program);
-            for (int i = 0; i < pProgram->apNodes.cItem; i++)
-            {
-                doResolvePass(pPass, pProgram->apNodes[i]);
-            }
-        } break;
+		case ASTCATK_Program:
+		{
+			auto * pProgram = Down(pNode, Program);
+			for (int i = 0; i < pProgram->apNodes.cItem; i++)
+			{
+				doResolvePass(pPass, pProgram->apNodes[i]);
+			}
+		} break;
 
-        default:
+		default:
 		{
 			reportIceAndExit("Unknown astcatk in doResolvePass: %d", category(pNode->astk));
 		} break;
-    }
+	}
 }
 
 void reportUnresolvedIdentError(ResolvePass * pPass, ScopedIdentifier ident)

@@ -8,9 +8,9 @@ enum ASTID : u32
 
 enum SYMBSEQID : u32
 {
-    SYMBSEQID_Unset,
+	SYMBSEQID_Unset,
 
-    SYMBSEQID_SetStart
+	SYMBSEQID_SetStart
 };
 
 enum SCOPEID : u32
@@ -33,10 +33,10 @@ enum TYPID : u32
 	TYPID_Unresolved,
 	TYPID_UnresolvedInferred,
 
-    // Type checking errors
+	// Type checking errors
 
 	TYPID_TypeError,
-    TYPID_BubbleError,
+	TYPID_BubbleError,
 
 	// Built-ins
 
@@ -47,5 +47,5 @@ enum TYPID : u32
 	TYPID_String,
 
 	TYPID_UserDefinedStart,
-    TYPID_ActualTypesStart = TYPID_Void
+	TYPID_ActualTypesStart = TYPID_Void
 };

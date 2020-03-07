@@ -64,7 +64,7 @@ bool isTypeResolved(const Type & type)
 {
 	if (type.isFuncType)
 	{
-        return isFuncTypeResolved(type.funcType);
+		return isFuncTypeResolved(type.funcType);
 	}
 
 	return isScopeSet(type.ident);
@@ -72,23 +72,23 @@ bool isTypeResolved(const Type & type)
 
 bool isFuncTypeResolved(const FuncType & funcType)
 {
-    for (int i = 0; i < funcType.paramTypids.cItem; i++)
-    {
-        if (!isTypeResolved(funcType.paramTypids[i])) return false;
-    }
+	for (int i = 0; i < funcType.paramTypids.cItem; i++)
+	{
+		if (!isTypeResolved(funcType.paramTypids[i])) return false;
+	}
 
-    for (int i = 0; i < funcType.returnTypids.cItem; i++)
-    {
-        if (!isTypeResolved(funcType.returnTypids[i])) return false;
-    }
+	for (int i = 0; i < funcType.returnTypids.cItem; i++)
+	{
+		if (!isTypeResolved(funcType.returnTypids[i])) return false;
+	}
 
-    return true;
+	return true;
 }
 
 bool isTypeInferred(const Type & type)
 {
 	bool result = (type.ident.pToken->lexeme == "var");
-    return result;
+	return result;
 }
 
 bool isUnmodifiedType(const Type & type)
@@ -184,8 +184,8 @@ uint typeHash(const Type & t)
 
 void init(FuncType * pFuncType)
 {
-    init(&pFuncType->paramTypids);
-    init(&pFuncType->returnTypids);
+	init(&pFuncType->paramTypids);
+	init(&pFuncType->returnTypids);
 }
 
 void initMove(FuncType * pFuncType, FuncType * pFuncTypeSrc)
@@ -202,56 +202,56 @@ void initCopy(FuncType * pFuncType, const FuncType & funcTypeSrc)
 
 void dispose(FuncType * pFuncType)
 {
-    dispose(&pFuncType->paramTypids);
-    dispose(&pFuncType->returnTypids);
+	dispose(&pFuncType->paramTypids);
+	dispose(&pFuncType->returnTypids);
 }
 
 bool funcTypeEq(const FuncType & f0, const FuncType & f1)
 {
-    AssertInfo(
-        isFuncTypeResolved(f0) && isFuncTypeResolved(f1),
-        "Can't really determine if function types are equal if they aren't yet resolved. "
-        "This function is used by the type table which should only be dealing with types that ARE resolved!"
-    );
+	AssertInfo(
+		isFuncTypeResolved(f0) && isFuncTypeResolved(f1),
+		"Can't really determine if function types are equal if they aren't yet resolved. "
+		"This function is used by the type table which should only be dealing with types that ARE resolved!"
+	);
 
-    if (f0.paramTypids.cItem != f1.paramTypids.cItem) return false;
-    if (f0.returnTypids.cItem != f1.returnTypids.cItem) return false;
+	if (f0.paramTypids.cItem != f1.paramTypids.cItem) return false;
+	if (f0.returnTypids.cItem != f1.returnTypids.cItem) return false;
 
-    for (int i = 0; i < f0.paramTypids.cItem; i++)
-    {
-        if (f0.paramTypids[i] != f1.paramTypids[i])
-            return false;
-    }
+	for (int i = 0; i < f0.paramTypids.cItem; i++)
+	{
+		if (f0.paramTypids[i] != f1.paramTypids[i])
+			return false;
+	}
 
-    for (int i = 0; i < f0.returnTypids.cItem; i++)
-    {
-        if (f0.returnTypids[i] != f1.returnTypids[i])
-            return false;
-    }
+	for (int i = 0; i < f0.returnTypids.cItem; i++)
+	{
+		if (f0.returnTypids[i] != f1.returnTypids[i])
+			return false;
+	}
 
-    return true;
+	return true;
 }
 
 uint funcTypeHash(const FuncType & f)
 {
-    AssertInfo(
-        isFuncTypeResolved(f),
-        "This function is used by the type table which should only be dealing with types that ARE resolved!"
-    );
+	AssertInfo(
+		isFuncTypeResolved(f),
+		"This function is used by the type table which should only be dealing with types that ARE resolved!"
+	);
 
 	uint hash = startHash();
 
-    for (int i = 0; i < f.paramTypids.cItem; i++)
-    {
-        TYPID typid = f.paramTypids[i];
-        hash = buildHash(&typid, sizeof(typid), hash);
-    }
+	for (int i = 0; i < f.paramTypids.cItem; i++)
+	{
+		TYPID typid = f.paramTypids[i];
+		hash = buildHash(&typid, sizeof(typid), hash);
+	}
 
-    for (int i = 0; i < f.returnTypids.cItem; i++)
-    {
-        TYPID typid = f.returnTypids[i];
-        hash = buildHash(&typid, sizeof(typid), hash);
-    }
+	for (int i = 0; i < f.returnTypids.cItem; i++)
+	{
+		TYPID typid = f.returnTypids[i];
+		hash = buildHash(&typid, sizeof(typid), hash);
+	}
 
 	return hash;
 }
@@ -259,36 +259,36 @@ uint funcTypeHash(const FuncType & f)
 bool areTypidListTypesFullyResolved(const DynamicArray<TYPID> & aTypid)
 {
 	for (int i = 0; i < aTypid.cItem; i++)
-    {
-        if (!isTypeResolved(aTypid[i]))
-        {
-            return false;
-        }
-    }
+	{
+		if (!isTypeResolved(aTypid[i]))
+		{
+			return false;
+		}
+	}
 
-    return true;
+	return true;
 }
 
 bool areVarDeclListTypesFullyResolved(const DynamicArray<AstNode*>& apVarDecls)
 {
-    for (int i = 0; i < apVarDecls.cItem; i++)
-    {
-        Assert(apVarDecls[i]->astk == ASTK_VarDeclStmt);
-        auto * pStmt = Down(apVarDecls[i], VarDeclStmt);
+	for (int i = 0; i < apVarDecls.cItem; i++)
+	{
+		Assert(apVarDecls[i]->astk == ASTK_VarDeclStmt);
+		auto * pStmt = Down(apVarDecls[i], VarDeclStmt);
 
-        if (!isTypeResolved(pStmt->typid))
-        {
-            return false;
-        }
-    }
+		if (!isTypeResolved(pStmt->typid))
+		{
+			return false;
+		}
+	}
 
-    return true;
+	return true;
 }
 
 bool areVarDeclListTypesEq(const DynamicArray<AstNode *> & apVarDecls0, const DynamicArray<AstNode *> & apVarDecls1)
 {
-    Assert(areVarDeclListTypesFullyResolved(apVarDecls0));
-    Assert(areVarDeclListTypesFullyResolved(apVarDecls1));
+	Assert(areVarDeclListTypesFullyResolved(apVarDecls0));
+	Assert(areVarDeclListTypesFullyResolved(apVarDecls1));
 
 	if (apVarDecls0.cItem != apVarDecls1.cItem) return false;
 
@@ -308,7 +308,7 @@ bool areVarDeclListTypesEq(const DynamicArray<AstNode *> & apVarDecls0, const Dy
 			pDecl1 = Down(pNode1, VarDeclStmt);
 		}
 
-        if (pDecl0->typid != pDecl1->typid) return false;
+		if (pDecl0->typid != pDecl1->typid) return false;
 	}
 
 	return true;
@@ -339,10 +339,10 @@ bool areTypidListAndVarDeclListTypesEq(const DynamicArray<TYPID> & aTypid, const
 void init(TypeTable * pTable)
 {
 	init(&pTable->table,
-        typidHash,
-        typidEq,
-        typeHash,
-        typeEq);
+		typidHash,
+		typidEq,
+		typeHash,
+		typeEq);
 
 	init(&pTable->typesPendingResolution);
 }
@@ -350,104 +350,104 @@ void init(TypeTable * pTable)
 void insertBuiltInTypes(TypeTable * pTable)
 {
 	// void
-    {
-        static Token voidToken;
-        voidToken.id = -1;
-        voidToken.startEnd = gc_startEndBuiltInPseudoToken;
-        voidToken.tokenk = TOKENK_Identifier;
-        voidToken.lexeme = makeStringView("void");
+	{
+		static Token voidToken;
+		voidToken.id = -1;
+		voidToken.startEnd = gc_startEndBuiltInPseudoToken;
+		voidToken.tokenk = TOKENK_Identifier;
+		voidToken.lexeme = makeStringView("void");
 
-        ScopedIdentifier voidIdent;
-        setIdent(&voidIdent, &voidToken, SCOPEID_BuiltIn);
+		ScopedIdentifier voidIdent;
+		setIdent(&voidIdent, &voidToken, SCOPEID_BuiltIn);
 
-        Type voidType;
-        init(&voidType, false /* isFuncType */);
-        voidType.ident = voidIdent;
+		Type voidType;
+		init(&voidType, false /* isFuncType */);
+		voidType.ident = voidIdent;
 
-        Verify(isTypeResolved(voidType));
-        Verify(ensureInTypeTable(pTable, voidType) == TYPID_Void);
-    }
+		Verify(isTypeResolved(voidType));
+		Verify(ensureInTypeTable(pTable, voidType) == TYPID_Void);
+	}
 
-    // int
-    {
-        static Token intToken;
-        intToken.id = -1;
-        intToken.startEnd = gc_startEndBuiltInPseudoToken;
-        intToken.tokenk = TOKENK_Identifier;
-        intToken.lexeme = makeStringView("int");
+	// int
+	{
+		static Token intToken;
+		intToken.id = -1;
+		intToken.startEnd = gc_startEndBuiltInPseudoToken;
+		intToken.tokenk = TOKENK_Identifier;
+		intToken.lexeme = makeStringView("int");
 
-        ScopedIdentifier intIdent;
-        setIdent(&intIdent, &intToken, SCOPEID_BuiltIn);
+		ScopedIdentifier intIdent;
+		setIdent(&intIdent, &intToken, SCOPEID_BuiltIn);
 
-        Type intType;
-        init(&intType, false /* isFuncType */);
-        intType.ident = intIdent;
+		Type intType;
+		init(&intType, false /* isFuncType */);
+		intType.ident = intIdent;
 
-        Verify(isTypeResolved(intType));
-        Verify(ensureInTypeTable(pTable, intType) == TYPID_Int);
-    }
+		Verify(isTypeResolved(intType));
+		Verify(ensureInTypeTable(pTable, intType) == TYPID_Int);
+	}
 
-    // float
-    {
-        static Token floatToken;
-        floatToken.id = -1;
-        floatToken.startEnd = gc_startEndBuiltInPseudoToken;
-        floatToken.tokenk = TOKENK_Identifier;
-        floatToken.lexeme = makeStringView("float");
+	// float
+	{
+		static Token floatToken;
+		floatToken.id = -1;
+		floatToken.startEnd = gc_startEndBuiltInPseudoToken;
+		floatToken.tokenk = TOKENK_Identifier;
+		floatToken.lexeme = makeStringView("float");
 
-        ScopedIdentifier floatIdent;
-        setIdent(&floatIdent, &floatToken, SCOPEID_BuiltIn);
+		ScopedIdentifier floatIdent;
+		setIdent(&floatIdent, &floatToken, SCOPEID_BuiltIn);
 
-        Type floatType;
-        init(&floatType, false /* isFuncType */);
-        floatType.ident = floatIdent;
+		Type floatType;
+		init(&floatType, false /* isFuncType */);
+		floatType.ident = floatIdent;
 
-        Verify(isTypeResolved(floatType));
-        Verify(ensureInTypeTable(pTable, floatType) == TYPID_Float);
-    }
+		Verify(isTypeResolved(floatType));
+		Verify(ensureInTypeTable(pTable, floatType) == TYPID_Float);
+	}
 
-    // bool
-    {
-        static Token boolToken;
-        boolToken.id = -1;
-        boolToken.startEnd = gc_startEndBuiltInPseudoToken;
-        boolToken.tokenk = TOKENK_Identifier;
-        boolToken.lexeme = makeStringView("bool");
+	// bool
+	{
+		static Token boolToken;
+		boolToken.id = -1;
+		boolToken.startEnd = gc_startEndBuiltInPseudoToken;
+		boolToken.tokenk = TOKENK_Identifier;
+		boolToken.lexeme = makeStringView("bool");
 
-        ScopedIdentifier boolIdent;
-        setIdent(&boolIdent, &boolToken, SCOPEID_BuiltIn);
+		ScopedIdentifier boolIdent;
+		setIdent(&boolIdent, &boolToken, SCOPEID_BuiltIn);
 
-        Type boolType;
-        init(&boolType, false /* isFuncType */);
-        boolType.ident = boolIdent;
+		Type boolType;
+		init(&boolType, false /* isFuncType */);
+		boolType.ident = boolIdent;
 
-        Verify(isTypeResolved(boolType));
-        Verify(ensureInTypeTable(pTable, boolType) == TYPID_Bool);
-    }
+		Verify(isTypeResolved(boolType));
+		Verify(ensureInTypeTable(pTable, boolType) == TYPID_Bool);
+	}
 
 	// string
-    {
-        static Token stringToken;
-        stringToken.id = -1;
-        stringToken.startEnd = gc_startEndBuiltInPseudoToken;
-        stringToken.tokenk = TOKENK_Identifier;
-        stringToken.lexeme = makeStringView("string");
+	{
+		static Token stringToken;
+		stringToken.id = -1;
+		stringToken.startEnd = gc_startEndBuiltInPseudoToken;
+		stringToken.tokenk = TOKENK_Identifier;
+		stringToken.lexeme = makeStringView("string");
 
-        ScopedIdentifier stringIdent;
-        setIdent(&stringIdent, &stringToken, SCOPEID_BuiltIn);
+		ScopedIdentifier stringIdent;
+		setIdent(&stringIdent, &stringToken, SCOPEID_BuiltIn);
 
-        Type stringType;
-        init(&stringType, false /* isFuncType */);
-        stringType.ident = stringIdent;
+		Type stringType;
+		init(&stringType, false /* isFuncType */);
+		stringType.ident = stringIdent;
 
-        Verify(isTypeResolved(stringType));
-        Verify(ensureInTypeTable(pTable, stringType) == TYPID_String);
-    }
+		Verify(isTypeResolved(stringType));
+		Verify(ensureInTypeTable(pTable, stringType) == TYPID_String);
+	}
 }
 
 const Type * lookupType(const TypeTable & table, TYPID typid)
 {
-    return lookupByKey(table.table, typid);
+	return lookupByKey(table.table, typid);
 }
 
 TYPID ensureInTypeTable(TypeTable * pTable, const Type & type, bool debugAssertIfAlreadyInTable)
@@ -463,11 +463,11 @@ TYPID ensureInTypeTable(TypeTable * pTable, const Type & type, bool debugAssertI
 		return *pTypid;
 	}
 
-    TYPID typidInsert = pTable->typidNext;
-    pTable->typidNext = static_cast<TYPID>(pTable->typidNext + 1);
+	TYPID typidInsert = pTable->typidNext;
+	pTable->typidNext = static_cast<TYPID>(pTable->typidNext + 1);
 
 	Verify(insert(&pTable->table, typidInsert, type));
-    return typidInsert;
+	return typidInsert;
 }
 
 bool tryResolveType(Type * pType, const SymbolTable & symbolTable, const Stack<Scope> & scopeStack)
@@ -480,10 +480,10 @@ bool tryResolveType(Type * pType, const SymbolTable & symbolTable, const Stack<S
 
 		for (int i = 0; i < count(scopeStack); i++)
 		{
-            Scope candidateScope =peekFar(scopeStack, i);
+			Scope candidateScope =peekFar(scopeStack, i);
 
-            candidate.defnclScopeid = candidateScope.id;
-            candidate.hash = scopedIdentHash(candidate);
+			candidate.defnclScopeid = candidateScope.id;
+			candidate.hash = scopedIdentHash(candidate);
 
 			if (lookupTypeSymb(symbolTable, candidate))
 			{
@@ -492,26 +492,26 @@ bool tryResolveType(Type * pType, const SymbolTable & symbolTable, const Stack<S
 			}
 		}
 
-        return false;
+		return false;
 	}
 	else
 	{
 		// Func type
 
-        for (int i = 0; i < pType->funcType.paramTypids.cItem; i++)
-        {
-            if (!isTypeResolved(pType->funcType.paramTypids[i]))
-            {
-                return false;
-            }
+		for (int i = 0; i < pType->funcType.paramTypids.cItem; i++)
+		{
+			if (!isTypeResolved(pType->funcType.paramTypids[i]))
+			{
+				return false;
+			}
 		}
 
 		for (int i = 0; i < pType->funcType.returnTypids.cItem; i++)
 		{
-            if (!isTypeResolved(pType->funcType.returnTypids[i]))
-            {
+			if (!isTypeResolved(pType->funcType.returnTypids[i]))
+			{
 				return false;
-            }
+			}
 		}
 
 		return true;

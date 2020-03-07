@@ -28,7 +28,7 @@ int g_cTokenkUnopPre = ArrayLen(g_aTokenkUnopPre);
 
 ReservedWord g_aReservedWord[] = {
 	{ "if",			TOKENK_If },
-    { "else",       TOKENK_Else },
+	{ "else",       TOKENK_Else },
 	{ "for",		TOKENK_For },
 	{ "while",		TOKENK_While },
 	{ "break",		TOKENK_Break },
@@ -52,7 +52,7 @@ ReservedWord g_aReservedWord[] = {
 	{ "string",		TOKENK_Identifier },
 	{ "struct",		TOKENK_Struct },
 	{ "enum",		TOKENK_Enum },
-    { "fn",         TOKENK_Fn },
+	{ "fn",         TOKENK_Fn },
 	{ "true",		TOKENK_BoolLiteral },
 	{ "false",		TOKENK_BoolLiteral },
 };
@@ -86,7 +86,7 @@ const char * g_mpTokenkStrDisplay[] = {
 	"'<'",					// TOKENK_Lesser
 	"'>'",					// TOKENK_Greater
 	"'^'",					// TOKENK_Carat
-    "'->'",                 // TOKENK_MinusGreater
+	"'->'",                 // TOKENK_MinusGreater
 	"'--'",					// TOKENK_MinusMinus
 	"'++'",					// TOKENK_PlusPlus
 	"'|'",					// TOKENK_Pipe
@@ -106,11 +106,11 @@ const char * g_mpTokenkStrDisplay[] = {
 	"'!='",					// TOKENK_BangEqual
 	"'<='",					// TOKENK_LesserEqual
 	"'>='",					// TOKENK_GreaterEqual
-    "'#and'",               // TOKENK_HashAnd
-    "'#or'",                // TOKENK_HashOr
-    "'#xor'",               // TOKENK_HashXor,
+	"'#and'",               // TOKENK_HashAnd
+	"'#or'",                // TOKENK_HashOr
+	"'#xor'",               // TOKENK_HashXor,
 	"'if'",					// TOKENK_If
-    "'else'",               // TOKENK_Else
+	"'else'",               // TOKENK_Else
 	"'for'",				// TOKENK_For
 	"'while'",				// TOKENK_While
 	"'break'",				// TOKENK_Break
@@ -119,7 +119,7 @@ const char * g_mpTokenkStrDisplay[] = {
 	"'do'",					// TOKENK_Do
 	"'struct'",				// TOKENK_Struct
 	"'enum'",				// TOKENK_Enum
-    "'func'",               // TOKENK_Func
+	"'func'",               // TOKENK_Func
 	"<end of file>",		// TOKENK_Eof
 };
 StaticAssert(ArrayLen(g_mpTokenkStrDisplay) == TOKENK_Max);
@@ -128,52 +128,52 @@ const char * errMessageFromFerrtok(FERRTOK ferrtok)
 {
 	Assert(ferrtok);
 
-    if (ferrtok == FERRTOK_Unspecified)
-    {
+	if (ferrtok == FERRTOK_Unspecified)
+	{
 		return "Unspecified error";
-    }
+	}
 
-    switch (ferrtok)
-    {
-        case FERRTOK_InvalidCharacter:
-        {
+	switch (ferrtok)
+	{
+		case FERRTOK_InvalidCharacter:
+		{
 			return "Invalid character";
-        } break;
+		} break;
 
-        case FERRTOK_IntLiteralNonBase10WithDecimal:
-        {
-            return "Numeric literal may only contain a decimal if it is in base-10";
-        } break;
+		case FERRTOK_IntLiteralNonBase10WithDecimal:
+		{
+			return "Numeric literal may only contain a decimal if it is in base-10";
+		} break;
 
-        case FERRTOK_IntLiteralNonBase10NoDigits:
-        {
-            return "Numeric literal with non-base-10 prefix must contain at least one digit";
-        } break;
+		case FERRTOK_IntLiteralNonBase10NoDigits:
+		{
+			return "Numeric literal with non-base-10 prefix must contain at least one digit";
+		} break;
 
-        case FERRTOK_NumberLiteralMultipleDecimals:
-        {
-            return "Numeric literal cannot contain more than one decimal";
-        } break;
+		case FERRTOK_NumberLiteralMultipleDecimals:
+		{
+			return "Numeric literal cannot contain more than one decimal";
+		} break;
 
-        case FERRTOK_MultilineString:
-        {
-            return "Multiline string literals are not permitted";
-        } break;
+		case FERRTOK_MultilineString:
+		{
+			return "Multiline string literals are not permitted";
+		} break;
 
-        case FERRTOK_UnterminatedString:
-        {
-            return "Unterminated string literal";
-        } break;
+		case FERRTOK_UnterminatedString:
+		{
+			return "Unterminated string literal";
+		} break;
 
-        case FERRTOK_UnterminatedBlockComment:
-        {
-            return "Unterminated block comment";
-        } break;
+		case FERRTOK_UnterminatedBlockComment:
+		{
+			return "Unterminated block comment";
+		} break;
 
-        default:
-        {
+		default:
+		{
 			reportIceAndExit("Unknown FERRTOK value %d", ferrtok);
 			return "";
-        } break;
-    }
+		} break;
+	}
 }
