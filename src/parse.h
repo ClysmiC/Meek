@@ -78,7 +78,8 @@ enum FUNCHEADERK
 {
 	FUNCHEADERK_Defn,
 	FUNCHEADERK_Literal,
-	FUNCHEADERK_Type
+	FUNCHEADERK_Type,
+	FUNCHEADERK_SymbolExpr		// Corresponds to SYMBEXPRK_Func
 };
 
 enum PARAMK
@@ -152,7 +153,8 @@ AstNode * parseExpr(Parser * pParser);
 AstNode * parseBinop(Parser * pParser, const BinopInfo & op);
 AstNode * parseUnopPre(Parser * pParser);
 AstNode * parsePrimary(Parser * pParser);
-AstNode * parseVarExpr(Parser * pParser, AstNode * pOwnerExpr);
+AstNode * parseVarOrMemberVarSymbolExpr(Parser * pParser, NULLABLE AstNode * pMemberOwnerExpr);
+AstNode * parseFuncSymbolExpr(Parser * pParser);
 AstNode * parseLiteralExpr(Parser * pParser, bool mustBeIntLiteralk=false);
 AstNode * parseFuncLiteralExpr(Parser * pParser);
 
@@ -181,20 +183,25 @@ struct ParseFuncHeaderParam
 
 	union
 	{
-		struct _FuncHeaderDefn			// FUNCHEADERK_Defn
+		struct _FuncHeaderDefn				// FUNCHEADERK_Defn
 		{
 			AstFuncDefnStmt * pioNode;
 		} paramDefn;
 
-		struct _FuncHeaderLiteral		// FUNCHEADERK_Literal
+		struct _FuncHeaderLiteral			// FUNCHEADERK_Literal
 		{
 			AstFuncLiteralExpr * pioNode;
 		} paramLiteral;
 
-		struct _FuncHeaderType			// FUNCHEADERK_Type
+		struct _FuncHeaderType				// FUNCHEADERK_Type
 		{
 			FuncType * pioFuncType;
 		} paramType;
+
+		struct _FuncHeaderSymbolExpr		// FUNCHEADERK_SymbolExpr
+		{
+			AstSymbolExpr * pSymbExpr;
+		} paramSymbolExpr;
 	};
 };
 

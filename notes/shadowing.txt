@@ -1,0 +1,91 @@
+fn doStuff()				// A
+{
+}
+
+fn doStuff(int)				// B
+{
+}
+
+fn main ()
+{
+	// Variable shadowing works like you'd expect
+	
+	int foo = 12;
+	
+	{
+		int foo = 15;		// This is fine! No way to access the outer foo in this scope.
+		
+		// int foo = 20;	// This isn't!
+	}
+	
+	fn doStuff()			// C
+	{
+		// This is fine. Shadows A.
+	}
+	
+	fn doStuff(int)			// D
+	{
+		// This is fine. Shadows B.
+	}
+	
+	fn doStuff(fn ())		// E
+	{
+		// This is fine.
+		
+		fn doStuff(int)		// F
+		{
+			// This is fine. Shadows D.
+		}
+		
+		fn doStuff(fn ())	// G
+		{
+			This is fine. Shadows E.
+		}
+	}
+	
+	fn doStuff(fn (int))	// H
+	{
+		// This is fine.
+	}
+	
+	fn (int) doStuff =		// J
+		fn (int)
+		{
+			// This is fine. This version is a variable. Other versions are functions.
+		};
+		
+		
+		
+	// I
+	
+	doStuff();					// Calls C
+	
+	// II
+	
+	doStuff(5);					// Calls D. Does not call I because undecorated function calls can only call named functions. To call via function pointer, use the "call" keyword (see VII).
+	
+	// III
+	
+	doStuff(doStuff);			// Calls H(J). Undecorated symbols that aren't part of function calls mustbe variables.
+								//	To specify that you want a function pointer to the named function, use the "fn" keyword (see IV, V and VI).
+						
+	// IV
+	
+	// doStuff(fn doStuff);		// Ambiguous. Compiler error. Could be calling E(C) or H(D). Disambiguate by using a clarifier on the types of the parameters.
+	
+	// V
+	
+	doStuff(fn () doStuff);		// Calls E(C). Since C was clarified, we could deduce that the caller was E.
+	
+	// VI
+	
+	doStuff(fn (int) doStuff);	// Calls H(D).
+	
+	// NOTE: Using a clarifier such as "fn (int)" to specify which overloaded function cannot be done on the caller, as it would conflict with the syntax for
+	//	declaring a function pointer variable (see declaration J). It can be used in any scenario expecting an rvalue, such as a parameter, the right hand side of
+	//	an assignment, or as an operand to == or !=
+	
+	// VII
+	
+	call doStuff(5);			// Calls I. Need to use call keyword to dynamically call a function pointer.
+}

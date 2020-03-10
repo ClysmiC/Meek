@@ -110,11 +110,11 @@ void dispose(SymbolTable * pSymbTable);
 
 void insertBuiltInSymbols(SymbolTable * pSymbolTable);
 
-SymbolInfo * lookupVarSymb(const SymbolTable & symbTable, const ScopedIdentifier & ident);
-SymbolInfo * lookupTypeSymb(const SymbolTable & symbTable, const ScopedIdentifier & ident);
+NULLABLE SymbolInfo * lookupVarSymb(const SymbolTable & symbTable, const ScopedIdentifier & ident);
+NULLABLE SymbolInfo * lookupTypeSymb(const SymbolTable & symbTable, const ScopedIdentifier & ident);
 
 // Look up all matching funcs if you already know it's scopeid
-DynamicArray<SymbolInfo> * lookupFuncSymb(const SymbolTable & symbTable, const ScopedIdentifier & ident);
+NULLABLE DynamicArray<SymbolInfo> * lookupFuncSymb(const SymbolTable & symbTable, const ScopedIdentifier & ident);
 
 // Look up all matching funcs for a given scope stack
 void lookupFuncSymb(const SymbolTable & symbTable, Token * pFuncToken, const Stack<Scope> scopeStack, DynamicArray<SymbolInfo> * poResults);

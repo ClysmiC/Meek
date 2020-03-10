@@ -93,6 +93,9 @@ int main()
 		return 1;
 	}
 
+	// TODO (andrew) Probably just eagerly insert func names into the symbol table like we do for others, and generate types pending resolution
+	//	that will poke in the typid's of the args. Then, this function could be a simple audit to make sure that there are no redefined funcs.
+
 	if (!tryResolvePendingFuncSymbolsAfterTypesResolved(&parser.symbTable))
 	{
 		print("Couldn't resolve all func symbols\n");

@@ -55,7 +55,7 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 			if (!isTypeResolved(typidLhs) || !isTypeResolved(typidRhs))
 			{
 				typidResult = TYPID_BubbleError;
-				goto end;
+				goto LEndSetTypidAndReturn;
 			}
 
 			if (typidLhs != typidRhs)
@@ -64,7 +64,7 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 
 				printfmt("Binary operator type mismatch. L: %d, R: %d\n", typidLhs, typidRhs);
 				typidResult = TYPID_TypeError;
-				goto end;
+				goto LEndSetTypidAndReturn;
 			}
 
 			typidResult = typidLhs;
@@ -101,7 +101,7 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 			if (!isTypeResolved(typidExpr))
 			{
 				typidResult = TYPID_BubbleError;
-				goto end;
+				goto LEndSetTypidAndReturn;
 			}
 
 			switch (pExpr->pOp->tokenk)
@@ -136,97 +136,172 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 			}
 		} break;
 
-		case ASTK_VarExpr:
+		case ASTK_SymbolExpr:
 		{
-			// HMM: How to handle func names as VarExprs... FuncCallExpr has special resolve code to took up varexpr's in the func symbol table,
-			//	but if I ever want a func varExpr outside of a function call (like passing a function to an argument or assigning it to a
-			//	variable) then I will need to be smarter here... it's hard though because you need to have some concept of an "expected type"
-			//	to properly handle overloaded function names...
+			auto * pExpr = Down(pNode, SymbolExpr);
 
-			auto * pExpr = Down(pNode, VarExpr);
-
-			AssertInfo(!pExpr->pResolvedDecl, "This shouldn't be resolved yet because this is the code that should resolve it!");
-
-			if (pExpr->pOwner)
+			switch (pExpr->symbexprk)
 			{
-				TYPID ownerTypid = resolveExpr(pPass, pExpr->pOwner);
-				SCOPEID ownerScopeid = SCOPEID_Nil;
-
-				if (!isTypeResolved(ownerTypid))
+				case SYMBEXPRK_Unresolved:
 				{
-					typidResult = TYPID_BubbleError;
-					goto end;
-				}
+					Assert(pExpr->unresolvedData.apCandidates.cItem == 0);
 
-				const Type * pOwnerType = lookupType(*pPass->pTypeTable, ownerTypid);
-				Assert(pOwnerType);
+					//
+					// NOTE (andrew) We are only responsible for gathering the candidates here. The parent node is responsible for
+					//	for choosing one based on the following algorithm:
+					//
+					//	-Loop from current scope to root scope. At each scope:
+					//		-If there is a variable whose name + supplied context matches
+					//			-Choose it.
+					//		-Else if there is a single function whose name + supplied context matches:
+					//			-Choose it
+					//		-Else if there are multiple functions whose name + supplied context matches:
+					//			-Ambiguous. Report error.
+					//		-Move up to next scope
+					//
+					//	-Nothing found? Report unresolved error.
+					//
+					// NOTE (andrew) Insertion order of candidates allows the parent to perform the above by scanning through linearly.
+					//
 
-				SymbolInfo * pSymbInfoOwner = lookupTypeSymb(*pPass->pSymbTable, pOwnerType->ident);
-				Assert(pSymbInfoOwner);
-
-				if (pSymbInfoOwner->symbolk == SYMBOLK_Struct)
-				{
-					ownerScopeid = pSymbInfoOwner->pStructDefnStmt->scopeid;
-				}
-
-				ScopedIdentifier candidate;
-				setIdent(&candidate, pExpr->pTokenIdent, ownerScopeid);
-				SymbolInfo * pSymbInfo = lookupVarSymb(*pPass->pSymbTable, candidate);
-
-				if (!pSymbInfo)
-				{
-					// Unresolved
-					// TODO: Add this to a resolve error list... don't print inline right here!
-
-					print("Unresolved member variable ");
-					print(pExpr->pTokenIdent->lexeme );
-					println();
-
-					typidResult = TYPID_Unresolved;
-					goto end;
-				}
-
-				// Resolve!
-
-				pExpr->pResolvedDecl = pSymbInfo->pVarDeclStmt;
-				typidResult = pSymbInfo->pVarDeclStmt->typid;
-			}
-			else
-			{
-				bool found = false;
-				for (int i = 0; i < count(pPass->scopeStack); i++)
-				{
-					SCOPEID scopeidCandidate = peekFar(pPass->scopeStack, i).id;
-
-					ScopedIdentifier candidate;
-					setIdent(&candidate, pExpr->pTokenIdent, scopeidCandidate);
-					SymbolInfo * pSymbInfo = lookupVarSymb(*pPass->pSymbTable, candidate);
-
-					if (pSymbInfo && pSymbInfo->pVarDeclStmt->symbseqid <= pPass->lastSymbseqid)
+					bool varFound = false;
+					for (int i = 0; i < count(pPass->scopeStack); i++)
 					{
-						// Resolve!
+						SCOPEID scopeidCandidate = peekFar(pPass->scopeStack, i).id;
 
-						pExpr->pResolvedDecl = pSymbInfo->pVarDeclStmt;
-						typidResult = pSymbInfo->pVarDeclStmt->typid;
+						ScopedIdentifier candidate;
+						setIdent(&candidate, pExpr->pTokenIdent, scopeidCandidate);
 
-						found = true;
-						break;
+						// First look for variable defn. Only 1 var is permitted -- any vars in higher scopes would be shadowed.
+
+						if (!varFound)
+						{
+							SymbolInfo * pSymbInfo = lookupVarSymb(*pPass->pSymbTable, candidate);
+							
+							Assert(Implies(pSymbInfo, pSymbInfo->symbolk == SYMBOLK_Var));
+
+							if (pSymbInfo && pSymbInfo->pVarDeclStmt->symbseqid <= pPass->lastSymbseqid)
+							{
+								append(&pExpr->unresolvedData.apCandidates, pSymbInfo);
+								varFound = true;
+							}
+						}
+
+						// Then look for function defns
+						
+						{
+							DynamicArray<SymbolInfo> * paSymbInfo = lookupFuncSymb(*pPass->pSymbTable, candidate);
+
+							if (paSymbInfo)
+							{
+								// No symbseqid check for funcs. Funcs definitions depend only on scope, are otherwise order-agnostic.
+
+								for (int iSymbInfo = 0; iSymbInfo < paSymbInfo->cItem; iSymbInfo++)
+								{
+									// NOTE (andrew) We make no attempt to not insert shadowed functions. Due to the algorithm
+									//	(see above), the parent won't look at the parent scope if it matches one at a lower level.
+									//	And if it doesn't match with one at a lower level, we don't need to fear it matching the
+									//	shadowed version at a higher level (note that func names are only shadowed if their names
+									//	*and* signatures match).
+
+									SymbolInfo * pSymbInfo = &(*paSymbInfo)[iSymbInfo];
+									append(&pExpr->unresolvedData.apCandidates, pSymbInfo);
+								}
+							}
+						}
+					}
+
+					if (pExpr->unresolvedData.apCandidates.cItem == 1)
+					{
+						SymbolInfo * pSymbInfo = pExpr->unresolvedData.apCandidates[0];
+						if (pSymbInfo->symbolk == SYMBOLK_Var)
+						{
+							// TODO
+						}
+						else
+						{
+							Assert(pSymbInfo->symbolk == SYMBOLK_Func);
+
+							// TODO
+						}
+					}
+					else if (pExpr->unresolvedData.apCandidates.cItem > 1)
+					{
+						typidResult = TYPID_UnresolvedHasCandidates;
+					}
+					else
+					{
+						print("Unresolved variable ");
+						print(pExpr->pTokenIdent->lexeme);
+						println();
+
+						// HMM: Is this the right result value? Should we have a specific TYPID_UnresolvedIdentifier?
+
+						typidResult = TYPID_Unresolved;
 					}
 				}
+				break;
 
-				if (!found)
+				case SYMBEXPRK_Var:
 				{
-					// Unresolved
-					// TODO: Add this to a resolve error list... don't print inline right here!
+					// NOTE (andrew) Undecorated symbols may refer to vars or functions, so they should start with SYMBEXPRK_Nil.
+					//	It isn't until we resolve it that we can properly set their symbexprk.
 
-					print("Unresolved variable ");
-					print(pExpr->pTokenIdent->lexeme);
-					println();
+					reportIceAndExit("Symbol tagged with SYMBEXPRK_Var before we resolved it?");
+				} break;
 
-					// HMM: Is this the right result value? This isn't really a type error since it is more of an unresolved identifier error
+				case SYMBEXPRK_MemberVar:
+				{
+					Assert(pExpr->memberData.pOwner);
+					AssertInfo(!pExpr->memberData.pDeclCached, "This shouldn't be resolved yet because this is the code that should resolve it!");
 
-					typidResult = TYPID_Unresolved;
-				}
+					TYPID ownerTypid = resolveExpr(pPass, pExpr->memberData.pOwner);
+					SCOPEID ownerScopeid = SCOPEID_Nil;
+
+					if (!isTypeResolved(ownerTypid))
+					{
+						typidResult = TYPID_BubbleError;
+						goto LEndSetTypidAndReturn;
+					}
+
+					const Type * pOwnerType = lookupType(*pPass->pTypeTable, ownerTypid);
+					Assert(pOwnerType);
+
+					SymbolInfo * pSymbInfoOwner = lookupTypeSymb(*pPass->pSymbTable, pOwnerType->ident);
+					Assert(pSymbInfoOwner);
+
+					if (pSymbInfoOwner->symbolk == SYMBOLK_Struct)
+					{
+						ownerScopeid = pSymbInfoOwner->pStructDefnStmt->scopeid;
+					}
+
+					ScopedIdentifier candidate;
+					setIdent(&candidate, pExpr->pTokenIdent, ownerScopeid);
+					SymbolInfo * pSymbInfo = lookupVarSymb(*pPass->pSymbTable, candidate);
+
+					if (!pSymbInfo)
+					{
+						// Unresolved
+						// TODO: Add this to a resolve error list... don't print inline right here!
+
+						print("Unresolved member variable ");
+						print(pExpr->pTokenIdent->lexeme );
+						println();
+
+						typidResult = TYPID_Unresolved;
+						goto LEndSetTypidAndReturn;
+					}
+
+					// Resolve!
+
+					pExpr->memberData.pDeclCached = pSymbInfo->pVarDeclStmt;
+					typidResult = pSymbInfo->pVarDeclStmt->typid;
+				} break;
+
+				case SYMBEXPRK_Func:
+				{
+					Assert(false);		// TODO
+				} break;
 			}
 		} break;
 
@@ -239,7 +314,7 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 			if (!isTypeResolved(typidPtr))
 			{
 				typidResult = TYPID_BubbleError;
-				goto end;
+				goto LEndSetTypidAndReturn;
 			}
 
 			const Type * pTypePtr = lookupType(*pPass->pTypeTable, typidPtr);
@@ -249,7 +324,7 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 			{
 				print("Trying to dereference a non-pointer\n");
 				typidResult = TYPID_TypeError;
-				goto end;
+				goto LEndSetTypidAndReturn;
 			}
 
 			Type typeDereferenced;
@@ -270,7 +345,7 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 			if (!isTypeResolved(typidArray))
 			{
 				typidResult = TYPID_BubbleError;
-				goto end;
+				goto LEndSetTypidAndReturn;
 			}
 
 			TYPID typidSubscript = resolveExpr(pPass, pExpr->pSubscriptExpr);
@@ -296,7 +371,7 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 
 				print("Trying to access non-array as if it were an array...\n");
 				typidResult = TYPID_TypeError;
-				goto end;
+				goto LEndSetTypidAndReturn;
 			}
 
 			Type typeElement;
@@ -310,19 +385,13 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 
 		case ASTK_FuncCallExpr:
 		{
-			// TODO: For now I am just going to assert that functions return a single value, even though the grammar allows
-			//	multiple return values. I still need to figure out what I want the semantics of MRV to be... do I want a
-			//	more general concept of "tuple" values that MRV leverages, or do I want MRV to be something that is just
-			//	baked in as a special case to things like assignment and parameter lists.
-
-
 			auto * pExpr = Down(pNode, FuncCallExpr);
 
-			if (pExpr->pFunc->astk == ASTK_VarExpr)
+			if (pExpr->pFunc->astk == ASTK_SymbolExpr)
 			{
-				auto * pFuncExpr = Down(pExpr->pFunc, VarExpr);
+				auto * pFuncExpr = Down(pExpr->pFunc, SymbolExpr);
 
-				// NOTE: For now I am resolving the VarExpr directly in-line, since the var expr case of this switch assumes a var
+				// NOTE: For now I am resolving the SymbolExpr directly in-line, since the var expr case of this switch assumes a var
 				//	and not a func. This is pretty much a hack until I think of a better way to model this.
 
 				Defer(UpExpr(pFuncExpr)->typid = typidResult);		// This is pretty gross
@@ -336,7 +405,7 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 					print("Member function looking thingy... not supported\n");
 
 					typidResult = TYPID_Unresolved;	// Is this right?
-					goto end;
+					goto LEndSetTypidAndReturn;
 				}
 
 				// Resolve args
@@ -386,7 +455,7 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 						print(pFuncExpr->pTokenIdent->lexeme);
 						print(" that had expected types\n");
 						typidResult = TYPID_Unresolved;
-						goto end;
+						goto LEndSetTypidAndReturn;
 					}
 
 					auto * papReturnVarDecls = &pFuncDefnStmtMatch->pParamsReturnsGrp->apReturnVarDecls;
@@ -461,7 +530,7 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 		} break;
 	}
 
-end:
+LEndSetTypidAndReturn:
 
 	AstExpr * pExpr = DownExpr(pNode);
 	pExpr->typid = typidResult;

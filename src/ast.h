@@ -60,6 +60,7 @@ enum ASTK : u8
 	ASTK_IllegalDoStmtErr,
 	ASTK_IllegalTopLevelStmtErr,
 	ASTK_InvokeFuncLiteralErr,
+	ASTK_ArrowAfterFuncSymbolExpr,
 
 	ASTK_ErrMax,
 
@@ -71,7 +72,7 @@ enum ASTK : u8
 	ASTK_BinopExpr,
 	ASTK_LiteralExpr,
 	ASTK_GroupExpr,
-	ASTK_VarExpr,
+	ASTK_SymbolExpr,
 	ASTK_PointerDereferenceExpr,
 	ASTK_ArrayAccessExpr,
 	ASTK_FuncCallExpr,
@@ -123,8 +124,8 @@ enum ASTK : u8
 
 struct AstParamsReturnsGrp
 {
-	DynamicArray<AstNode*> apParamVarDecls;
-	DynamicArray<AstNode*> apReturnVarDecls;
+	DynamicArray<AstNode *> apParamVarDecls;
+	DynamicArray<AstNode *> apReturnVarDecls;
 };
 
 
@@ -173,6 +174,8 @@ struct AstIllegalTopLevelStmtErr
 };
 
 struct AstInvokeFuncLiteralErr {};
+
+struct AstArrowAfterFuncSymbolExpr {};
 
 struct AstErr
 {
@@ -242,15 +245,44 @@ struct AstGroupExpr
 	AstNode * pExpr;
 };
 
-struct AstVarExpr
+enum SYMBEXPRK
 {
-	// NOTE: pOwner is the left hand side of the '.' -- null means that it is
-	//	just a plain old variable without a dot.
+	SYMBEXPRK_Unresolved,
+	SYMBEXPRK_Var,
+	SYMBEXPRK_MemberVar,
+	SYMBEXPRK_Func
+};
 
-	AstNode * pOwner;
+struct AstSymbolExpr
+{
+	SYMBEXPRK symbexprk;
+
 	Token * pTokenIdent;
 
-	AstVarDeclStmt * pResolvedDecl;     // Cached (non-child)
+	union
+	{
+		struct _UnresolvedSymbExpr
+		{
+			DynamicArray<SymbolInfo *> apCandidates;	// Candidates set by resolve pass. Parent node is responsible for choosing the correct candidate.
+		} unresolvedData;
+
+		struct _VarSymbExpr
+		{
+			NULLABLE AstVarDeclStmt * pDeclCached;		// Set in resolve pass. Not a child node.
+		} varData;
+
+		struct _MemberVarSymbExpr
+		{
+			AstNode * pOwner;
+			NULLABLE AstVarDeclStmt * pDeclCached;		// Set in resolve pass. Not a child node.
+		} memberData;
+
+		struct _FuncVarSymbExpr
+		{
+			DynamicArray<TYPID> aTypidParams;
+			NULLABLE AstFuncDefnStmt * pDefnCached;		// Set in resolve pass. Not a child node.
+		} funcData;
+	};
 };
 
 struct AstPointerDereferenceExpr
@@ -292,7 +324,7 @@ struct AstExpr
 		AstBinopExpr				binopExpr;
 		AstLiteralExpr				literalExpr;
 		AstGroupExpr				groupExpr;
-		AstVarExpr					varExpr;
+		AstSymbolExpr				symbolExpr;
 		AstPointerDereferenceExpr	pointerDereferenceExpr;
 		AstArrayAccessExpr			arrayAccessExpr;
 		AstFuncCallExpr				funcCallExpr;

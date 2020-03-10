@@ -1161,39 +1161,50 @@ AstNode * parsePrimary(Parser * pParser)
 		// Identifier
 
 		AstNode * pVarOwner = nullptr;
-		return parseVarExpr(pParser, pVarOwner);
+		return parseVarOrMemberVarSymbolExpr(pParser, pVarOwner);
 	}
 	else if (peekToken(pParser->pScanner) == TOKENK_Fn)
 	{
-		// Func literal
-
-		AstNode * pNode = parseFuncLiteralExpr(pParser);
-
-		if (isErrorNode(*pNode))
+		if (peekToken(pParser->pScanner, nullptr, 1) == TOKENK_Identifier)
 		{
+			// Func symbol
+
+			AstNode * pNode = parseFuncSymbolExpr(pParser);
+
+			// TODO:
+		}
+		else
+		{
+			// Func literal
+
+			AstNode * pNode = parseFuncLiteralExpr(pParser);
+
+			if (isErrorNode(*pNode))
+			{
+				return pNode;
+			}
+
+			if (peekToken(pParser->pScanner) == TOKENK_OpenParen)
+			{
+				// HMM: I am torn about whether I want to call finishParsePrimaryHere,
+				//	which would let you invoke a function literal at the spot that it is
+				//	defined. Personally I am not convinced that that is good practice...
+				//	It also doesn't work with the "do" syntax for one-liners.
+
+				// NOTE: Current check for this is kind of a hack when really it would be
+				//	better to make calling a func literal a valid parse, but a semantic error!
+				//	Otherwise we would error on something like this since we are only checking
+				//	for open parens...
+				//	fn() -> () { doSomething(); }(;
+
+				int iOpenParenStart = peekTokenStartEnd(pParser->pScanner).iStart;
+
+				auto * pErr = AstNewErr1Child(pParser, InvokeFuncLiteralErr, makeStartEnd(iOpenParenStart), pNode);
+				return Up(pErr);
+			}
+
 			return pNode;
 		}
-
-		if (peekToken(pParser->pScanner) == TOKENK_OpenParen)
-		{
-			// HMM: I am torn about whether I want to call finishParsePrimaryHere,
-			//	which would let you invoke a function literal at the spot that it is
-			//	defined. Personally I am not convinced that that is good practice...
-			//	It also doesn't work with the "do" syntax for one-liners.
-
-			// NOTE: Current check for this is kind of a hack when really it would be
-			//	better to make calling a func literal a valid parse, but a semantic error!
-			//	Otherwise we would error on something like this since we are only checking
-			//	for open parens...
-			//	fn() -> () { doSomething(); }(;
-
-			int iOpenParenStart = peekTokenStartEnd(pParser->pScanner).iStart;
-
-			auto * pErr = AstNewErr1Child(pParser, InvokeFuncLiteralErr, makeStartEnd(iOpenParenStart), pNode);
-			return Up(pErr);
-		}
-
-		return pNode;
 	}
 	else
 	{
@@ -1234,16 +1245,16 @@ AstNode * parseFuncLiteralExpr(Parser * pParser)
 	return parseFuncDefnStmtOrLiteralExpr(pParser, FUNCHEADERK_Literal);
 }
 
-AstNode * parseVarExpr(Parser * pParser, AstNode * pOwnerExpr)
+AstNode * parseVarOrMemberVarSymbolExpr(Parser * pParser, NULLABLE AstNode * pMemberOwnerExpr)
 {
 	if (!tryConsumeToken(pParser->pScanner, TOKENK_Identifier, ensurePendingToken(pParser)))
 	{
 		auto startEndPrev = prevTokenStartEnd(pParser->pScanner);
 
 		AstExpectedTokenkErr * pErr;
-		if (pOwnerExpr)
+		if (pMemberOwnerExpr)
 		{
-			pErr = AstNewErr1Child(pParser, ExpectedTokenkErr, makeStartEnd(startEndPrev.iEnd + 1), pOwnerExpr);
+			pErr = AstNewErr1Child(pParser, ExpectedTokenkErr, makeStartEnd(startEndPrev.iEnd + 1), pMemberOwnerExpr);
 		}
 		else
 		{
@@ -1257,20 +1268,60 @@ AstNode * parseVarExpr(Parser * pParser, AstNode * pOwnerExpr)
 	Token * pIdent = claimPendingToken(pParser);
 	Assert(pIdent->tokenk == TOKENK_Identifier);
 
-	// HMM: VarExpr start is really where its owner starts... is that what it *should* be?
+	// HMM: should the start/end range of a member var expr be just the start/end of the member? Or should it include the owner?
 
 	int iStart = pIdent->startEnd.iStart;
-	if (pOwnerExpr)
+	if (pMemberOwnerExpr)
 	{
-		iStart = getStartEnd(pParser->astDecs, pOwnerExpr->astid).iStart;
+		iStart = getStartEnd(pParser->astDecs, pMemberOwnerExpr->astid).iStart;
 	}
 
-	auto * pNode = AstNew(pParser, VarExpr, makeStartEnd(iStart, pIdent->startEnd.iEnd));
-	pNode->pOwner = pOwnerExpr;
+	auto * pNode = AstNew(pParser, SymbolExpr, makeStartEnd(iStart, pIdent->startEnd.iEnd));
+
 	pNode->pTokenIdent = pIdent;
-	pNode->pResolvedDecl = nullptr;
+	if (pMemberOwnerExpr)
+	{
+		pNode->symbexprk = SYMBEXPRK_MemberVar;
+		pNode->memberData.pOwner = pMemberOwnerExpr;
+		pNode->memberData.pDeclCached = nullptr;
+	}
+	else
+	{
+		// Cannot determine yet if this is a var or func
+
+		pNode->symbexprk = SYMBEXPRK_Unresolved;
+		init(&pNode->unresolvedData.apCandidates);
+	}
 
 	return finishParsePrimary(pParser, Up(pNode));
+}
+
+AstNode * parseFuncSymbolExpr(Parser * pParser)
+{
+	int iStart = peekTokenStartEnd(pParser->pScanner).iStart;
+
+	ParseFuncHeaderParam parseFuncHeaderParam;
+	parseFuncHeaderParam.funcheaderk = FUNCHEADERK_SymbolExpr;
+
+	AstNode * pNodeUnderConstruction = nullptr;
+	{
+		StartEndIndices startEndPlaceholder(-1, -1);
+		parseFuncHeaderParam.paramSymbolExpr.pSymbExpr = AstNew(pParser, SymbolExpr, startEndPlaceholder);
+		parseFuncHeaderParam.paramSymbolExpr.pSymbExpr->symbexprk = SYMBEXPRK_Func;
+
+		pNodeUnderConstruction = Up(parseFuncHeaderParam.paramSymbolExpr.pSymbExpr);
+	}
+
+	AstErr * pErr = tryParseFuncHeader(pParser, parseFuncHeaderParam);
+
+	if (pErr)
+	{
+		goto LFailCleanup;
+	}
+
+
+
+	LFailCleanup:
 }
 
 ParseTypeResult tryParseType(Parser * pParser)
@@ -1427,20 +1478,25 @@ AstErr * tryParseFuncHeader(Parser * pParser, const ParseFuncHeaderParam & param
 		FUNCHEADERK funcheaderk;
 		PARAMK paramk;
 
-		struct _FuncHeaderDefn			// FUNCHEADERK_Defn
+		struct _FuncHeaderDefn				// FUNCHEADERK_Defn
 		{
 			AstFuncDefnStmt * pioNode;
 		} paramDefn;
 
-		struct _FuncHeaderLiteral		// FUNCHEADERK_Literal
+		struct _FuncHeaderLiteral			// FUNCHEADERK_Literal
 		{
 			AstFuncLiteralExpr * pioNode;
 		} paramLiteral;
 
-		struct _FuncHeaderType			// FUNCHEADERK_Type
+		struct _FuncHeaderType				// FUNCHEADERK_Type
 		{
 			FuncType * pioFuncType;
 		} paramType;
+
+		struct _FuncHeaderSymbolExpr		// FUNCHEADERK_SymbolExpr
+		{
+			AstSymbolExpr * pSymbExpr;
+		} paramSymbolExpr;
 	};
 
 	auto init = [](ParseParamListParam * pPplParam, const ParseFuncHeaderParam & pfhParam, PARAMK paramk)
@@ -1464,11 +1520,23 @@ AstErr * tryParseFuncHeader(Parser * pParser, const ParseFuncHeaderParam & param
 			{
 				pPplParam->paramType.pioFuncType = pfhParam.paramType.pioFuncType;
 			} break;
+
+			case FUNCHEADERK_SymbolExpr:
+			{
+				pPplParam->paramSymbolExpr.pSymbExpr = pfhParam.paramSymbolExpr.pSymbExpr;
+			} break;
+
+			default:
+			{
+				reportIceAndExit("Unknown FUNCHEADERK %d", pPplParam->funcheaderk);
+			}
 		}
 	};
 
 	auto tryParseParamList = [](Parser * pParser, const ParseParamListParam & param) -> NULLABLE AstErr *
 	{
+		Assert(Implies(param.funcheaderk == FUNCHEADERK_SymbolExpr, param.paramk == PARAMK_Param));
+
 		// Parse (
 
 		bool isNakedSingleReturn = false;
@@ -1556,8 +1624,6 @@ AstErr * tryParseFuncHeader(Parser * pParser, const ParseFuncHeaderParam & param
 			}
 			else
 			{
-				Assert(param.funcheaderk == FUNCHEADERK_Type);
-
 				// Type
 
 				ParseTypeResult parseTypeResult = tryParseType(pParser);
@@ -1566,26 +1632,42 @@ AstErr * tryParseFuncHeader(Parser * pParser, const ParseFuncHeaderParam & param
 					return DownErr(parseTypeResult.pErr);
 				}
 
-				// (Optional) name.
+
+				if (param.funcheaderk == FUNCHEADERK_Type)
+				{
+					// (Optional) name.
 				
-				// Note that we don't actually bind this name to anything. It is recommended to be omitted for type definitions,
-				//	but is permitted to keep the syntax as close to the same as possible in all 3 cases.
-				// It is disallowed in naked single returns because this func header is the type of a variable, and it would
-				//	be ambiguous whether the next identifier is the optional return value name or the name of the variable!
+					// Note that we don't actually bind this name to anything. It is recommended to be omitted for type definitions,
+					//	but is permitted to keep the syntax as close to the same as possible in all 3 cases.
+					// It is disallowed in naked single returns because this func header is the type of a variable, and it would
+					//	be ambiguous whether the next identifier is the optional return value name or the name of the variable!
 
-				if (!isNakedSingleReturn)
-				{
-					tryConsumeToken(pParser->pScanner, TOKENK_Identifier);
-				}
+					if (!isNakedSingleReturn)
+					{
+						tryConsumeToken(pParser->pScanner, TOKENK_Identifier);
+					}
 
-				if (param.paramk == PARAMK_Param)
-				{
-					TYPID * pTypid = appendNew(&param.paramType.pioFuncType->paramTypids);
-					parseTypeResult.pTypePendingResolve->pTypidUpdateOnResolve = pTypid;
+					if (param.paramk == PARAMK_Param)
+					{
+						TYPID * pTypid = appendNew(&param.paramType.pioFuncType->paramTypids);
+						parseTypeResult.pTypePendingResolve->pTypidUpdateOnResolve = pTypid;
+					}
+					else
+					{
+						TYPID * pTypid = appendNew(&param.paramType.pioFuncType->returnTypids);
+						parseTypeResult.pTypePendingResolve->pTypidUpdateOnResolve = pTypid;
+					}
 				}
 				else
 				{
-					TYPID * pTypid = appendNew(&param.paramType.pioFuncType->returnTypids);
+					// We also disallow names for parameters in FUNCHEADERK_SymbolExpr as this language feature is purely
+					//	a disambiguation tool. Names are irrelevant.
+
+					Assert(param.funcheaderk == FUNCHEADERK_SymbolExpr);
+					Assert(param.paramk == PARAMK_Param);
+					Assert(param.paramSymbolExpr.pSymbExpr->symbexprk == SYMBEXPRK_Func);
+
+					TYPID * pTypid = appendNew(&param.paramSymbolExpr.pSymbExpr->funcData.aTypidParams);
 					parseTypeResult.pTypePendingResolve->pTypidUpdateOnResolve = pTypid;
 				}
 			}
@@ -1597,6 +1679,8 @@ AstErr * tryParseFuncHeader(Parser * pParser, const ParseFuncHeaderParam & param
 
 		return nullptr;
 	};
+
+	Assert(Implies(param.funcheaderk == FUNCHEADERK_SymbolExpr, param.paramSymbolExpr.pSymbExpr->symbexprk == SYMBEXPRK_Func));
 
 	int iStart = peekTokenStartEnd(pParser->pScanner).iStart;
 
@@ -1657,25 +1741,54 @@ AstErr * tryParseFuncHeader(Parser * pParser, const ParseFuncHeaderParam & param
 
 	// Parse ->
 
-	bool arrowOmitted = false;
-	if (!tryConsumeToken(pParser->pScanner, TOKENK_MinusGreater))
+	bool arrowPresent = false;
+	if (tryConsumeToken(pParser->pScanner, TOKENK_MinusGreater, ensurePendingToken(pParser)))
 	{
-		arrowOmitted = true;
+		arrowPresent = true;
 	}
 
 	//
 	// Parse out parameters if there was a ->
 	//
 
-	if (!arrowOmitted)
+	if (arrowPresent)
 	{
-		ParseParamListParam pplParam;
-		init(&pplParam, param, PARAMK_Return);
-		AstErr * pErr = tryParseParamList(pParser, pplParam);
-		if (pErr)
+		if (param.funcheaderk == FUNCHEADERK_SymbolExpr)
 		{
-			return pErr;
+			Token * pErrToken = claimPendingToken(pParser);
+			Assert(pErrToken->tokenk == TOKENK_MinusGreater);
+
+			auto * pErr = AstNewErr0Child(pParser, ArrowAfterFuncSymbolExpr, pErrToken->startEnd);
+			return UpErr(pErr);
 		}
+		else
+		{
+			ParseParamListParam pplParam;
+			init(&pplParam, param, PARAMK_Return);
+			AstErr * pErr = tryParseParamList(pParser, pplParam);
+			if (pErr)
+			{
+				return pErr;
+			}
+		}
+	}
+
+	// Parse trailing definition name
+
+	if (param.funcheaderk == FUNCHEADERK_SymbolExpr)
+	{
+		Assert(!arrowPresent);
+
+		if (!tryConsumeToken(pParser->pScanner, TOKENK_Identifier, ensurePendingToken(pParser)))
+		{
+			auto startEndPrev = prevTokenStartEnd(pParser->pScanner);
+
+			auto * pErr = AstNewErr0Child(pParser, ExpectedTokenkErr, makeStartEnd(startEndPrev.iEnd + 1));
+			append(&pErr->aTokenkValid, TOKENK_Identifier);
+			return UpErr(pErr);
+		}
+
+		param.paramSymbolExpr.pSymbExpr->pTokenIdent = claimPendingToken(pParser);
 	}
 
 	// Success!
@@ -1695,7 +1808,7 @@ AstNode * finishParsePrimary(Parser * pParser, AstNode * pExpr)
 	{
 		// Member access
 
-		return parseVarExpr(pParser, pExpr);
+		return parseVarOrMemberVarSymbolExpr(pParser, pExpr);
 	}
 	else if (tryConsumeToken(pParser->pScanner, TOKENK_Carat, ensurePendingToken(pParser)))
 	{
@@ -2200,6 +2313,12 @@ void reportScanAndParseErrors(const Parser & parser)
 			case ASTK_InvokeFuncLiteralErr:
 			{
 				reportParseError(parser, *pNode, "Function literal can not be directly invoked");
+			}
+			break;
+
+			case ASTK_ArrowAfterFuncSymbolExpr:
+			{
+				reportParseError(parser, *pNode, "Unexpected '->' after function symbol. Only parameter types may be specified.");
 			}
 			break;
 

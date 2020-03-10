@@ -1,0 +1,38 @@
+Add hint to varexpr to manually disambiguate things.
+Allowed hints:
+	fn
+	type
+	
+If there is no hint, varexprs get looked up in the following order:
+
+Name resolution for varexpr
+
+-Always search for a variable. If we find one, that's the one.
+
+
+Need a way to specify a particular overload of a function:
+
+fn theThingImpl()
+{
+	print("hi");
+}
+
+fn theThingImple(int i)
+{
+	print(i);
+}
+
+fn delegate (fn () theThing)
+{
+	theThing();
+}
+
+fn delegate (fn (int) theThing)
+{
+	theThing(4);
+}
+
+fn main()
+{
+	deletage(^theThing);		// Which one gets called??
+}

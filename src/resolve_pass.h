@@ -13,11 +13,6 @@ struct ResolvePass
 		DynamicArray<TYPID> aTypidReturn;
 	};
 
-	enum HINT
-	{
-		HINT_
-	};
-
 	SYMBSEQID lastSymbseqid = SYMBSEQID_Unset;      // TODO: USE THIS
 
 	Stack<Scope> scopeStack;

@@ -274,17 +274,17 @@ bool tryResolvePendingFuncSymbolsAfterTypesResolved(SymbolTable * pSymbTable)
 	return (pSymbTable->funcSymbolsPendingResolution.cItem == 0);
 }
 
-SymbolInfo * lookupVarSymb(const SymbolTable & symbTable, const ScopedIdentifier & ident)
+NULLABLE SymbolInfo * lookupVarSymb(const SymbolTable & symbTable, const ScopedIdentifier & ident)
 {
 	return lookup(symbTable.varTable, ident);
 }
 
-SymbolInfo * lookupTypeSymb(const SymbolTable & symbTable, const ScopedIdentifier & ident)
+NULLABLE SymbolInfo * lookupTypeSymb(const SymbolTable & symbTable, const ScopedIdentifier & ident)
 {
 	return lookup(symbTable.typeTable, ident);
 }
 
-DynamicArray<SymbolInfo> * lookupFuncSymb(const SymbolTable & symbTable, const ScopedIdentifier & ident)
+NULLABLE DynamicArray<SymbolInfo> * lookupFuncSymb(const SymbolTable & symbTable, const ScopedIdentifier & ident)
 {
 	return lookup(symbTable.funcTable, ident);
 }

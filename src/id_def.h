@@ -32,6 +32,7 @@ enum TYPID : u32
 {
 	TYPID_Unresolved,
 	TYPID_UnresolvedInferred,
+	TYPID_UnresolvedHasCandidates,
 
 	// Type checking errors
 

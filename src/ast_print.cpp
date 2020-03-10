@@ -428,6 +428,25 @@ void debugPrintSubAst(DebugPrintCtx * pCtx, const AstNode & node, int level, boo
 			}
 		} break;
 
+		case ASTK_ArrowAfterFuncSymbolExpr:
+		{
+			auto * pErr = DownConst(&node, ArrowAfterFuncSymbolExpr);
+			auto * pErrCasted = UpErrConst(pErr);
+
+			printfmt("%s unexpected '->' after function symbol.Only parameter types may be specified", parseErrorString);
+
+			if (pErrCasted->apChildren.cItem > 0)
+			{
+				// Sloppy... printChildren should probably handle the new line spacing so that if you pass
+				//	it an empty array of children it will still just work.
+
+				println();
+
+				printTabs(pCtx, levelNext, false, false);
+				printErrChildren(pCtx, *pErrCasted, levelNext);
+			}
+		} break;
+
 
 
 		// EXPR
@@ -476,25 +495,51 @@ void debugPrintSubAst(DebugPrintCtx * pCtx, const AstNode & node, int level, boo
 			debugPrintSubAst(pCtx, *pExpr->pExpr, levelNext, true);
 		} break;
 
-		case ASTK_VarExpr:
+		case ASTK_SymbolExpr:
 		{
-			auto * pExpr = DownConst(&node, VarExpr);
+			auto * pExpr = DownConst(&node, SymbolExpr);
 
-			if (pExpr->pOwner)
+			switch (pExpr->symbexprk)
 			{
-				print(pExpr->pTokenIdent->lexeme);
-				println();
+				case SYMBEXPRK_Var:
+				{
+					print("(var): ");
+					print(pExpr->pTokenIdent->lexeme);
+				}
+				break;
 
-				printTabs(pCtx, levelNext, false, false);
-				println();
+				case SYMBEXPRK_MemberVar:
+				{
+					print("(member var): ");
+					print(pExpr->pTokenIdent->lexeme);
+					println();
 
-				printTabs(pCtx, levelNext, false, false);
-				print("(owner):");
-				debugPrintSubAst(pCtx, *pExpr->pOwner, levelNext, true);
-			}
-			else
-			{
-				print(pExpr->pTokenIdent->lexeme);
+					printTabs(pCtx, levelNext, false, false);
+					println();
+
+					printTabs(pCtx, levelNext, false, false);
+					print("(owner):");
+					debugPrintSubAst(pCtx, *pExpr->memberData.pOwner, levelNext, true);
+				}
+				break;
+
+				case SYMBEXPRK_Func:
+				{
+
+				}
+				break;
+
+				case SYMBEXPRK_Nil:
+				{
+					print("(unresolved symbexprk): ");
+					print(pExpr->pTokenIdent->lexeme);
+				}
+				break;
+
+				default:
+				{
+					AssertInfo(false, "Unknown symbexprk");
+				}
 			}
 		} break;
 

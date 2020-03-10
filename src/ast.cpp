@@ -140,7 +140,7 @@ bool isLValue(ASTK astk)
 
 	switch (astk)
 	{
-		case ASTK_VarExpr:
+		case ASTK_SymbolExpr:
 		case ASTK_PointerDereferenceExpr:
 		case ASTK_ArrayAccessExpr:
 			return true;
