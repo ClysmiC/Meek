@@ -17,7 +17,7 @@ TOKENK consumeToken(Scanner * pScanner, NULLABLE Token * poToken)
 	Token throwaway;
 	Token * pToken = (poToken) ? poToken : &throwaway;
 
-	if (count(pScanner->peekBuffer) > 0)
+	if (pScanner->peekBuffer.cItem > 0)
 	{
 		read(&pScanner->peekBuffer, pToken);
 		return pToken->tokenk;
@@ -30,13 +30,14 @@ TOKENK consumeToken(Scanner * pScanner, NULLABLE Token * poToken)
 
 TOKENK peekToken(Scanner * pScanner, NULLABLE Token * poToken, uint lookahead)
 {
+	Assert(!pScanner->isSpeculating);
 	Assert(lookahead < Scanner::s_lookMax);
 	auto & rbuf = pScanner->peekBuffer;
 
 	// Consume tokens until we have enough in our buffer to peek that far
 
 	Token tokenLookahead;
-	while (!isFinished(pScanner) && count(rbuf) <= lookahead)
+	while (!isFinished(pScanner) && rbuf.cItem <= lookahead)
 	{
 		produceNextToken(pScanner, &tokenLookahead);
 		write(&rbuf, tokenLookahead);
@@ -61,6 +62,7 @@ TOKENK peekToken(Scanner * pScanner, NULLABLE Token * poToken, uint lookahead)
 
 TOKENK prevToken(Scanner * pScanner, NULLABLE Token * poToken, uint lookbehind)
 {
+	Assert(!pScanner->isSpeculating);
 	Assert(lookbehind < Scanner::s_lookMax);
 	auto & rbuf = pScanner->prevBuffer;
 
@@ -83,6 +85,8 @@ TOKENK prevToken(Scanner * pScanner, NULLABLE Token * poToken, uint lookbehind)
 
 StartEndIndices peekTokenStartEnd(Scanner * pScanner, uint lookahead)
 {
+	Assert(!pScanner->isSpeculating);
+
 	Token throwaway;
 	peekToken(pScanner, &throwaway, lookahead);
 	return throwaway.startEnd;
@@ -90,6 +94,8 @@ StartEndIndices peekTokenStartEnd(Scanner * pScanner, uint lookahead)
 
 StartEndIndices prevTokenStartEnd(Scanner * pScanner, uint lookbehind)
 {
+	Assert(!pScanner->isSpeculating);
+
 	Token throwaway;
 	prevToken(pScanner, &throwaway, lookbehind);
 	return throwaway.startEnd;
@@ -97,6 +103,8 @@ StartEndIndices prevTokenStartEnd(Scanner * pScanner, uint lookbehind)
 
 bool tryConsumeToken(Scanner * pScanner, TOKENK tokenkMatch, NULLABLE Token * poToken)
 {
+	Assert(!pScanner->isSpeculating);
+
 	Token throwaway;
 	Token * pToken = (poToken) ? poToken : &throwaway;
 
@@ -113,6 +121,8 @@ bool tryConsumeToken(Scanner * pScanner, TOKENK tokenkMatch, NULLABLE Token * po
 
 bool tryConsumeToken(Scanner * pScanner, const TOKENK * aTokenkMatch, int cTokenkMatch, NULLABLE Token * poToken)
 {
+	Assert(!pScanner->isSpeculating);
+
 	Token throwaway;
 	Token * pToken = (poToken) ? poToken : &throwaway;
 
@@ -132,6 +142,8 @@ bool tryConsumeToken(Scanner * pScanner, const TOKENK * aTokenkMatch, int cToken
 
 bool tryPeekToken(Scanner * pScanner, const TOKENK * aTokenkMatch, int cTokenkMatch, NULLABLE Token * poToken)
 {
+	Assert(!pScanner->isSpeculating);
+
 	Token throwaway;
 	Token * pToken = (poToken) ? poToken : &throwaway;
 
@@ -554,17 +566,44 @@ int lineFromI(const Scanner & scanner, int iText)
 	return line;
 }
 
+TOKENK nextTokenkSpeculative(Scanner * pScanner)
+{
+	if (!pScanner->isSpeculating)
+	{
+		pScanner->iPeekBufferSpeculative = 0;
+		pScanner->iTextSpeculative = pScanner->iText;
+		pScanner->isSpeculating = true;
+	}
+
+	Token throwaway;
+	if (pScanner->iPeekBufferSpeculative < pScanner->peekBuffer.cItem)
+	{
+		Verify(peek(pScanner->peekBuffer, pScanner->iPeekBufferSpeculative, &throwaway));
+		pScanner->iPeekBufferSpeculative++;
+
+		return throwaway.tokenk;
+	}
+
+	return produceNextToken(pScanner, &throwaway);
+}
+
+void backtrackAfterSpeculation(Scanner * pScanner)
+{
+	Assert(pScanner->isSpeculating);
+	pScanner->isSpeculating = false;
+}
+
 void finishAfterConsumeDigit(Scanner * pScanner, char firstDigit, Token * poToken)
 {
-	_finishAfterConsumeDigit(pScanner, firstDigit, false, poToken);
+	finishAfterConsumeDigitMaybeStartingWithDot(pScanner, firstDigit, false, poToken);
 }
 
 void finishAfterConsumeDotAndDigit(Scanner * pScanner, char firstDigit, Token * poToken)
 {
-	_finishAfterConsumeDigit(pScanner, firstDigit, true, poToken);
+	finishAfterConsumeDigitMaybeStartingWithDot(pScanner, firstDigit, true, poToken);
 }
 
-void _finishAfterConsumeDigit(Scanner * pScanner, char firstDigit, bool startsWithDot, Token * poToken)
+void finishAfterConsumeDigitMaybeStartingWithDot(Scanner * pScanner, char firstDigit, bool startsWithDot, Token * poToken)
 {
 	int cDot = (startsWithDot) ? 1 : 0;
 	int base = 10;
@@ -678,9 +717,6 @@ void _finishAfterConsumeDigit(Scanner * pScanner, char firstDigit, bool startsWi
 
 	if (!grferrtok)
 	{
-		// Note makeToken handles some classes of errors too, like int literals
-		//	that are too big for us to actually store!
-
 		(cDot > 0) ?
 			makeToken(pScanner, TOKENK_FloatLiteral, poToken) :
 			makeToken(pScanner, TOKENK_IntLiteral, poToken);
@@ -706,18 +742,21 @@ void makeToken(Scanner * pScanner, TOKENK tokenk, Token * poToken)
 
 void makeToken(Scanner * pScanner, TOKENK tokenk, StringView lexeme, Token * poToken)
 {
-	Assert(!pScanner->madeToken);
+	if (!pScanner->isSpeculating)
+	{
+		Assert(!pScanner->madeToken);
 
-	poToken->id = pScanner->iToken + 1;		// + 1 to make sure we never have id 0
-	poToken->startEnd.iStart = pScanner->iTextTokenStart;
-	poToken->startEnd.iEnd = pScanner->iText;
-	poToken->tokenk = tokenk;
-	poToken->lexeme = lexeme;
-	poToken->grferrtok = 0;
+		poToken->id = pScanner->iToken + 1;		// + 1 to make sure we never have id 0
+		poToken->startEnd.iStart = pScanner->iTextTokenStart;
+		poToken->startEnd.iEnd = pScanner->iText;
+		poToken->tokenk = tokenk;
+		poToken->lexeme = lexeme;
+		poToken->grferrtok = 0;
 
-	forceWrite(&pScanner->prevBuffer, *poToken);
-	pScanner->madeToken = true;
-	pScanner->iToken++;
+		forceWrite(&pScanner->prevBuffer, *poToken);
+		pScanner->madeToken = true;
+		pScanner->iToken++;
+	}
 }
 
 void makeErrorToken(Scanner * pScanner, GRFERRTOK grferrtok, Token * poToken)
@@ -737,13 +776,16 @@ char consumeChar(Scanner * pScanner)
 {
 	if (checkEndOfFile(pScanner)) return '\0';	 // This check might be redundant/unnecessary
 
-	char c = pScanner->pText[pScanner->iText];
-	if (c == '\n')
+	int * pIText = pScanner->isSpeculating ? &pScanner->iTextSpeculative : &pScanner->iText;
+
+	char c = pScanner->pText[*pIText];
+	if (c == '\n' && !pScanner->isSpeculating)
 	{
-		append(&pScanner->newLineIndices, pScanner->iText);
+		append(&pScanner->newLineIndices, *pIText);
 	}
 
-	pScanner->iText++;
+	(*pIText)++;
+
 	return c;
 }
 

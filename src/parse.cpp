@@ -128,31 +128,26 @@ AstNode * parseStmt(Parser * pParser, PARSESTMTK parsestmtk)
 
 		Assert(pNode->astk == ASTK_StructDefnStmt);
 
-		if (parsestmtk == PARSESTMTK_DoStmt)
+		if (parsestmtk == PARSESTMTK_DoPseudoStmt)
 		{
-			auto * pErr = AstNewErr1Child(pParser, IllegalDoStmtErr, getStartEnd(pParser->astDecs, pNode->astid), pNode);
+			auto * pErr = AstNewErr1Child(pParser, IllegalDoPseudoStmtErr, getStartEnd(pParser->astDecs, pNode->astid), pNode);
 			pErr->astkStmt = pNode->astk;
 			return Up(pErr);
 		}
 
 		return pNode;
 	}
-	else if (tokenkNext == TOKENK_Fn && tokenkNextNext == TOKENK_Identifier)
+	else if (parsestmtk != PARSESTMTK_DoPseudoStmt && tokenkNext == TOKENK_Fn && tokenkNextNext == TOKENK_Identifier)
 	{
+		// Func defn
+
+		Assert(parsestmtk != PARSESTMTK_DoPseudoStmt);
+
 		AstNode * pNode = parseFuncDefnStmt(pParser);
 
 		if (isErrorNode(*pNode)) return pNode;
 
 		Assert(pNode->astk == ASTK_FuncDefnStmt);
-
-		// Func defn
-
-		if (parsestmtk == PARSESTMTK_DoStmt)
-		{
-			auto * pErr = AstNewErr1Child(pParser, IllegalDoStmtErr, getStartEnd(pParser->astDecs, pNode->astid), pNode);
-			pErr->astkStmt = pNode->astk;
-			return Up(pErr);
-		}
 
 		return pNode;
 	}
@@ -212,9 +207,9 @@ AstNode * parseStmt(Parser * pParser, PARSESTMTK parsestmtk)
 
 		Assert(pNode->astk == ASTK_BlockStmt);
 
-		if (parsestmtk == PARSESTMTK_DoStmt)
+		if (parsestmtk == PARSESTMTK_DoPseudoStmt)
 		{
-			auto * pErr = AstNewErr1Child(pParser, IllegalDoStmtErr, getStartEnd(pParser->astDecs, pNode->astid), pNode);
+			auto * pErr = AstNewErr1Child(pParser, IllegalDoPseudoStmtErr, getStartEnd(pParser->astDecs, pNode->astid), pNode);
 			pErr->astkStmt = pNode->astk;
 			return Up(pErr);
 		}
@@ -231,7 +226,7 @@ AstNode * parseStmt(Parser * pParser, PARSESTMTK parsestmtk)
 	else if (tokenkNext == TOKENK_OpenBracket ||
 			 tokenkNext == TOKENK_Carat ||
 			 (tokenkNext == TOKENK_Identifier && tokenkNextNext == TOKENK_Identifier) ||
-			 tokenkNext == TOKENK_Fn)
+			 (tokenkNext == TOKENK_Fn && parsestmtk != PARSESTMTK_DoPseudoStmt))
 	{
 		// HMM: Should I put this earlier since var decls are so common?
 		//	I have to have it at least after func defn so I can be assured
@@ -239,15 +234,17 @@ AstNode * parseStmt(Parser * pParser, PARSESTMTK parsestmtk)
 
 		// Var decl
 
+		Assert(Implies(tokenkNext == TOKENK_Fn, parsestmtk != PARSESTMTK_DoPseudoStmt));
+
 		auto * pNode = parseVarDeclStmt(pParser);
 
 		if (isErrorNode(*pNode)) return pNode;
 
 		Assert(pNode->astk == ASTK_VarDeclStmt);
 
-		if (parsestmtk == PARSESTMTK_DoStmt)
+		if (parsestmtk == PARSESTMTK_DoPseudoStmt)
 		{
-			auto * pErr = AstNewErr1Child(pParser, IllegalDoStmtErr, getStartEnd(pParser->astDecs, pNode->astid), pNode);
+			auto * pErr = AstNewErr1Child(pParser, IllegalDoPseudoStmtErr, getStartEnd(pParser->astDecs, pNode->astid), pNode);
 			pErr->astkStmt = pNode->astk;
 			return Up(pErr);
 		}
@@ -308,6 +305,17 @@ AstNode * parseStmt(Parser * pParser, PARSESTMTK parsestmtk)
 			pErr->astkStmt = pNode->astk;
 			return Up(pErr);
 		}
+
+		return pNode;
+	}
+	else if (parsestmtk == PARSESTMTK_Stmt && tokenkNext == TOKENK_Do)
+	{
+		// NOTE (andrew) Other parsestmtk's will just fall into an "unexpected 'do'" error, which is probably better than trying
+		//	to encode all the weird situations you can get into with the do pseudo-statement in their own specific error types.
+
+		auto * pNode = parseDoPseudoStmt(pParser);
+		
+		if (isErrorNode(*pNode)) return pNode;
 
 		return pNode;
 	}
@@ -374,7 +382,7 @@ AstNode * parseExprStmtOrAssignStmt(Parser * pParser)
 			return Up(pErr);
 		}
 
-		if (tryConsumeToken(pParser->pScanner, s_aTokenkAssign, s_cTokenkAssign, ensurePendingToken(pParser)))
+		if (tryConsumeToken(pParser->pScanner, s_aTokenkAssign, s_cTokenkAssign))
 		{
 			// NOTE: This check isn't necessary for correctness, but it gives a better error message for a common case.
 
@@ -391,7 +399,7 @@ AstNode * parseExprStmtOrAssignStmt(Parser * pParser)
 
 	// Parse semicolon
 
-	if (!tryConsumeToken(pParser->pScanner, TOKENK_Semicolon, ensurePendingToken(pParser)))
+	if (!tryConsumeToken(pParser->pScanner, TOKENK_Semicolon))
 	{
 		auto startEndPrev = prevTokenStartEnd(pParser->pScanner);
 
@@ -724,7 +732,7 @@ AstNode * parseIfStmt(Parser * pParser)
 
 	// Parse 'do <stmt>' or block stmt
 
-	AstNode * pThenStmt = parseDoStmtOrBlockStmt(pParser);
+	AstNode * pThenStmt = parseDoPseudoStmtOrBlockStmt(pParser);
 	if (isErrorNode(*pThenStmt))
 	{
 		auto * pErr = AstNewErr2Child(pParser, BubbleErr, gc_startEndBubble, pCondExpr, pThenStmt);
@@ -742,7 +750,7 @@ AstNode * parseIfStmt(Parser * pParser)
 		}
 		else
 		{
-			pElseStmt = parseDoStmtOrBlockStmt(pParser);
+			pElseStmt = parseDoPseudoStmtOrBlockStmt(pParser);
 		}
 	}
 
@@ -788,7 +796,7 @@ AstNode * parseWhileStmt(Parser * pParser)
 
 	// Parse 'do <stmt>' or block stmt
 
-	AstNode * pBodyStmt = parseDoStmtOrBlockStmt(pParser);
+	AstNode * pBodyStmt = parseDoPseudoStmtOrBlockStmt(pParser);
 	if (isErrorNode(*pBodyStmt))
 	{
 		auto * pErr = AstNewErr2Child(pParser, BubbleErr, gc_startEndBubble, pCondExpr, pBodyStmt);
@@ -805,7 +813,7 @@ AstNode * parseWhileStmt(Parser * pParser)
 	return Up(pNode);
 }
 
-AstNode * parseDoStmtOrBlockStmt(Parser * pParser, bool pushPopScopeBlock)
+AstNode * parseDoPseudoStmtOrBlockStmt(Parser * pParser, bool pushPopScopeBlock)
 {
 	TOKENK tokenk = peekToken(pParser->pScanner);
 	if (tokenk != TOKENK_OpenBrace &&
@@ -823,37 +831,60 @@ AstNode * parseDoStmtOrBlockStmt(Parser * pParser, bool pushPopScopeBlock)
 	if (tokenk == TOKENK_OpenBrace)
 	{
 		pStmt = parseBlockStmt(pParser, pushPopScopeBlock);
-
-		if (isErrorNode(*pStmt))
-		{
-			auto * pErr = AstNewErr1Child(pParser, BubbleErr, gc_startEndBubble, pStmt);
-			return Up(pErr);
-		}
 	}
 	else
 	{
 		Assert(tokenk == TOKENK_Do);
-		consumeToken(pParser->pScanner);		// 'do'
-
-		bool isDoStmt = true;
-		pStmt = parseStmt(pParser, isDoStmt ? PARSESTMTK_DoStmt : PARSESTMTK_Stmt);
-
-		Assert(pStmt->astk != ASTK_BlockStmt);
-		Assert(pStmt->astk != ASTK_VarDeclStmt);
-
-		if (isErrorNode(*pStmt))
-		{
-			auto * pErr = AstNewErr1Child(pParser, BubbleErr, gc_startEndBubble, pStmt);
-			return Up(pErr);
-		}
+		pStmt = parseStmt(pParser, PARSESTMTK_DoPseudoStmt);
 	}
 
+	if (isErrorNode(*pStmt))
+	{
+		return pStmt;
+	}
+
+	// Success!
+
 	return pStmt;
+}
+
+AstNode * parseDoPseudoStmt(Parser * pParser)
+{
+	// NOTE (andrew) "do" is a psuedo statement in that it doesn't actually get it's own statement kind in
+	//	the AST. It is literally just a statement that is restricted from being certain kinds of statements.
+	//	It is used to enforce that there aren't nonsensical things like variable declarations in a one-stmt
+	//	for loop. It is also used to tell the parser to take a particular branch when hitting a certain
+	//	keyword. E.g., "fn" usually branches to parsing fn defn or var decls. But in an expression context,
+	//	it can also be used to disambiguate a fn identifier, or define a fn literal. If you start a statement
+	//	with such an expression, you need to use "do" to tell the parser that the "fn" isn't starting a defn/decl!
+
+	// Parse 'do'
+
+	if (!tryConsumeToken(pParser->pScanner, TOKENK_Do))
+	{
+		auto startEndPrev = prevTokenStartEnd(pParser->pScanner);
+
+		auto * pErr = AstNewErr0Child(pParser, ExpectedTokenkErr, makeStartEnd(startEndPrev.iEnd + 1));
+		append(&pErr->aTokenkValid, TOKENK_Do);
+		return Up(pErr);
+	}
+
+	AstNode * pNode = parseStmt(pParser, PARSESTMTK_DoPseudoStmt);
+
+	if (isErrorNode(*pNode))
+	{
+		return pNode;
+	}
+
+	// Success!
+
+	return pNode;
 }
 
 AstNode * parseBlockStmt(Parser * pParser, bool pushPopScope)
 {
 	int iStart = peekTokenStartEnd(pParser->pScanner).iStart;
+
 	// Parse {
 
 	if (!tryConsumeToken(pParser->pScanner, TOKENK_OpenBrace))
@@ -1165,13 +1196,81 @@ AstNode * parsePrimary(Parser * pParser)
 	}
 	else if (peekToken(pParser->pScanner) == TOKENK_Fn)
 	{
-		if (peekToken(pParser->pScanner, nullptr, 1) == TOKENK_Identifier)
-		{
-			// Func symbol
+		// The way the grammar currently exists, we require arbitrary lookahead to determine if this is a function symbolexpr
+		//	or a function literal. It's not great, but we need to speculatively look ahead until we find a symbol that only
+		//	belongs to one or the other.
 
+		bool isFnSymbolExpr = false;
+		{
+			int cParenCtx = 0;
+			bool speculate = true;
+			while (speculate)
+			{
+				TOKENK tokenkSpeculate = nextTokenkSpeculative(pParser->pScanner);
+
+				switch (tokenkSpeculate)
+				{
+					case TOKENK_Error:
+					case TOKENK_Eof:
+					{
+						// NOTE (andrew) We'll have an error either way here, so it doesn't matter which branch we choose.
+						//	The only difference is what error message we show. We use this same approach in a few other cases.
+
+						speculate = false;
+					} break;
+
+					case TOKENK_OpenParen:
+					{
+						cParenCtx++;
+					} break;
+
+					case TOKENK_CloseParen:
+					{
+						cParenCtx--;
+						if (cParenCtx < 0)
+						{
+							// Error. Doesn't matter which branch we take.
+
+							speculate = false;
+						}
+					} break;
+
+					case TOKENK_Identifier:
+					{
+						if (cParenCtx == 0)
+						{
+							// NOTE (andrew) We don't have to worry about this being a naked single return value in a func
+							//	literal, as we would have already chosen our branch once we saw ->
+
+							isFnSymbolExpr = true;
+							speculate = false;
+						}
+					} break;
+
+					case TOKENK_MinusGreater:
+					case TOKENK_Equal:
+					{
+						isFnSymbolExpr = false;
+						speculate = false;
+					} break;
+				}
+			}
+
+			backtrackAfterSpeculation(pParser->pScanner);
+		}
+
+		if (isFnSymbolExpr)
+		{
 			AstNode * pNode = parseFuncSymbolExpr(pParser);
 
-			// TODO:
+			if (isErrorNode(*pNode))
+			{
+				return pNode;
+			}
+
+			// Success!
+
+			return pNode;
 		}
 		else
 		{
@@ -1188,8 +1287,8 @@ AstNode * parsePrimary(Parser * pParser)
 			{
 				// HMM: I am torn about whether I want to call finishParsePrimaryHere,
 				//	which would let you invoke a function literal at the spot that it is
-				//	defined. Personally I am not convinced that that is good practice...
-				//	It also doesn't work with the "do" syntax for one-liners.
+				//	defined (JavaScript calls this IIFE). Personally I am not convinced
+				//	that this is good practice... I can't think of a single use case for it.
 
 				// NOTE: Current check for this is kind of a hack when really it would be
 				//	better to make calling a func literal a valid parse, but a semantic error!
@@ -1202,6 +1301,8 @@ AstNode * parsePrimary(Parser * pParser)
 				auto * pErr = AstNewErr1Child(pParser, InvokeFuncLiteralErr, makeStartEnd(iOpenParenStart), pNode);
 				return Up(pErr);
 			}
+
+			// Success!
 
 			return pNode;
 		}
@@ -1243,6 +1344,44 @@ AstNode * parseLiteralExpr(Parser * pParser, bool mustBeIntLiteralk)
 AstNode * parseFuncLiteralExpr(Parser * pParser)
 {
 	return parseFuncDefnStmtOrLiteralExpr(pParser, FUNCHEADERK_Literal);
+}
+
+AstNode * parseFuncSymbolExpr(Parser * pParser)
+{
+	int iStart = peekTokenStartEnd(pParser->pScanner).iStart;
+
+	ParseFuncHeaderParam parseFuncHeaderParam;
+	parseFuncHeaderParam.funcheaderk = FUNCHEADERK_SymbolExpr;
+
+	AstNode * pNodeUnderConstruction = nullptr;
+	DynamicArray<TYPID> * paTypidUnderConstruction = nullptr;
+	{
+		StartEndIndices startEndPlaceholder(-1, -1);
+
+		auto * pNode = AstNew(pParser, SymbolExpr, startEndPlaceholder);
+		pNode->symbexprk = SYMBEXPRK_Func;
+		pNode->funcData.pDefnCached = nullptr;
+		init(&pNode->funcData.aTypidDisambig);
+
+		parseFuncHeaderParam.paramSymbolExpr.pSymbExpr = pNode;
+
+		pNodeUnderConstruction = Up(pNode);
+		paTypidUnderConstruction = &pNode->funcData.aTypidDisambig;
+	}
+
+	AstErr * pErr = tryParseFuncHeader(pParser, parseFuncHeaderParam);
+	if (pErr)
+	{
+		goto LFailCleanup;
+	}
+
+	// Success!
+
+	return pNodeUnderConstruction;
+
+LFailCleanup:
+	dispose(paTypidUnderConstruction);
+	release(&pParser->astAlloc, pNodeUnderConstruction);
 }
 
 AstNode * parseVarOrMemberVarSymbolExpr(Parser * pParser, NULLABLE AstNode * pMemberOwnerExpr)
@@ -1294,34 +1433,6 @@ AstNode * parseVarOrMemberVarSymbolExpr(Parser * pParser, NULLABLE AstNode * pMe
 	}
 
 	return finishParsePrimary(pParser, Up(pNode));
-}
-
-AstNode * parseFuncSymbolExpr(Parser * pParser)
-{
-	int iStart = peekTokenStartEnd(pParser->pScanner).iStart;
-
-	ParseFuncHeaderParam parseFuncHeaderParam;
-	parseFuncHeaderParam.funcheaderk = FUNCHEADERK_SymbolExpr;
-
-	AstNode * pNodeUnderConstruction = nullptr;
-	{
-		StartEndIndices startEndPlaceholder(-1, -1);
-		parseFuncHeaderParam.paramSymbolExpr.pSymbExpr = AstNew(pParser, SymbolExpr, startEndPlaceholder);
-		parseFuncHeaderParam.paramSymbolExpr.pSymbExpr->symbexprk = SYMBEXPRK_Func;
-
-		pNodeUnderConstruction = Up(parseFuncHeaderParam.paramSymbolExpr.pSymbExpr);
-	}
-
-	AstErr * pErr = tryParseFuncHeader(pParser, parseFuncHeaderParam);
-
-	if (pErr)
-	{
-		goto LFailCleanup;
-	}
-
-
-
-	LFailCleanup:
 }
 
 ParseTypeResult tryParseType(Parser * pParser)
@@ -1667,7 +1778,7 @@ AstErr * tryParseFuncHeader(Parser * pParser, const ParseFuncHeaderParam & param
 					Assert(param.paramk == PARAMK_Param);
 					Assert(param.paramSymbolExpr.pSymbExpr->symbexprk == SYMBEXPRK_Func);
 
-					TYPID * pTypid = appendNew(&param.paramSymbolExpr.pSymbExpr->funcData.aTypidParams);
+					TYPID * pTypid = appendNew(&param.paramSymbolExpr.pSymbExpr->funcData.aTypidDisambig);
 					parseTypeResult.pTypePendingResolve->pTypidUpdateOnResolve = pTypid;
 				}
 			}
@@ -1729,7 +1840,11 @@ AstErr * tryParseFuncHeader(Parser * pParser, const ParseFuncHeaderParam & param
 
 	// Parse "in" parameters
 
+	bool paramsPresent = false;
+	if (param.funcheaderk != FUNCHEADERK_SymbolExpr || peekToken(pParser->pScanner) == TOKENK_OpenParen)
 	{
+		paramsPresent = true;
+
 		ParseParamListParam pplParam;
 		init(&pplParam, param, PARAMK_Param);
 		AstErr * pErr = tryParseParamList(pParser, pplParam);
@@ -1739,29 +1854,23 @@ AstErr * tryParseFuncHeader(Parser * pParser, const ParseFuncHeaderParam & param
 		}
 	}
 
-	// Parse ->
-
-	bool arrowPresent = false;
-	if (tryConsumeToken(pParser->pScanner, TOKENK_MinusGreater, ensurePendingToken(pParser)))
+	if (param.funcheaderk != FUNCHEADERK_SymbolExpr)
 	{
-		arrowPresent = true;
-	}
+		Assert(paramsPresent);
 
-	//
-	// Parse out parameters if there was a ->
-	//
+		// Parse ->
 
-	if (arrowPresent)
-	{
-		if (param.funcheaderk == FUNCHEADERK_SymbolExpr)
+		bool arrowPresent = false;
+		if (tryConsumeToken(pParser->pScanner, TOKENK_MinusGreater, ensurePendingToken(pParser)))
 		{
-			Token * pErrToken = claimPendingToken(pParser);
-			Assert(pErrToken->tokenk == TOKENK_MinusGreater);
-
-			auto * pErr = AstNewErr0Child(pParser, ArrowAfterFuncSymbolExpr, pErrToken->startEnd);
-			return UpErr(pErr);
+			arrowPresent = true;
 		}
-		else
+
+		//
+		// Parse out parameters if there was a ->
+		//
+
+		if (arrowPresent)
 		{
 			ParseParamListParam pplParam;
 			init(&pplParam, param, PARAMK_Return);
@@ -1772,12 +1881,9 @@ AstErr * tryParseFuncHeader(Parser * pParser, const ParseFuncHeaderParam & param
 			}
 		}
 	}
-
-	// Parse trailing definition name
-
-	if (param.funcheaderk == FUNCHEADERK_SymbolExpr)
+	else
 	{
-		Assert(!arrowPresent);
+		// Parse trailing definition name
 
 		if (!tryConsumeToken(pParser->pScanner, TOKENK_Identifier, ensurePendingToken(pParser)))
 		{
@@ -1787,6 +1893,9 @@ AstErr * tryParseFuncHeader(Parser * pParser, const ParseFuncHeaderParam & param
 			append(&pErr->aTokenkValid, TOKENK_Identifier);
 			return UpErr(pErr);
 		}
+
+		Assert(Implies(!paramsPresent, param.paramSymbolExpr.pSymbExpr->funcData.aTypidDisambig.cItem == 0));
+		param.paramSymbolExpr.pSymbExpr->funcData.providedDisambigTypes = paramsPresent;
 
 		param.paramSymbolExpr.pSymbExpr->pTokenIdent = claimPendingToken(pParser);
 	}
@@ -2048,7 +2157,7 @@ AstNode * parseFuncDefnStmtOrLiteralExpr(Parser * pParser, FUNCHEADERK funcheade
 	// Parse { <stmts> } or do <stmt>
 
 	const bool pushPopScope = false;
-	AstNode * pBody = parseDoStmtOrBlockStmt(pParser, pushPopScope);
+	AstNode * pBody = parseDoPseudoStmtOrBlockStmt(pParser, pushPopScope);
 
 	if (isErrorNode(*pBody))
 	{
@@ -2296,9 +2405,9 @@ void reportScanAndParseErrors(const Parser & parser)
 			}
 			break;
 
-			case ASTK_IllegalDoStmtErr:
+			case ASTK_IllegalDoPseudoStmtErr:
 			{
-				auto * pErr = Down(pNode, IllegalDoStmtErr);
+				auto * pErr = Down(pNode, IllegalDoPseudoStmtErr);
 				reportParseError(parser, *pNode, "%s is not permitted following 'do'", displayString(pErr->astkStmt, true /* capitalize */));
 			}
 			break;

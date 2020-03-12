@@ -17,21 +17,21 @@ struct Scanner
 {
 	// Init state
 
-	char *	pText = nullptr;
-	int		textSize = 0;
+	char * pText = nullptr;
+	int textSize = 0;
 
 	// Scan state
 
-	int		iText = 0;
+	int iText = 0;
 
-	int		iTextTokenStart = 0;
+	int iTextTokenStart = 0;
 
-	int		iToken = 0;						// Becomes tokens id
+	int iToken = 0;						// Becomes tokens id
 
-	int			cNestedBlockComment = 0;		/* this style of comment can nest */
+	int cNestedBlockComment = 0;		/* this style of comment can nest */
 
-	bool		madeToken = false;				// Resets at beginning of each call to makeToken
-	bool		hadError = false;
+	bool madeToken = false;				// Resets at beginning of each call to makeToken
+	bool hadError = false;
 
 	// Sorted array of each \n index. Used to retrieve line #'s from raw indices (which are the only thing we track)
 
@@ -43,6 +43,12 @@ struct Scanner
 	RingBuffer<Token, s_lookMax> peekBuffer;
 	RingBuffer<Token, s_lookMax> prevBuffer;    // More recent tokens are at the end of the buffer
 
+	// Speculative parsing/backtracking
+
+	bool isSpeculating = false;
+	int iPeekBufferSpeculative=  0;
+	int iTextSpeculative = 0;
+
 	// Exit kind
 
 	SCANEXITK	scanexitk = SCANEXITK_Nil;
@@ -53,6 +59,11 @@ struct Scanner
 // Public
 
 void init(Scanner * pScanner, char * pText, uint textSize);
+bool isFinished(Scanner * pScanner);
+int lineFromI(const Scanner & scanner, int iText);
+
+// Scanning
+
 TOKENK peekToken(Scanner * pScanner, NULLABLE Token * poToken=nullptr, uint lookahead=0);
 TOKENK prevToken(Scanner * pScanner, NULLABLE Token * poToken=nullptr, uint lookbehind=0);
 StartEndIndices peekTokenStartEnd(Scanner * pScanner, uint lookahead=0);
@@ -61,8 +72,12 @@ bool tryConsumeToken(Scanner * pScanner, TOKENK tokenk, NULLABLE Token * poToken
 bool tryConsumeToken(Scanner * pScanner, const TOKENK * aTokenk, int cTokenk, NULLABLE Token * poToken=nullptr);
 bool tryPeekToken(Scanner * pScanner, const TOKENK * aTokenk, int cTokenk, NULLABLE Token * poToken=nullptr);
 TOKENK consumeToken(Scanner * pScanner, NULLABLE Token * poToken=nullptr);
-bool isFinished(Scanner * pScanner);
-int lineFromI(const Scanner & scanner, int iText);
+
+// Speculative scanning
+
+TOKENK nextTokenkSpeculative(Scanner * pScanner);
+void backtrackAfterSpeculation(Scanner * pScanner);
+
 
 
 // Internal
@@ -84,7 +99,7 @@ void makeErrorToken(Scanner * pScanner, GRFERRTOK ferrtok, Token * poToken);
 void makeEofToken(Scanner * pScanner, Token * poToken);
 void finishAfterConsumeDotAndDigit(Scanner * pScanner, char firstDigit, Token * poToken);
 void finishAfterConsumeDigit(Scanner * pScanner, char firstDigit, Token * poToken);
-void _finishAfterConsumeDigit(Scanner * pScanner, char firstDigit, bool startsWithDot, Token * poToken);
+void finishAfterConsumeDigitMaybeStartingWithDot(Scanner * pScanner, char firstDigit, bool startsWithDot, Token * poToken);
 
 bool checkEndOfFile(Scanner * pScanner, int lookahead=0);
 

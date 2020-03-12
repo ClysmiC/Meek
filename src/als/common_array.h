@@ -118,12 +118,6 @@ bool isEmpty(const RingBuffer<T, Capacity> & pRbuf)
 	return pRbuf.cItem != 0;
 }
 
-template <typename T, unsigned int Capacity>
-unsigned int count(const RingBuffer<T, Capacity> & pRbuf)
-{
-	return pRbuf.cItem;
-}
-
 
 
 // Dynamic array (not thread safe)

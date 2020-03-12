@@ -57,7 +57,7 @@ enum ASTK : u8
 	ASTK_ExpectedTokenkErr,
 	ASTK_InitUnnamedVarErr,
 	ASTK_ChainedAssignErr,
-	ASTK_IllegalDoStmtErr,
+	ASTK_IllegalDoPseudoStmtErr,
 	ASTK_IllegalTopLevelStmtErr,
 	ASTK_InvokeFuncLiteralErr,
 	ASTK_ArrowAfterFuncSymbolExpr,
@@ -163,7 +163,7 @@ struct AstInitUnnamedVarErr {};
 
 struct AstChainedAssignErr {};
 
-struct AstIllegalDoStmtErr
+struct AstIllegalDoPseudoStmtErr
 {
 	ASTK astkStmt;
 };
@@ -190,7 +190,7 @@ struct AstErr
 		AstExpectedTokenkErr expectedTokenErr;
 		AstInitUnnamedVarErr unnamedVarErr;
 		AstChainedAssignErr chainedAssignErr;
-		AstIllegalDoStmtErr illegalDoStmtErr;
+		AstIllegalDoPseudoStmtErr illegalDoPseudoStmtErr;
 		AstIllegalTopLevelStmtErr illegalTopLevelStmt;
 		AstInvokeFuncLiteralErr invokeFuncLiteralErr;
 	};
@@ -279,7 +279,8 @@ struct AstSymbolExpr
 
 		struct _FuncVarSymbExpr
 		{
-			DynamicArray<TYPID> aTypidParams;
+			bool providedDisambigTypes;					// True = "fn(..) ident", False = "fn ident"
+			DynamicArray<TYPID> aTypidDisambig;			// Disambiguating typeid's supplied by the programmer
 			NULLABLE AstFuncDefnStmt * pDefnCached;		// Set in resolve pass. Not a child node.
 		} funcData;
 	};

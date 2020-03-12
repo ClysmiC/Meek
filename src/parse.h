@@ -79,7 +79,7 @@ enum FUNCHEADERK
 	FUNCHEADERK_Defn,
 	FUNCHEADERK_Literal,
 	FUNCHEADERK_Type,
-	FUNCHEADERK_SymbolExpr		// Corresponds to SYMBEXPRK_Func
+	FUNCHEADERK_SymbolExpr		// Corresponds to SYMEXPRK_Func
 };
 
 enum PARAMK
@@ -128,7 +128,7 @@ bool tryRecoverFromPanic(Parser * pParser, const TOKENK * aTokenkRecover, int cT
 
 enum PARSESTMTK
 {
-	PARSESTMTK_DoStmt,
+	PARSESTMTK_DoPseudoStmt,
 	PARSESTMTK_TopLevelStmt,
 	PARSESTMTK_Stmt
 };
@@ -139,7 +139,8 @@ AstNode * parseStructDefnStmt(Parser * pParser);
 AstNode * parseVarDeclStmt(Parser * pParser, EXPECTK expectkName=EXPECTK_Required, EXPECTK expectkInit=EXPECTK_Optional, EXPECTK expectkSemicolon=EXPECTK_Required);
 AstNode * parseIfStmt(Parser * pParser);
 AstNode * parseWhileStmt(Parser * pParser);
-AstNode * parseDoStmtOrBlockStmt(Parser * pParser, bool pushPopScopeBlock=true);
+AstNode * parseDoPseudoStmtOrBlockStmt(Parser * pParser, bool pushPopScopeBlock=true);
+AstNode * parseDoPseudoStmt(Parser * pParser);
 AstNode * parseBlockStmt(Parser * pParser, bool pushPopScope=true);
 AstNode * parseReturnStmt(Parser * pParser);
 AstNode * parseBreakStmt(Parser * pParser);
@@ -154,9 +155,9 @@ AstNode * parseBinop(Parser * pParser, const BinopInfo & op);
 AstNode * parseUnopPre(Parser * pParser);
 AstNode * parsePrimary(Parser * pParser);
 AstNode * parseVarOrMemberVarSymbolExpr(Parser * pParser, NULLABLE AstNode * pMemberOwnerExpr);
-AstNode * parseFuncSymbolExpr(Parser * pParser);
 AstNode * parseLiteralExpr(Parser * pParser, bool mustBeIntLiteralk=false);
 AstNode * parseFuncLiteralExpr(Parser * pParser);
+AstNode * parseFuncSymbolExpr(Parser * pParser);
 
 // Helpers
 

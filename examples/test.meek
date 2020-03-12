@@ -74,3 +74,82 @@ fn main(int a)
 	newVector()^ = add(v1, v2);
 	newVector()^ = doOperation(v1, v2, add);
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+fn main()
+{
+	// This is a function pointer variable named foo that is bound to a function literal
+
+	fn (int) foo = fn (int x) -> float { // A };
+
+	// This is a named function definition
+
+	fn foo (float64) { // B }
+
+	// This is also a named function definition. It and B are overloaded.
+
+	fn foo (float) { // C }
+
+	// Calls A
+
+	foo();
+
+	// Ambiguous??
+
+	do fn foo(5);
+
+	// Ambiguous??
+
+	do fn foo(5.0);
+
+	// Calls C
+
+	do fn (float) foo(5.0);
+
+	// Calls B
+
+	do fn (float64) foo(5.0);
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

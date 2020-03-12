@@ -168,7 +168,7 @@ inline StartEndIndices makeStartEnd(int startAndEnd)
 
 struct Token
 {
-	int id = 0;
+	int id = 0;		// Is this necessary / used anywhere??
 
 	StartEndIndices startEnd;
 

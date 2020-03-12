@@ -151,11 +151,13 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 					//	for choosing one based on the following algorithm:
 					//
 					//	-Loop from current scope to root scope. At each scope:
-					//		-If there is a variable whose name + supplied context matches
+					//		-If there is a variable whose name + supplied context matches, either exactly or with type coercion.
 					//			-Choose it.
-					//		-Else if there is a single function whose name + supplied context matches:
+					//		-Else if there is a function whose name + supplied context exactly matches:
 					//			-Choose it
-					//		-Else if there are multiple functions whose name + supplied context matches:
+					//		-Else if there is a function whose name + supplied context matches after type coercion:
+					//			-Choose it
+					//		-Else if there are multiple functions whose name + supplied context matches after type coercion:
 					//			-Ambiguous. Report error.
 					//		-Move up to next scope
 					//
@@ -201,7 +203,7 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 									// NOTE (andrew) We make no attempt to not insert shadowed functions. Due to the algorithm
 									//	(see above), the parent won't look at the parent scope if it matches one at a lower level.
 									//	And if it doesn't match with one at a lower level, we don't need to fear it matching the
-									//	shadowed version at a higher level (note that func names are only shadowed if their names
+									//	shadowed version at a higher level (since func names are only shadowed if their names
 									//	*and* signatures match).
 
 									SymbolInfo * pSymbInfo = &(*paSymbInfo)[iSymbInfo];
@@ -216,13 +218,17 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 						SymbolInfo * pSymbInfo = pExpr->unresolvedData.apCandidates[0];
 						if (pSymbInfo->symbolk == SYMBOLK_Var)
 						{
-							// TODO
+							pExpr->symbexprk = SYMBEXPRK_Var;
+							pExpr->varData.pDeclCached = pSymbInfo->pVarDeclStmt;
+
+							typidResult = pExpr->varData.pDeclCached->typid;
 						}
 						else
 						{
 							Assert(pSymbInfo->symbolk == SYMBOLK_Func);
 
-							// TODO
+							pExpr->symbexprk = SYMBEXPRK_Func;
+							pExpr->funcData.pDefnCached = pSymbInfo->pFuncDefnStmt;
 						}
 					}
 					else if (pExpr->unresolvedData.apCandidates.cItem > 1)
@@ -300,7 +306,26 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 
 				case SYMBEXPRK_Func:
 				{
-					Assert(false);		// TODO
+					Assert(!pExpr->funcData.pDefnCached, "This shouldn't be resolved yet because this is the code that should resolve it!");
+
+					for (int iScope = 0; iScope < count(pPass->scopeStack); iScope++)
+					{
+						SCOPEID scopeid = peekFar(pPass->scopeStack, iScope).id;
+
+						DynamicArray<SymbolInfo> aFuncCandidates;
+						init(&aFuncCandidates);
+						Defer(dispose(&aFuncCandidates));
+
+						lookupFuncSymb(*pPass->pSymbTable, pExpr->pTokenIdent, pPass->scopeStack, &aFuncCandidates);
+
+						for (int iCandidate = 0; iCandidate < aFuncCandidates.cItem; iCandidate++)
+						{
+							Assert(aFuncCandidates[iCandidate].symbolk == SYMBOLK_Func);
+							AstFuncDefnStmt * pCandidateDefn = aFuncCandidates[iCandidate].pFuncDefnStmt;
+
+							// TODO: match types
+						}
+					}
 				} break;
 			}
 		} break;
