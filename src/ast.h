@@ -13,6 +13,8 @@ struct AstNode;
 struct AstVarDeclStmt;
 struct Type;
 
+// TOOD: Assert versions of these? I.e., do an assert and then cast. Maybe use the , operator? LOL
+
 // The downside to using a union instead of inheritance is that I can't implicitly upcast. Since there is quite
 //	a bit of pointer casting required, these helpers make it slightly more succinct
 
@@ -263,6 +265,7 @@ struct AstSymbolExpr
 	{
 		struct _UnresolvedSymbExpr
 		{
+			bool ignoreVars;
 			DynamicArray<SymbolInfo *> apCandidates;	// Candidates set by resolve pass. Parent node is responsible for choosing the correct candidate.
 		} unresolvedData;
 
@@ -279,7 +282,6 @@ struct AstSymbolExpr
 
 		struct _FuncVarSymbExpr
 		{
-			bool providedDisambigTypes;					// True = "fn(..) ident", False = "fn ident"
 			DynamicArray<TYPID> aTypidDisambig;			// Disambiguating typeid's supplied by the programmer
 			NULLABLE AstFuncDefnStmt * pDefnCached;		// Set in resolve pass. Not a child node.
 		} funcData;
@@ -382,8 +384,7 @@ struct AstFuncDefnStmt
 	AstNode * pBodyStmt;
 	SCOPEID scopeid;        // Scope introduced by this func defn
 	SYMBSEQID symbseqid;
-	TYPID typid;
-
+	TYPID typid;			// typid corresponding to this func type (not the typid of the return value(s))
 };
 #if 0
 	static constexpr uint s_nodeSizeDebug = sizeof(AstFuncDefnStmt);

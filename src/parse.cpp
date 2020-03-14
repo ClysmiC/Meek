@@ -312,6 +312,7 @@ AstNode * parseStmt(Parser * pParser, PARSESTMTK parsestmtk)
 	{
 		// NOTE (andrew) Other parsestmtk's will just fall into an "unexpected 'do'" error, which is probably better than trying
 		//	to encode all the weird situations you can get into with the do pseudo-statement in their own specific error types.
+		//	Example weird situations: 'do do <stmt>', top level 'do <stmt>', etc.
 
 		auto * pNode = parseDoPseudoStmt(pParser);
 		
@@ -1350,38 +1351,65 @@ AstNode * parseFuncSymbolExpr(Parser * pParser)
 {
 	int iStart = peekTokenStartEnd(pParser->pScanner).iStart;
 
-	ParseFuncHeaderParam parseFuncHeaderParam;
-	parseFuncHeaderParam.funcheaderk = FUNCHEADERK_SymbolExpr;
+	TOKENK tokenkNext = peekToken(pParser->pScanner);
+	TOKENK tokenkNextNext = peekToken(pParser->pScanner, nullptr, 1);
 
-	AstNode * pNodeUnderConstruction = nullptr;
-	DynamicArray<TYPID> * paTypidUnderConstruction = nullptr;
+	Assert(tokenkNext == TOKENK_Fn);
+
+	if (tokenkNextNext == TOKENK_Identifier)
 	{
-		StartEndIndices startEndPlaceholder(-1, -1);
+		Verify(tryConsumeToken(pParser->pScanner, TOKENK_Fn));
+		Verify(tryConsumeToken(pParser->pScanner, TOKENK_Identifier, ensurePendingToken(pParser)));
 
-		auto * pNode = AstNew(pParser, SymbolExpr, startEndPlaceholder);
-		pNode->symbexprk = SYMBEXPRK_Func;
-		pNode->funcData.pDefnCached = nullptr;
-		init(&pNode->funcData.aTypidDisambig);
+		Token * pTokenIdent = claimPendingToken(pParser);
 
-		parseFuncHeaderParam.paramSymbolExpr.pSymbExpr = pNode;
+		// fn <ident> specifies that we are talking about a function, but we still
+		//	don't necessarily know exactly which one
 
-		pNodeUnderConstruction = Up(pNode);
-		paTypidUnderConstruction = &pNode->funcData.aTypidDisambig;
+		auto * pNode = AstNew(pParser, SymbolExpr, makeStartEnd(iStart, pTokenIdent->startEnd.iEnd));
+		pNode->pTokenIdent = pTokenIdent;
+		pNode->symbexprk = SYMBEXPRK_Unresolved;
+		pNode->unresolvedData.ignoreVars = true;
+		init(&pNode->unresolvedData.apCandidates);
 	}
-
-	AstErr * pErr = tryParseFuncHeader(pParser, parseFuncHeaderParam);
-	if (pErr)
+	else if (tokenkNextNext == TOKENK_OpenParen)
 	{
-		goto LFailCleanup;
+		ParseFuncHeaderParam parseFuncHeaderParam;
+		parseFuncHeaderParam.funcheaderk = FUNCHEADERK_SymbolExpr;
+
+		AstNode * pNodeUnderConstruction = nullptr;
+		DynamicArray<TYPID> * paTypidUnderConstruction = nullptr;
+		{
+			StartEndIndices startEndPlaceholder(-1, -1);
+
+			auto * pNode = AstNew(pParser, SymbolExpr, startEndPlaceholder);
+			pNode->symbexprk = SYMBEXPRK_Func;
+			pNode->funcData.pDefnCached = nullptr;
+			init(&pNode->funcData.aTypidDisambig);
+
+			parseFuncHeaderParam.paramSymbolExpr.pSymbExpr = pNode;
+
+			pNodeUnderConstruction = Up(pNode);
+			paTypidUnderConstruction = &pNode->funcData.aTypidDisambig;
+		}
+
+		AstErr * pErr = tryParseFuncHeader(pParser, parseFuncHeaderParam);
+
+		if (pErr)
+		{
+			dispose(paTypidUnderConstruction);
+			release(&pParser->astAlloc, pNodeUnderConstruction);
+			return Up(pErr);
+		}
+
+		// Success!
+
+		return pNodeUnderConstruction;
 	}
-
-	// Success!
-
-	return pNodeUnderConstruction;
-
-LFailCleanup:
-	dispose(paTypidUnderConstruction);
-	release(&pParser->astAlloc, pNodeUnderConstruction);
+	else
+	{
+		// Expected ( or identifier
+	}
 }
 
 AstNode * parseVarOrMemberVarSymbolExpr(Parser * pParser, NULLABLE AstNode * pMemberOwnerExpr)
@@ -1430,6 +1458,7 @@ AstNode * parseVarOrMemberVarSymbolExpr(Parser * pParser, NULLABLE AstNode * pMe
 
 		pNode->symbexprk = SYMBEXPRK_Unresolved;
 		init(&pNode->unresolvedData.apCandidates);
+		pNode->unresolvedData.ignoreVars = false;
 	}
 
 	return finishParsePrimary(pParser, Up(pNode));
@@ -1840,24 +1869,16 @@ AstErr * tryParseFuncHeader(Parser * pParser, const ParseFuncHeaderParam & param
 
 	// Parse "in" parameters
 
-	bool paramsPresent = false;
-	if (param.funcheaderk != FUNCHEADERK_SymbolExpr || peekToken(pParser->pScanner) == TOKENK_OpenParen)
+	ParseParamListParam pplParam;
+	init(&pplParam, param, PARAMK_Param);
+	AstErr * pErr = tryParseParamList(pParser, pplParam);
+	if (pErr)
 	{
-		paramsPresent = true;
-
-		ParseParamListParam pplParam;
-		init(&pplParam, param, PARAMK_Param);
-		AstErr * pErr = tryParseParamList(pParser, pplParam);
-		if (pErr)
-		{
-			return pErr;
-		}
+		return pErr;
 	}
 
 	if (param.funcheaderk != FUNCHEADERK_SymbolExpr)
 	{
-		Assert(paramsPresent);
-
 		// Parse ->
 
 		bool arrowPresent = false;
@@ -1893,9 +1914,6 @@ AstErr * tryParseFuncHeader(Parser * pParser, const ParseFuncHeaderParam & param
 			append(&pErr->aTokenkValid, TOKENK_Identifier);
 			return UpErr(pErr);
 		}
-
-		Assert(Implies(!paramsPresent, param.paramSymbolExpr.pSymbExpr->funcData.aTypidDisambig.cItem == 0));
-		param.paramSymbolExpr.pSymbExpr->funcData.providedDisambigTypes = paramsPresent;
 
 		param.paramSymbolExpr.pSymbExpr->pTokenIdent = claimPendingToken(pParser);
 	}

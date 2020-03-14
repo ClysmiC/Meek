@@ -176,7 +176,7 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 
 						// First look for variable defn. Only 1 var is permitted -- any vars in higher scopes would be shadowed.
 
-						if (!varFound)
+						if (!varFound && !pExpr->unresolvedData.ignoreVars)
 						{
 							SymbolInfo * pSymbInfo = lookupVarSymb(*pPass->pSymbTable, candidate);
 							
@@ -312,19 +312,58 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 					{
 						SCOPEID scopeid = peekFar(pPass->scopeStack, iScope).id;
 
-						DynamicArray<SymbolInfo> aFuncCandidates;
-						init(&aFuncCandidates);
-						Defer(dispose(&aFuncCandidates));
+						ScopedIdentifier identCandidate;
+						setIdent(&identCandidate, pExpr->pTokenIdent, scopeid);
 
-						lookupFuncSymb(*pPass->pSymbTable, pExpr->pTokenIdent, pPass->scopeStack, &aFuncCandidates);
+						DynamicArray<SymbolInfo> * paSymbInfoFuncCandidates = lookupFuncSymb(*pPass->pSymbTable, identCandidate);
 
-						for (int iCandidate = 0; iCandidate < aFuncCandidates.cItem; iCandidate++)
+						for (int iCandidate = 0; iCandidate < paSymbInfoFuncCandidates->cItem; iCandidate++)
 						{
-							Assert(aFuncCandidates[iCandidate].symbolk == SYMBOLK_Func);
-							AstFuncDefnStmt * pCandidateDefn = aFuncCandidates[iCandidate].pFuncDefnStmt;
+							Assert((*paSymbInfoFuncCandidates)[iCandidate].symbolk == SYMBOLK_Func);
+							AstFuncDefnStmt * pCandidateDefnStmt = (*paSymbInfoFuncCandidates)[iCandidate].pFuncDefnStmt;
 
-							// TODO: match types
+							if (pCandidateDefnStmt->pParamsReturnsGrp->apParamVarDecls.cItem != pExpr->funcData.aTypidDisambig.cItem)
+								continue;
+
+							bool match = true;
+							for (int iParam = 0; iParam < pExpr->funcData.aTypidDisambig.cItem; iParam++)
+							{
+								TYPID typidDisambig = pExpr->funcData.aTypidDisambig[iParam];
+								Assert(isTypeResolved(typidDisambig));
+
+								Assert(pCandidateDefnStmt->pParamsReturnsGrp->apParamVarDecls[iParam]->astk == ASTK_VarDeclStmt);
+								auto * pNode = Down(pCandidateDefnStmt->pParamsReturnsGrp->apParamVarDecls[iParam], VarDeclStmt);
+
+								TYPID typidCandidate = pNode->typid;
+								Assert(isTypeResolved(typidCandidate));
+
+								// TODO: type coercion
+
+								if (typidDisambig != typidCandidate)
+								{
+									match = false;
+									break;
+								}
+							}
+
+							if (match)
+							{
+								// Resolve!
+
+								pExpr->funcData.pDefnCached = pCandidateDefnStmt;
+								typidResult = pCandidateDefnStmt->typid;
+							}
 						}
+
+						// Unresolved
+						// TODO: Add this to a resolve error list... don't print inline right here!
+
+						print("Unresolved func identifier ");
+						print(pExpr->pTokenIdent->lexeme);
+						println();
+
+						typidResult = TYPID_Unresolved;
+						goto LEndSetTypidAndReturn;
 					}
 				} break;
 			}
@@ -414,29 +453,15 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 
 			if (pExpr->pFunc->astk == ASTK_SymbolExpr)
 			{
-				auto * pFuncExpr = Down(pExpr->pFunc, SymbolExpr);
+				auto * pFuncSymbolExpr = Down(pExpr->pFunc, SymbolExpr);
 
-				// NOTE: For now I am resolving the SymbolExpr directly in-line, since the var expr case of this switch assumes a var
-				//	and not a func. This is pretty much a hack until I think of a better way to model this.
-
-				Defer(UpExpr(pFuncExpr)->typid = typidResult);		// This is pretty gross
-
-				if (pFuncExpr->pOwner)
-				{
-					// TODO: This is where I would handle UFCS
-					// TODO: report error here while I don't support UFCS
-					// NOTE: We aren't ever visiting the parent(s) here or setting their typids to unresolved.... bleh.
-
-					print("Member function looking thingy... not supported\n");
-
-					typidResult = TYPID_Unresolved;	// Is this right?
-					goto LEndSetTypidAndReturn;
-				}
+				Defer(UpExpr(pFuncSymbolExpr)->typid = typidResult);		// This is pretty gross
 
 				// Resolve args
 
 				// TODO: implement reserve(..) for dynamic array, since we already know ahead of time
 				//	how many typids we will have in it.
+
 				DynamicArray<TYPID> aTypidArg;
 				init(&aTypidArg);
 				Defer(dispose(&aTypidArg));
@@ -447,15 +472,15 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 					append(&aTypidArg, typidArg);
 				}
 
-				// Find func with matching ident and param types
-				// TODO: We need to look at variable definitions too, if the variables are function types.
+				// TODO: Not all args have resolved typid. Will need to do matching between resolved candidates types and
+				//	our candidate types.
 
 				{
 					DynamicArray<SymbolInfo> aFuncCandidates;
 					init(&aFuncCandidates);
 					Defer(dispose(&aFuncCandidates));
 
-					lookupFuncSymb(*pPass->pSymbTable, pFuncExpr->pTokenIdent, pPass->scopeStack, &aFuncCandidates);
+					lookupFuncSymb(*pPass->pSymbTable, pFuncSymbolExpr->pTokenIdent, pPass->scopeStack, &aFuncCandidates);
 
 					AstFuncDefnStmt * pFuncDefnStmtMatch = nullptr;
 					for (int i = 0; i < aFuncCandidates.cItem; i++)

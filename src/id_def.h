@@ -21,6 +21,7 @@ enum SCOPEID : u32
 
 	SCOPEID_UserDefinedStart,
 
+	SCOPEID_Max = static_cast<u32>(0xFF'FF'FF'FF),
 	SCOPEID_Nil = static_cast<u32>(-1)
 };
 
