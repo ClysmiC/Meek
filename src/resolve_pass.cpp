@@ -337,7 +337,8 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 								TYPID typidCandidate = pNode->typid;
 								Assert(isTypeResolved(typidCandidate));
 
-								// TODO: type coercion
+								// NOTE (andrews) Don't want any type coercion here. The disambiguating types provided should
+								//	match a function exactly!
 
 								if (typidDisambig != typidCandidate)
 								{
