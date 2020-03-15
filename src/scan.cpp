@@ -492,25 +492,15 @@ TOKENK produceNextToken(Scanner * pScanner, Token * poToken)
 
 							// @Slow
 
-							bool isReservedWord = false;
+							TOKENK tokenkReserved = TOKENK_Nil;
 							StringView lexeme = currentLexeme(*pScanner);
+							bool isReserved = isReservedWord(lexeme, &tokenkReserved);
 
-							for (int i = 0; i < g_cReservedWord; i++)
+							if (isReserved)
 							{
-								const ReservedWord * pReservedWord = g_aReservedWord + i;
-
-								if (lexeme == pReservedWord->lexeme)
-								{
-									// Move lexeme buffer cursor back, since we don't need to write
-									//	known reserved words to it. We can just use the global.
-
-									isReservedWord = true;
-									makeToken(pScanner, pReservedWord->tokenk, pReservedWord->lexeme, poToken);
-									break;
-								}
+								makeToken(pScanner, tokenkReserved, lexeme, poToken);
 							}
-
-							if (!isReservedWord)
+							else
 							{
 								makeToken(pScanner, TOKENK_Identifier, lexeme, poToken);
 							}

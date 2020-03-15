@@ -133,7 +133,7 @@ struct TypeTable
 
 void init(TypeTable * pTable);
 void insertBuiltInTypes(TypeTable * pTable);
-const Type * lookupType(const TypeTable & table, TYPID typid);
+NULLABLE const Type * lookupType(const TypeTable & table, TYPID typid);
 
 
 TYPID ensureInTypeTable(TypeTable * pTable, const Type & type, bool debugAssertIfAlreadyInTable=false);
@@ -143,6 +143,8 @@ bool tryResolveType(Type * pType, const SymbolTable & symbolTable, const Stack<S
 bool tryResolveAllTypes(Parser * pParser);
 
 TYPID typidFromLiteralk(LITERALK literalk);
+
+bool canCoerce(TYPID typidFrom, TYPID typidTo);
 
 
 #if DEBUG

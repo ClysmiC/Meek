@@ -356,6 +356,17 @@ void remove(DynamicArray<T> * pArray, int iItem)
 	pArray->cItem--;
 }
 
+template <typename T>
+void reverse(DynamicArray<T> * pArray)
+{
+	for (int iItem = 0; iItem < pArray->cItem / 2; iItem++)
+	{
+		T temp = pArray->pBuffer[iItem];
+		pArray->pBuffer[iItem] = pArray->pBuffer[pArray->cItem - iItem - 1];
+		pArray->pBuffer[pArray->cItem - iItem - 1] = temp;
+	}
+}
+
 
 // Fixed array (not thread safe)
 

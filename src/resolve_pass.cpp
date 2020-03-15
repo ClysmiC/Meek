@@ -229,6 +229,8 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 
 							pExpr->symbexprk = SYMBEXPRK_Func;
 							pExpr->funcData.pDefnCached = pSymbInfo->pFuncDefnStmt;
+
+							typidResult = pExpr->funcData.pDefnCached->typid;
 						}
 					}
 					else if (pExpr->unresolvedData.apCandidates.cItem > 1)
@@ -452,80 +454,398 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 		{
 			auto * pExpr = Down(pNode, FuncCallExpr);
 
-			if (pExpr->pFunc->astk == ASTK_SymbolExpr)
+			// Resolve calling expression 
+
+			TYPID typidCallingExpr = resolveExpr(pPass, pExpr->pFunc);
+			Assert(Implies(typidCallingExpr == TYPID_UnresolvedHasCandidates, pExpr->pFunc->astk == ASTK_SymbolExpr));
+
+			bool callingExprResolvedOrHasCandidates = isTypeResolved(typidCallingExpr) || typidCallingExpr == TYPID_UnresolvedHasCandidates;
+
+			// Resolve args
+
+			// TODO: implement reserve(..) for dynamic array, since we already know ahead of time
+			//	how many typids we will have in it.
+
+			DynamicArray<TYPID> aTypidArg;
+			init(&aTypidArg);
+			Defer(dispose(&aTypidArg));
+
+			bool allArgsResolvedOrHasCandidates = true;
+			for (int i = 0; i < pExpr->apArgs.cItem; i++)
 			{
-				auto * pFuncSymbolExpr = Down(pExpr->pFunc, SymbolExpr);
-
-				Defer(UpExpr(pFuncSymbolExpr)->typid = typidResult);		// This is pretty gross
-
-				// Resolve args
-
-				// TODO: implement reserve(..) for dynamic array, since we already know ahead of time
-				//	how many typids we will have in it.
-
-				DynamicArray<TYPID> aTypidArg;
-				init(&aTypidArg);
-				Defer(dispose(&aTypidArg));
-
-				for (int i = 0; i < pExpr->apArgs.cItem; i++)
+				TYPID typidArg = resolveExpr(pPass, pExpr->apArgs[i]);
+				if (!isTypeResolved(typidArg) && typidArg != TYPID_UnresolvedHasCandidates)
 				{
-					TYPID typidArg = resolveExpr(pPass, pExpr->apArgs[i]);
-					append(&aTypidArg, typidArg);
+					allArgsResolvedOrHasCandidates = false;
 				}
 
-				// TODO: Not all args have resolved typid. Will need to do matching between resolved candidates types and
-				//	our candidate types.
+				append(&aTypidArg, typidArg);
+			}
 
+			if (!callingExprResolvedOrHasCandidates || !allArgsResolvedOrHasCandidates)
+			{
+				typidResult = TYPID_BubbleError;
+				goto LEndSetTypidAndReturn;
+			}
+
+			if (pExpr->pFunc->astk != ASTK_SymbolExpr)
+			{
+				const Type * pType = lookupType(*pPass->pTypeTable, typidCallingExpr);
+				Assert(pType);
+
+				if (!pType->isFuncType)
 				{
-					DynamicArray<SymbolInfo> aFuncCandidates;
-					init(&aFuncCandidates);
-					Defer(dispose(&aFuncCandidates));
+					// TODO: better messaging
 
-					lookupFuncSymb(*pPass->pSymbTable, pFuncSymbolExpr->pTokenIdent, pPass->scopeStack, &aFuncCandidates);
+					print("Calling non-function as if it were a function");
+					println();
 
-					AstFuncDefnStmt * pFuncDefnStmtMatch = nullptr;
-					for (int i = 0; i < aFuncCandidates.cItem; i++)
+					typidResult = TYPID_TypeError;
+					goto LEndSetTypidAndReturn;
+				}
+				else
+				{
+					const FuncType * pFuncType = &pType->funcType;
+
+					if (pFuncType->paramTypids.cItem != aTypidArg.cItem)
 					{
-						SymbolInfo * pSymbInfoCandidate = &aFuncCandidates[i];
-						Assert(pSymbInfoCandidate->symbolk == SYMBOLK_Func);
+						// TODO: Might need to adjust aTypidArg.cItem if the candidate
+						//	has default arguments. Or better yet, encode the min/max range
+						//	in the funcType and check if aTypidArg.cItem falls within
+						//	that range
 
-						AstFuncDefnStmt * pFuncDefnStmt = pSymbInfoCandidate->pFuncDefnStmt;
+						// TODO: better messaging
 
-						if (areTypidListAndVarDeclListTypesEq(aTypidArg, pFuncDefnStmt->pParamsReturnsGrp->apParamVarDecls))
-						{
-							pFuncDefnStmtMatch = pFuncDefnStmt;
-							break;
-						}
-					}
+						printfmt(
+							"Calling function that expects %d arguments, but only providing %d",
+							pFuncType->paramTypids.cItem,
+							aTypidArg.cItem
+						);
 
-					if (!pFuncDefnStmtMatch)
-					{
-						// TODO: Add this to a resolve error list... don't print inline right here!
-
-						print("Could not find function definition for ");
-						print(pFuncExpr->pTokenIdent->lexeme);
-						print(" that had expected types\n");
-						typidResult = TYPID_Unresolved;
+						typidResult = TYPID_TypeError;
 						goto LEndSetTypidAndReturn;
 					}
 
-					auto * papReturnVarDecls = &pFuncDefnStmtMatch->pParamsReturnsGrp->apReturnVarDecls;
-					if (papReturnVarDecls->cItem == 0)
+					for (int iParam = 0; iParam < pFuncType->paramTypids.cItem; iParam++)
 					{
-						typidResult = TYPID_Void;
-					}
-					else
-					{
-						AssertInfo(papReturnVarDecls->cItem == 1, "TODO: figure out semantics for multiple return values.... for now I will just assert that there is only 1");
-						Assert((*papReturnVarDecls)[0]->astk == ASTK_VarDeclStmt);
-						typidResult = Down((*papReturnVarDecls)[0], VarDeclStmt)->typid;
+						TYPID typidParam = pFuncType->paramTypids[iParam];
+						TYPID typidArg = aTypidArg[iParam];
+
+						if (isTypeResolved(typidArg))
+						{
+							if (typidArg != typidParam && !canCoerce(typidArg, typidParam))
+							{
+								// TODO: better messaging
+
+								print("Function call type mismatch");
+
+								typidResult = TYPID_TypeError;
+								goto LEndSetTypidAndReturn;
+							}
+						}
+						else
+						{
+							Assert(typidArg == TYPID_UnresolvedHasCandidates);
+
+							// TODO: try to find exactly 1 candidate... just like we do if funcexpr is a symbolexpr
+							AssertInfo(false, "TODO");
+
+							// TODO: if exactly 1 is found, change the symbexprk of the underlying arg
+						}
 					}
 				}
 			}
 			else
 			{
-				// TODO: It's a non-var being called as a function. Resolve the calling expr,
-				//	make sure it is a function type, then make sure our params match
+				auto * pFuncSymbolExpr = Down(pExpr->pFunc, SymbolExpr);
+
+				// Defer(UpExpr(pFuncSymbolExpr)->typid = typidResult);		// This is pretty gross
+
+
+				// Do matching between func candidates and arg candidates
+
+				AstNode * pNodeDefnclMatch = nullptr;
+				if (pFuncSymbolExpr->symbexprk == SYMBEXPRK_Func)
+				{
+					pNodeDefnclMatch = Up(pFuncSymbolExpr->funcData.pDefnCached);
+				}
+				else
+				{
+					Assert(pFuncSymbolExpr->symbexprk == SYMBEXPRK_Unresolved);
+
+					// NOTE (andrew) The ordering of the candidates was set by resolveExpr(..), and is important for correctness. To facilitate
+					//	easy removal from the array, we want to iterate backwards. Thus, we reverse the array to allow us to iterate backwards
+					//	but maintain the intended order. We reverse back after we are finished to maintain original order for posterity.
+
+					DynamicArray<SymbolInfo *> apSymbInfoExactMatch;
+					init(&apSymbInfoExactMatch);
+					Defer(dispose(&apSymbInfoExactMatch));
+
+					DynamicArray<SymbolInfo *> apSymbInfoLooseMatch;
+					init(&apSymbInfoLooseMatch);
+					Defer(dispose(&apSymbInfoLooseMatch));
+
+					for (int iFuncCandidate = 0; iFuncCandidate < pFuncSymbolExpr->unresolvedData.apCandidates.cItem; iFuncCandidate++)
+					{
+						SymbolInfo * pSymbInfoFuncCandidate = pFuncSymbolExpr->unresolvedData.apCandidates[iFuncCandidate];
+
+						TYPID typidCandidate = TYPID_Unresolved;
+						if (pSymbInfoFuncCandidate->symbolk == SYMBOLK_Var)
+						{
+							typidCandidate = pSymbInfoFuncCandidate->pVarDeclStmt->typid;	
+						}
+						else
+						{
+							Assert(pSymbInfoFuncCandidate->symbolk == SYMBOLK_Func);
+							typidCandidate = pSymbInfoFuncCandidate->pFuncDefnStmt->typid;
+						}
+
+						if (!isTypeResolved(typidCandidate))
+						{
+							continue;
+						}
+
+						const Type * pTypeCandidate = lookupType(*pPass->pTypeTable, typidCandidate);
+						Assert(pTypeCandidate);
+
+						if (!pTypeCandidate->isFuncType)
+						{
+							continue;
+						}
+
+						const FuncType * pFuncTypeCandidate = &pTypeCandidate->funcType;
+
+						if (pFuncTypeCandidate->paramTypids.cItem != aTypidArg.cItem)
+						{
+							// TODO: Might need to adjust aTypidArg.cItem if the candidate
+							//	has default arguments. Or better yet, encode the min/max range
+							//	in the funcType and check if aTypidArg.cItem falls within
+							//	that range
+
+							continue;
+						}
+
+						enum MATCHK
+						{
+							MATCHK_MatchExact,
+							MATCHK_MatchLoose,
+							MATCHK_NoMatch
+						};
+
+						MATCHK matchk = MATCHK_MatchExact;
+						for (int iParamCandidate = 0; iParamCandidate < pFuncTypeCandidate->paramTypids.cItem; iParamCandidate++)
+						{
+							TYPID typidCandidateExpected = pFuncTypeCandidate->paramTypids[iParamCandidate];
+
+							auto * pNodeArg = pExpr->apArgs[iParamCandidate];
+							TYPID typidArg = aTypidArg[iParamCandidate];
+
+							if (isTypeResolved(typidArg))
+							{
+								if (typidCandidateExpected == typidArg)
+								{
+									// Do nothing
+								}
+								else if (canCoerce(typidArg, typidCandidateExpected))
+								{
+									matchk = MATCHK_MatchLoose;
+								}
+								else
+								{
+									matchk = MATCHK_NoMatch;
+									break;
+								}
+							}
+							else 
+							{
+								Assert(typidArg == TYPID_UnresolvedHasCandidates);
+								Assert(pNodeArg->astk == ASTK_SymbolExpr);
+
+								auto * pNodeArgSymbExpr = Down(pNodeArg, SymbolExpr);
+								Assert(pNodeArgSymbExpr->symbexprk == SYMBEXPRK_Unresolved);
+								Assert(pNodeArgSymbExpr->unresolvedData.apCandidates.cItem > 1);
+
+								int cMatchExact = 0;
+								int cMatchLoose = 0;
+								TYPID typidMatchExact = TYPID_Unresolved;
+								TYPID typidMatchLoose = TYPID_Unresolved;
+								for (int iArgCandidate = 0; iArgCandidate < pNodeArgSymbExpr->unresolvedData.apCandidates.cItem; iArgCandidate++)
+								{
+									SymbolInfo * pSymbInfoArgCandidate = pNodeArgSymbExpr->unresolvedData.apCandidates[iArgCandidate];
+									
+									TYPID typidArgCandidate = TYPID_Unresolved;
+									if (pSymbInfoArgCandidate->symbolk == SYMBOLK_Var)
+									{
+										typidArgCandidate = pSymbInfoArgCandidate->pVarDeclStmt->typid;
+									}
+									else
+									{
+										Assert(pSymbInfoArgCandidate->symbolk == SYMBOLK_Func);
+										typidArgCandidate = pSymbInfoArgCandidate->pFuncDefnStmt->typid;
+									}
+
+									Assert(isTypeResolved(typidArgCandidate));		// HMM: Is this actually Assertable?
+
+									if (typidCandidateExpected == typidArgCandidate)
+									{
+										cMatchExact++;
+										typidMatchExact = typidArgCandidate;
+										Assert(cMatchExact == 1);
+#if !DEBUG
+										break;
+#endif
+									}
+									else if (canCoerce(typidArg, typidCandidateExpected))
+									{
+										cMatchLoose++;
+
+										if (cMatchLoose == 1)
+										{
+											typidMatchLoose = typidArgCandidate;
+										}
+										else
+										{
+											typidMatchLoose = TYPID_Unresolved;
+										}
+									}
+									else
+									{
+										// Do nothing
+									}
+								}
+
+								Assert(Implies(cMatchExact > 0, cMatchExact == 1));
+								Assert(Implies(cMatchExact == 1, isTypeResolved(typidMatchExact)));
+
+								if (cMatchExact == 1)
+								{
+									// Do nothing
+								}
+								else if (cMatchLoose == 1)
+								{
+									matchk = MATCHK_MatchLoose;
+								}
+								else if (cMatchLoose > 1)
+								{
+									// TODO: better reporting
+									// TODO: This actually shouldn't be an error... it is only an error
+									//	if the rest of the parameters match too! Otherwise we just
+									//	discard this func candidate from consideration anyways.
+
+									print("Ambiguous function call ");
+									print(pFuncSymbolExpr->pTokenIdent->lexeme);
+									typidResult = TYPID_TypeError;
+									goto LEndSetTypidAndReturn;
+								}
+								else
+								{
+									matchk = MATCHK_NoMatch;
+									break;
+								}
+							}
+						}
+
+						switch (matchk)
+						{
+							case MATCHK_MatchExact:
+							{
+								append(&apSymbInfoExactMatch, pSymbInfoFuncCandidate);
+							} break;
+
+							case MATCHK_MatchLoose:
+							{
+								append(&apSymbInfoLooseMatch, pSymbInfoFuncCandidate);
+							} break;
+						}
+					}
+
+					Assert(apSymbInfoExactMatch.cItem <= 1);		// TODO: I don't think this is assertable... there could be a func var and a fn def that both exact match...
+
+					if (apSymbInfoExactMatch.cItem == 1)
+					{
+						SymbolInfo * pSymbInfoExactMatch = apSymbInfoExactMatch[0];
+						if (pSymbInfoExactMatch->symbolk == SYMBOLK_Var)
+						{
+							pNodeDefnclMatch = Up(pSymbInfoExactMatch->pVarDeclStmt);
+						}
+						else
+						{
+							Assert(pSymbInfoExactMatch->symbolk == SYMBOLK_Func);
+							pNodeDefnclMatch = Up(pSymbInfoExactMatch->pFuncDefnStmt);
+						}
+					}
+					else if (apSymbInfoLooseMatch.cItem == 1)
+					{
+						SymbolInfo * pSymbInfoExactMatch = apSymbInfoLooseMatch[0];
+						if (pSymbInfoExactMatch->symbolk == SYMBOLK_Var)
+						{
+							pNodeDefnclMatch = Up(pSymbInfoExactMatch->pVarDeclStmt);
+						}
+						else
+						{
+							Assert(pSymbInfoExactMatch->symbolk == SYMBOLK_Func);
+							pNodeDefnclMatch = Up(pSymbInfoExactMatch->pFuncDefnStmt);
+						}
+					}
+					else if (apSymbInfoLooseMatch.cItem > 1)
+					{
+						// TODO: better reporting
+
+						print("Ambiguous function call ");
+						print(pFuncSymbolExpr->pTokenIdent->lexeme);
+						typidResult = TYPID_TypeError;
+						goto LEndSetTypidAndReturn;
+					}
+					else
+					{
+						// TODO: better reporting
+
+						print("No func named ");
+						print(pFuncSymbolExpr->pTokenIdent->lexeme);
+						print(" matches the provided parameters");
+						typidResult = TYPID_TypeError;
+						goto LEndSetTypidAndReturn;
+					}
+				}
+
+				Assert(pNodeDefnclMatch);
+				const Type * pType = nullptr;
+				if (pNodeDefnclMatch->astk == ASTK_VarDeclStmt)
+				{
+					auto * pNodeVarDeclStmt = Down(pNodeDefnclMatch, VarDeclStmt);
+					Assert(isTypeResolved(pNodeVarDeclStmt->typid));
+
+					pType = lookupType(*pPass->pTypeTable, pNodeVarDeclStmt->typid);
+
+					pFuncSymbolExpr->symbexprk = SYMBEXPRK_Var;
+					pFuncSymbolExpr->varData.pDeclCached = pNodeVarDeclStmt;
+				}
+				else
+				{
+					Assert(pNodeDefnclMatch->astk == ASTK_FuncDefnStmt);
+
+					auto * pNodeFuncDefnStmt = Down(pNodeDefnclMatch, FuncDefnStmt);
+					Assert(isTypeResolved(pNodeFuncDefnStmt->typid));
+
+					pType = lookupType(*pPass->pTypeTable, pNodeFuncDefnStmt->typid);
+
+					pFuncSymbolExpr->symbexprk = SYMBEXPRK_Func;
+					pFuncSymbolExpr->funcData.pDefnCached = pNodeFuncDefnStmt;
+				}
+
+				Assert(pType);
+				Assert(pType->isFuncType);
+				if (pType->funcType.returnTypids.cItem == 0)
+				{
+					typidResult = TYPID_Void;
+				}
+				else
+				{
+					// TODO: multiple return values
+
+					Assert(pType->funcType.returnTypids.cItem == 1);
+					typidResult = pType->funcType.returnTypids[0];
+				}
 			}
 		} break;
 

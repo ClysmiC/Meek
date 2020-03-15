@@ -7,26 +7,24 @@
 const StartEndIndices gc_startEndBubble(-1, -1);
 const StartEndIndices gc_startEndBuiltInPseudoToken(-1, -1);
 
-// TODO: should probably make these globals "const" for good measure.
-
-TOKENK g_aTokenkLiteral[] = {
+const TOKENK g_aTokenkLiteral[] = {
 	TOKENK_IntLiteral,
 	TOKENK_FloatLiteral,
 	TOKENK_BoolLiteral,
 	TOKENK_StringLiteral
 };
-int g_cTokenkLiteral = ArrayLen(g_aTokenkLiteral);
+const int g_cTokenkLiteral = ArrayLen(g_aTokenkLiteral);
 
-TOKENK g_aTokenkUnopPre[] = {
+const TOKENK g_aTokenkUnopPre[] = {
 	TOKENK_Plus,		// HMM: Is this worthwhile to have?
 	TOKENK_Minus,
 	TOKENK_Bang,
 	TOKENK_Carat,		// Address-of
 	// TOKENK_Greater,		// Dereference... I kinda like this but hope it doesn't lead to ambiguity! Also it needs ot be able to stack, i.e., >> could be confused with bit shift?
 };
-int g_cTokenkUnopPre = ArrayLen(g_aTokenkUnopPre);
+const int g_cTokenkUnopPre = ArrayLen(g_aTokenkUnopPre);
 
-ReservedWord g_aReservedWord[] = {
+const ReservedWord g_aReservedWord[] = {
 	{ "if",			TOKENK_If },
 	{ "else",       TOKENK_Else },
 	{ "for",		TOKENK_For },
@@ -56,7 +54,7 @@ ReservedWord g_aReservedWord[] = {
 	{ "true",		TOKENK_BoolLiteral },
 	{ "false",		TOKENK_BoolLiteral },
 };
-int g_cReservedWord = ArrayLen(g_aReservedWord);
+const int g_cReservedWord = ArrayLen(g_aReservedWord);
 
 const char * g_mpTokenkStrDisplay[] = {
 	"<error>",				// TOKENK_Error
@@ -176,4 +174,26 @@ const char * errMessageFromFerrtok(FERRTOK ferrtok)
 			return "";
 		} break;
 	}
+}
+
+bool isReservedWord(StringView strv, NULLABLE TOKENK * poTokenk)
+{
+	// @Slow
+
+	for (int iRw = 0; iRw < g_cReservedWord; iRw++)
+	{
+		const ReservedWord * pReservedWord = &g_aReservedWord[iRw];
+
+		if (strv == pReservedWord->lexeme)
+		{
+			if (poTokenk)
+			{
+				*poTokenk = pReservedWord->tokenk;
+			}
+
+			return true;
+		}
+	}
+
+	return false;
 }

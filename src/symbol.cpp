@@ -2,6 +2,7 @@
 
 #include "ast.h"
 #include "literal.h"
+#include "print.h"
 #include "token.h"
 #include "type.h"
 
@@ -147,6 +148,16 @@ bool tryInsert(
 {
 	if (!ident.pToken) return false;
 
+	if (symbInfo.symbolk != SYMBOLK_BuiltInType && isReservedWord(ident.pToken->lexeme))
+	{
+		// TODO: better reporting than print statement....
+
+		print("Cannot use reserved word ");
+		print(ident.pToken->lexeme);
+		print("as an identifier");
+		return false;
+	}
+
 	Assert(ident.defnclScopeid == peek(scopeStack).id);
 	Assert(symbInfo.ident.hash == ident.hash);      // Ehh passing idents around is kind of redundant if it is already embedded in the symbol info
 
@@ -161,23 +172,6 @@ bool tryInsert(
 		{
 			append(pRedefinedArray, symbInfo);
 			return false;
-		}
-
-		// Check for shadowing of struct or builtin (only vars can be shadowed)
-		// NOTE: i = 1 because the top scope in the stack matches the ident's scope, which was just checked in the previous step
-
-		if (symbInfo.symbolk == SYMBOLK_Struct || symbInfo.symbolk == SYMBOLK_BuiltInType)
-		{
-			for (int i = 1; i < count(scopeStack); i++)
-			{
-				ScopedIdentifier candidateIdent;
-				setIdent(&candidateIdent, ident.pToken, peekFar(scopeStack, i).id);
-				if (lookup(*pTable, ident))
-				{
-					append(pRedefinedArray, symbInfo);
-					return false;
-				}
-			}
 		}
 
 		// Add sequence id to AST node
@@ -213,25 +207,25 @@ bool tryInsert(
 			return false;
 		}
 
-		// Check for duplicate w/ same parameter signature
+		// Check for duplicate in own scope w/ same parameter signature
 
 		{
-			DynamicArray<SymbolInfo> aFuncsWithSameName;
-			init(&aFuncsWithSameName);
-			Defer(dispose(&aFuncsWithSameName));
+			DynamicArray<SymbolInfo> * paFuncsSameNameAndScope;
 
-			lookupFuncSymb(*pSymbolTable, symbInfo.ident.pToken, scopeStack, &aFuncsWithSameName);
+			paFuncsSameNameAndScope = lookupFuncSymb(*pSymbolTable, ident);
 
-			for (int i = 0; i < aFuncsWithSameName.cItem; i++)
+			for (int i = 0; i < paFuncsSameNameAndScope->cItem; i++)
 			{
-				SymbolInfo * pSymbInfoCandidate = &aFuncsWithSameName[i];
+				SymbolInfo * pSymbInfoCandidate = &(*paFuncsSameNameAndScope)[i];
 				Assert(pSymbInfoCandidate->symbolk == SYMBOLK_Func);
 
 				AstFuncDefnStmt * pFuncDefnStmtOther = pSymbInfoCandidate->pFuncDefnStmt;
 
-				if (areVarDeclListTypesEq(pFuncDefnStmt->pParamsReturnsGrp->apParamVarDecls, pFuncDefnStmtOther->pParamsReturnsGrp->apParamVarDecls))
+				if (areVarDeclListTypesEq(
+						pFuncDefnStmt->pParamsReturnsGrp->apParamVarDecls,
+						pFuncDefnStmtOther->pParamsReturnsGrp->apParamVarDecls))
 				{
-					// Duplicate
+					// Duplicate in same scope
 
 					append(&pSymbolTable->redefinedFuncs, symbInfo);
 					return false;

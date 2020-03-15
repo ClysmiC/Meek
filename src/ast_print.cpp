@@ -371,9 +371,9 @@ void debugPrintSubAst(DebugPrintCtx * pCtx, const AstNode & node, int level, boo
 			}
 		} break;
 
-		case ASTK_IllegalDoStmtErr:
+		case ASTK_IllegalDoPseudoStmtErr:
 		{
-			auto * pErr = DownConst(&node, IllegalDoStmtErr);
+			auto * pErr = DownConst(&node, IllegalDoPseudoStmtErr);
 			auto * pErrCasted = UpErrConst(pErr);
 
 			printfmt("%s %s is not permitted following 'do'", parseErrorString, displayString(pErr->astkStmt));
@@ -392,7 +392,7 @@ void debugPrintSubAst(DebugPrintCtx * pCtx, const AstNode & node, int level, boo
 
 		case ASTK_IllegalTopLevelStmtErr:
 		{
-			auto * pErr = DownConst(&node, IllegalDoStmtErr);
+			auto * pErr = DownConst(&node, IllegalTopLevelStmtErr);
 			auto * pErrCasted = UpErrConst(pErr);
 
 			printfmt("%s %s is not permitted as a top level statement", parseErrorString, displayString(pErr->astkStmt));
@@ -503,14 +503,14 @@ void debugPrintSubAst(DebugPrintCtx * pCtx, const AstNode & node, int level, boo
 			{
 				case SYMBEXPRK_Var:
 				{
-					print("(var): ");
+					print("(var symbol): ");
 					print(pExpr->pTokenIdent->lexeme);
 				}
 				break;
 
 				case SYMBEXPRK_MemberVar:
 				{
-					print("(member var): ");
+					print("(member var symbol): ");
 					print(pExpr->pTokenIdent->lexeme);
 					println();
 
@@ -525,13 +525,16 @@ void debugPrintSubAst(DebugPrintCtx * pCtx, const AstNode & node, int level, boo
 
 				case SYMBEXPRK_Func:
 				{
+					print("(func symbol): ");
+					print(pExpr->pTokenIdent->lexeme);
 
+					// TODO: maybe print type disambig ??
 				}
 				break;
 
-				case SYMBEXPRK_Nil:
+				case SYMBEXPRK_Unresolved:
 				{
-					print("(unresolved symbexprk): ");
+					print("(unresolved symbol): ");
 					print(pExpr->pTokenIdent->lexeme);
 				}
 				break;

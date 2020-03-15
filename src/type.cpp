@@ -445,7 +445,7 @@ void insertBuiltInTypes(TypeTable * pTable)
 	}
 }
 
-const Type * lookupType(const TypeTable & table, TYPID typid)
+NULLABLE const Type * lookupType(const TypeTable & table, TYPID typid)
 {
 	return lookupByKey(table.table, typid);
 }
@@ -559,6 +559,13 @@ TYPID typidFromLiteralk(LITERALK literalk)
 	StaticAssert(ArrayLen(s_mpLiteralkTypid) == LITERALK_Max);
 
 	return s_mpLiteralkTypid[literalk];
+}
+
+bool canCoerce(TYPID typidFrom, TYPID typidTo)
+{
+	// TODO
+
+	return false;
 }
 
 #if DEBUG

@@ -211,13 +211,16 @@ inline void nillify(Token * poToken)
 // TODO: use a dict or trie for reserved words
 // TODO: Probably worth making these const correct.
 
-extern ReservedWord g_aReservedWord[];
-extern int g_cReservedWord;
+bool isReservedWord(StringView strv, NULLABLE TOKENK * poTokenk = nullptr);
 
-extern TOKENK g_aTokenkLiteral[];
-extern int g_cTokenkLiteral;
+extern const ReservedWord g_aReservedWord[];
+extern const int g_cReservedWord;
 
-extern TOKENK g_aTokenkUnopPre[];
-extern int g_cTokenkUnopPre;
+extern const TOKENK g_aTokenkLiteral[];
+extern const int g_cTokenkLiteral;
+
+extern const TOKENK g_aTokenkUnopPre[];
+extern const int g_cTokenkUnopPre;
 
 extern const char * g_mpTokenkStrDisplay[];
+
