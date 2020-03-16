@@ -9,4 +9,5 @@ It looks a lot like C right now, but I have plenty of ideas to try out once deve
 Currently working on...
 
 - ~Scanner and parser~
-- Type checking
+- Analysis (type checking, name resolution, etc.)
+- LLVM output + integration
