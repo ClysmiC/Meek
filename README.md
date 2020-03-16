@@ -8,6 +8,10 @@ It looks a lot like C right now, but I have plenty of ideas to try out once deve
 
 Currently working on...
 
-- ~Scanner and parser~
+- ~Scanner~
+  - ~100% complete~
+- ~Parser~
+  - ~100% complete~
 - Analysis (type checking, name resolution, etc.)
+  - 50% complete
 - LLVM output + integration
