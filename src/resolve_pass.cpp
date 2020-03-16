@@ -549,6 +549,10 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 				{
 					pNodeDefnclMatch = Up(pFuncSymbolExpr->funcData.pDefnCached);
 				}
+				else if (pFuncSymbolExpr->symbexprk = SYMBEXPRK_Var)
+				{
+					pNodeDefnclMatch = Up(pFuncSymbolExpr->varData.pDeclCached);
+				}
 				else
 				{
 					Assert(pFuncSymbolExpr->symbexprk == SYMBEXPRK_Unresolved);

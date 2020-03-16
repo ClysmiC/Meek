@@ -29,8 +29,6 @@ fn add(Vector v1, Vector v2) -> Vector
 	{
 		return i1 + i2;
 	}
-
-	[6] Vector jvv;
 }
 
 // struct defined way after used... order doesn't matter!
@@ -90,7 +88,7 @@ fn main(int a)
 
 
 
-
+/*
 fn main()
 {
 	// This is a function pointer variable named foo that is bound to a function literal
@@ -125,6 +123,7 @@ fn main()
 
 	do fn (float64) foo(5.0);
 }
+*/
 
 
 

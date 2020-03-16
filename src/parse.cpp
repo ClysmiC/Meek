@@ -1214,8 +1214,7 @@ AstNode * parsePrimary(Parser * pParser)
 					case TOKENK_Error:
 					case TOKENK_Eof:
 					{
-						// NOTE (andrew) We'll have an error either way here, so it doesn't matter which branch we choose.
-						//	The only difference is what error message we show. We use this same approach in a few other cases.
+						// Doesn't matter which branch we take... will hit error either way
 
 						speculate = false;
 					} break;
@@ -1228,31 +1227,31 @@ AstNode * parsePrimary(Parser * pParser)
 					case TOKENK_CloseParen:
 					{
 						cParenCtx--;
-						if (cParenCtx < 0)
-						{
-							// Error. Doesn't matter which branch we take.
-
-							speculate = false;
-						}
-					} break;
-
-					case TOKENK_Identifier:
-					{
 						if (cParenCtx == 0)
 						{
-							// NOTE (andrew) We don't have to worry about this being a naked single return value in a func
-							//	literal, as we would have already chosen our branch once we saw ->
+							speculate = false;
 
-							isFnSymbolExpr = true;
+							if (nextTokenkSpeculative(pParser->pScanner) == TOKENK_Identifier)
+							{
+								isFnSymbolExpr = true;
+							}
+						}
+						else if (cParenCtx < 0)
+						{
+							// Doesn't matter which branch we take... will hit error either way
+
 							speculate = false;
 						}
+
 					} break;
 
-					case TOKENK_MinusGreater:
 					case TOKENK_Equal:
 					{
-						isFnSymbolExpr = false;
-						speculate = false;
+						if (cParenCtx > 0)
+						{
+							isFnSymbolExpr = false;
+							speculate = false;
+						}
 					} break;
 				}
 			}

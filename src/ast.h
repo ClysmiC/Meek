@@ -331,6 +331,7 @@ struct AstExpr
 		AstPointerDereferenceExpr	pointerDereferenceExpr;
 		AstArrayAccessExpr			arrayAccessExpr;
 		AstFuncCallExpr				funcCallExpr;
+		AstFuncLiteralExpr			funcLiteralExpr;
 	};
 
 	TYPID typid = TYPID_Unresolved;

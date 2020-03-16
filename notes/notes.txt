@@ -17,7 +17,7 @@ fn theThingImpl()
 	print("hi");
 }
 
-fn theThingImple(int i)
+fn theThingImpl(int i)
 {
 	print(i);
 }
@@ -34,5 +34,28 @@ fn delegate (fn (int) theThing)
 
 fn main()
 {
-	deletage(^theThing);		// Which one gets called??
+	deletage(fn theThingImpl);		// Error, ambiguous argument
+	delegate(fn theThingImpl());	// prints "hi"
+	delegate(fn theThingImpl(int));	// prints "4";
 }
+
+
+
+
+
+
+
+
+
+Order of things
+
+parse
+	-all type definitions get put into type table
+	-all references to types get put into pending list
+		-types of vars
+		-types of funcs		// should these 2 be separate? vars can be of func type...
+		
+resolve all pending types
+
+resolve pass
+	

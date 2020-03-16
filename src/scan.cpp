@@ -732,7 +732,14 @@ void makeToken(Scanner * pScanner, TOKENK tokenk, Token * poToken)
 
 void makeToken(Scanner * pScanner, TOKENK tokenk, StringView lexeme, Token * poToken)
 {
-	if (!pScanner->isSpeculating)
+	if (pScanner->isSpeculating)
+	{
+		// This is the only result we care about when speculating.
+		//	Speculation is kinda half-baked right now...
+
+		poToken->tokenk = tokenk;
+	}
+	else
 	{
 		Assert(!pScanner->madeToken);
 
@@ -744,9 +751,10 @@ void makeToken(Scanner * pScanner, TOKENK tokenk, StringView lexeme, Token * poT
 		poToken->grferrtok = 0;
 
 		forceWrite(&pScanner->prevBuffer, *poToken);
-		pScanner->madeToken = true;
 		pScanner->iToken++;
 	}
+
+	pScanner->madeToken = true;
 }
 
 void makeErrorToken(Scanner * pScanner, GRFERRTOK grferrtok, Token * poToken)
@@ -873,19 +881,32 @@ bool checkEndOfFile(Scanner * pScanner, int lookahead)
 	// NOTE: 0 lookahead checks the next character, so we still want to
 	//	run this loop iteration at least once, hence <=
 
-	for (int i = 0; i <= lookahead; i++)
+	if (pScanner->isSpeculating)
 	{
-		if (!(pScanner->pText + pScanner->iText + i))
+		for (int i = 0; i <= lookahead; i++)
 		{
-			pScanner->scanexitk = SCANEXITK_ReadNullTerminator;
-			return true;
+			if (!(pScanner->pText + pScanner->iTextSpeculative + i))
+			{
+				return true;
+			}
 		}
 	}
-
-	if (pScanner->iText + lookahead >= pScanner->textSize)
+	else
 	{
-		if (lookahead == 0) pScanner->scanexitk = SCANEXITK_ReadAllBytes;
-		return true;
+		for (int i = 0; i <= lookahead; i++)
+		{
+			if (!(pScanner->pText + pScanner->iText + i))
+			{
+				pScanner->scanexitk = SCANEXITK_ReadNullTerminator;
+				return true;
+			}
+		}
+
+		if (pScanner->iText + lookahead >= pScanner->textSize)
+		{
+			if (lookahead == 0) pScanner->scanexitk = SCANEXITK_ReadAllBytes;
+			return true;
+		}
 	}
 
 	return false;
