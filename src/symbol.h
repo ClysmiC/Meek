@@ -111,13 +111,12 @@ void dispose(SymbolTable * pSymbTable);
 void insertBuiltInSymbols(SymbolTable * pSymbolTable);
 
 NULLABLE SymbolInfo * lookupVarSymb(const SymbolTable & symbTable, const ScopedIdentifier & ident);
+NULLABLE SymbolInfo * lookupVarSymb(const SymbolTable & symbTable, Token * pIdentToken, const Stack<Scope> scopeStack);
+
 NULLABLE SymbolInfo * lookupTypeSymb(const SymbolTable & symbTable, const ScopedIdentifier & ident);
 
-// Look up all matching funcs if you already know it's scopeid
-NULLABLE DynamicArray<SymbolInfo> * lookupFuncSymb(const SymbolTable & symbTable, const ScopedIdentifier & ident);
-
-// Look up all matching funcs for a given scope stack
-void lookupFuncSymb(const SymbolTable & symbTable, Token * pFuncToken, const Stack<Scope> scopeStack, DynamicArray<SymbolInfo> * poResults);
+void lookupFuncSymb(const SymbolTable & symbTable, const ScopedIdentifier & ident, DynamicArray<SymbolInfo *> * poResults);
+void lookupFuncSymb(const SymbolTable & symbTable, Token * pIdentToken, const Stack<Scope> scopeStack, DynamicArray<SymbolInfo *> * poResults);
 
 bool tryInsert(SymbolTable * pSymbolTable, const ScopedIdentifier & ident, const SymbolInfo & symbInfo, const Stack<Scope> & scopeStack);
 bool tryResolvePendingFuncSymbolsAfterTypesResolved(SymbolTable * pSymbTable);

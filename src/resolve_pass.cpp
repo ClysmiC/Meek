@@ -148,68 +148,41 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 
 					//
 					// NOTE (andrew) We are only responsible for gathering the candidates here. The parent node is responsible for
-					//	for choosing one based on the following algorithm:
-					//
-					//	-Loop from current scope to root scope. At each scope:
-					//		-If there is a variable whose name + supplied context matches, either exactly or with type coercion.
-					//			-Choose it.
-					//		-Else if there is a function whose name + supplied context exactly matches:
-					//			-Choose it
-					//		-Else if there is a function whose name + supplied context matches after type coercion:
-					//			-Choose it
-					//		-Else if there are multiple functions whose name + supplied context matches after type coercion:
-					//			-Ambiguous. Report error.
-					//		-Move up to next scope
-					//
-					//	-Nothing found? Report unresolved error.
-					//
-					// NOTE (andrew) Insertion order of candidates allows the parent to perform the above by scanning through linearly.
+					//	for choosing one. The order that we collect the candidates matter, as the selection algorithm is as follows:
 					//
 
-					bool varFound = false;
-					for (int i = 0; i < count(pPass->scopeStack); i++)
+					// Lookup all funcs matching this identifier
+
 					{
-						SCOPEID scopeidCandidate = peekFar(pPass->scopeStack, i).id;
+						lookupFuncSymb(*pPass->pSymbTable, pExpr->pTokenIdent, pPass->scopeStack, &pExpr->unresolvedData.apCandidates);
+					}
 
-						ScopedIdentifier candidate;
-						setIdent(&candidate, pExpr->pTokenIdent, scopeidCandidate);
+					// Lookup var matching this identifier, and slot it in where it fits
 
-						// First look for variable defn. Only 1 var is permitted -- any vars in higher scopes would be shadowed.
+					{
+						SymbolInfo * pSymbInfoVar = lookupVarSymb(*pPass->pSymbTable, pExpr->pTokenIdent, pPass->scopeStack);
 
-						if (!varFound && !pExpr->unresolvedData.ignoreVars)
+						if (pSymbInfoVar)
 						{
-							SymbolInfo * pSymbInfo = lookupVarSymb(*pPass->pSymbTable, candidate);
-							
-							Assert(Implies(pSymbInfo, pSymbInfo->symbolk == SYMBOLK_Var));
+							Assert(pSymbInfoVar->symbolk == SYMBOLK_Var);
+							SCOPEID scopeidVar = pSymbInfoVar->pVarDeclStmt->ident.defnclScopeid;
 
-							if (pSymbInfo && pSymbInfo->pVarDeclStmt->symbseqid <= pPass->lastSymbseqid)
+							int iInsert = 0;
+							for (int iCandidate = 0; iCandidate < pExpr->unresolvedData.apCandidates.cItem; iCandidate++)
 							{
-								append(&pExpr->unresolvedData.apCandidates, pSymbInfo);
-								varFound = true;
-							}
-						}
+								SymbolInfo * pSymbInfoCandidate = pExpr->unresolvedData.apCandidates[iCandidate];
+								Assert(pSymbInfoCandidate->symbolk == SYMBOLK_Func);
 
-						// Then look for function defns
-						
-						{
-							DynamicArray<SymbolInfo> * paSymbInfo = lookupFuncSymb(*pPass->pSymbTable, candidate);
-
-							if (paSymbInfo)
-							{
-								// No symbseqid check for funcs. Funcs definitions depend only on scope, are otherwise order-agnostic.
-
-								for (int iSymbInfo = 0; iSymbInfo < paSymbInfo->cItem; iSymbInfo++)
+								SCOPEID scopeidFunc = pSymbInfoCandidate->pFuncDefnStmt->ident.defnclScopeid;
+								
+								if (scopeidVar >= scopeidFunc)
 								{
-									// NOTE (andrew) We make no attempt to not insert shadowed functions. Due to the algorithm
-									//	(see above), the parent won't look at the parent scope if it matches one at a lower level.
-									//	And if it doesn't match with one at a lower level, we don't need to fear it matching the
-									//	shadowed version at a higher level (since func names are only shadowed if their names
-									//	*and* signatures match).
-
-									SymbolInfo * pSymbInfo = &(*paSymbInfo)[iSymbInfo];
-									append(&pExpr->unresolvedData.apCandidates, pSymbInfo);
+									iInsert = iCandidate;
+									break;
 								}
 							}
+
+							insert(&pExpr->unresolvedData.apCandidates, pSymbInfoVar, iInsert);
 						}
 					}
 
@@ -308,56 +281,64 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 
 				case SYMBEXPRK_Func:
 				{
-					Assert(!pExpr->funcData.pDefnCached, "This shouldn't be resolved yet because this is the code that should resolve it!");
+					AssertInfo(!pExpr->funcData.pDefnCached, "This shouldn't be resolved yet because this is the code that should resolve it!");
 
-					for (int iScope = 0; iScope < count(pPass->scopeStack); iScope++)
+					DynamicArray<SymbolInfo *> apSymbInfoFuncCandidates;
+					init(&apSymbInfoFuncCandidates);
+					Defer(dispose(&apSymbInfoFuncCandidates));
+
+					lookupFuncSymb(*pPass->pSymbTable, pExpr->pTokenIdent, pPass->scopeStack, &apSymbInfoFuncCandidates);
+
+					AstFuncDefnStmt * pFuncDefnStmtMatch = nullptr;
+					for (int iCandidate = 0; iCandidate < apSymbInfoFuncCandidates.cItem; iCandidate++)
 					{
-						SCOPEID scopeid = peekFar(pPass->scopeStack, iScope).id;
+						Assert(apSymbInfoFuncCandidates[iCandidate]->symbolk == SYMBOLK_Func);
 
-						ScopedIdentifier identCandidate;
-						setIdent(&identCandidate, pExpr->pTokenIdent, scopeid);
-
-						DynamicArray<SymbolInfo> * paSymbInfoFuncCandidates = lookupFuncSymb(*pPass->pSymbTable, identCandidate);
-
-						for (int iCandidate = 0; iCandidate < paSymbInfoFuncCandidates->cItem; iCandidate++)
+						AstFuncDefnStmt * pCandidateDefnStmt = apSymbInfoFuncCandidates[iCandidate]->pFuncDefnStmt;
+						if (pCandidateDefnStmt->pParamsReturnsGrp->apParamVarDecls.cItem != pExpr->funcData.aTypidDisambig.cItem)
 						{
-							Assert((*paSymbInfoFuncCandidates)[iCandidate].symbolk == SYMBOLK_Func);
-							AstFuncDefnStmt * pCandidateDefnStmt = (*paSymbInfoFuncCandidates)[iCandidate].pFuncDefnStmt;
+							continue;
+						}
 
-							if (pCandidateDefnStmt->pParamsReturnsGrp->apParamVarDecls.cItem != pExpr->funcData.aTypidDisambig.cItem)
-								continue;
+						bool allArgsMatch = true;
+						for (int iParam = 0; iParam < pExpr->funcData.aTypidDisambig.cItem; iParam++)
+						{
+							TYPID typidDisambig = pExpr->funcData.aTypidDisambig[iParam];
+							Assert(isTypeResolved(typidDisambig));
 
-							bool match = true;
-							for (int iParam = 0; iParam < pExpr->funcData.aTypidDisambig.cItem; iParam++)
+							Assert(pCandidateDefnStmt->pParamsReturnsGrp->apParamVarDecls[iParam]->astk == ASTK_VarDeclStmt);
+							auto * pNode = Down(pCandidateDefnStmt->pParamsReturnsGrp->apParamVarDecls[iParam], VarDeclStmt);
+
+							TYPID typidCandidate = pNode->typid;
+							Assert(isTypeResolved(typidCandidate));
+
+							// NOTE (andrews) Don't want any type coercion here. The disambiguating types provided should
+							//	match a function exactly!
+
+							if (typidDisambig != typidCandidate)
 							{
-								TYPID typidDisambig = pExpr->funcData.aTypidDisambig[iParam];
-								Assert(isTypeResolved(typidDisambig));
-
-								Assert(pCandidateDefnStmt->pParamsReturnsGrp->apParamVarDecls[iParam]->astk == ASTK_VarDeclStmt);
-								auto * pNode = Down(pCandidateDefnStmt->pParamsReturnsGrp->apParamVarDecls[iParam], VarDeclStmt);
-
-								TYPID typidCandidate = pNode->typid;
-								Assert(isTypeResolved(typidCandidate));
-
-								// NOTE (andrews) Don't want any type coercion here. The disambiguating types provided should
-								//	match a function exactly!
-
-								if (typidDisambig != typidCandidate)
-								{
-									match = false;
-									break;
-								}
-							}
-
-							if (match)
-							{
-								// Resolve!
-
-								pExpr->funcData.pDefnCached = pCandidateDefnStmt;
-								typidResult = pCandidateDefnStmt->typid;
+								allArgsMatch = false;
+								break;
 							}
 						}
 
+						if (allArgsMatch)
+						{
+							pFuncDefnStmtMatch = pCandidateDefnStmt;
+							break;
+						}
+					}
+
+
+					if (pFuncDefnStmtMatch)
+					{
+						// Resolve!
+
+						pExpr->funcData.pDefnCached = pFuncDefnStmtMatch;
+						typidResult = pFuncDefnStmtMatch->typid;
+					}
+					else
+					{
 						// Unresolved
 						// TODO: Add this to a resolve error list... don't print inline right here!
 
@@ -366,7 +347,6 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 						println();
 
 						typidResult = TYPID_Unresolved;
-						goto LEndSetTypidAndReturn;
 					}
 				} break;
 			}
@@ -1034,15 +1014,18 @@ void resolveStmt(ResolvePass * pPass, AstNode * pNode)
 			{
 				// Verify assumptions
 
-				DynamicArray<SymbolInfo> * paSymbInfo;
-				paSymbInfo = lookupFuncSymb(*pPass->pSymbTable, pStmt->ident);
+				DynamicArray<SymbolInfo * > apSymbInfo;
+				init(&apSymbInfo);
+				Defer(dispose(&apSymbInfo));
 
-				AssertInfo(paSymbInfo && paSymbInfo->cItem > 0, "We should have put this func decl in the symbol table when we parsed it...");
+				lookupFuncSymb(*pPass->pSymbTable, pStmt->ident, &apSymbInfo);
+
+				AssertInfo(apSymbInfo.cItem > 0, "We should have put this func decl in the symbol table when we parsed it...");
 				bool found = false;
 
-				for (int i = 0; i < paSymbInfo->cItem; i++)
+				for (int i = 0; i < apSymbInfo.cItem; i++)
 				{
-					SymbolInfo * pSymbInfo = &(*paSymbInfo)[i];
+					SymbolInfo * pSymbInfo = apSymbInfo[i];
 					Assert(pSymbInfo->symbolk == SYMBOLK_Func);
 
 					if (pStmt->typid == pSymbInfo->pFuncDefnStmt->typid)

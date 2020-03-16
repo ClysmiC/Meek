@@ -1371,6 +1371,8 @@ AstNode * parseFuncSymbolExpr(Parser * pParser)
 		pNode->symbexprk = SYMBEXPRK_Unresolved;
 		pNode->unresolvedData.ignoreVars = true;
 		init(&pNode->unresolvedData.apCandidates);
+
+		return Up(pNode);
 	}
 	else if (tokenkNextNext == TOKENK_OpenParen)
 	{
@@ -1408,7 +1410,13 @@ AstNode * parseFuncSymbolExpr(Parser * pParser)
 	}
 	else
 	{
-		// Expected ( or identifier
+		auto startEndPrev = prevTokenStartEnd(pParser->pScanner);
+
+		auto * pErr = AstNewErr0Child(pParser, ExpectedTokenkErr, makeStartEnd(startEndPrev.iEnd + 1));
+		append(&pErr->aTokenkValid, TOKENK_Identifier);
+		append(&pErr->aTokenkValid, TOKENK_OpenParen);
+
+		return Up(pErr);
 	}
 }
 

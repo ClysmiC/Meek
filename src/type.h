@@ -85,7 +85,9 @@ bool areTypidListTypesFullyResolved(const DynamicArray<TYPID> & aTypid);
 bool areVarDeclListTypesFullyResolved(const DynamicArray<AstNode *> & apVarDecls);
 bool areVarDeclListTypesEq(const DynamicArray<AstNode *> & apVarDecls0, const DynamicArray<AstNode *> & apVarDecls1);
 
-bool areTypidListAndVarDeclListTypesEq(const DynamicArray<TYPID> & aTypid, const DynamicArray<AstNode *> & apVarDecls);
+bool areTypidListTypesEq(const DynamicArray<TYPID> & aTypid0, const DynamicArray<TYPID> & aTypid1);
+
+// bool areTypidListAndVarDeclListTypesEq(const DynamicArray<TYPID> & aTypid, const DynamicArray<AstNode *> & apVarDecls);
 
 inline uint typidHash(const TYPID & typid)
 {
@@ -134,6 +136,8 @@ struct TypeTable
 void init(TypeTable * pTable);
 void insertBuiltInTypes(TypeTable * pTable);
 NULLABLE const Type * lookupType(const TypeTable & table, TYPID typid);
+
+NULLABLE const FuncType * funcTypeFromDefnStmt(const TypeTable & typeTable, const AstFuncDefnStmt & defnStmt);
 
 
 TYPID ensureInTypeTable(TypeTable * pTable, const Type & type, bool debugAssertIfAlreadyInTable=false);

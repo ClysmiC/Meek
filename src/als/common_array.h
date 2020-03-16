@@ -291,25 +291,24 @@ void appendMultiple(DynamicArray<T> * pArray, DynamicArray<T> & arrayToAppend)
 }
 
 template <typename T>
-void prepend(DynamicArray<T> * pArray, const T & t)
+void insert(DynamicArray<T> * pArray, const T & t, int i)
 {
-	// Slowest way to insert
-
-	// Could probably optimize this somehow by writing a version of ensureCapacity that leaves a hole
-	//	at the specified index. That way we wouldn't have to do any shifting after reallocating...
-	//	but then again we wouldn't be able to use realloc which already might do some allocator
-	//	magic to avoid a copy. So probably not worth it...
-
 	ensureCapacity(pArray, pArray->cItem + 1);
 
-	unsigned int cItemShift = pArray->cItem;
-	T * pDst = pArray->pBuffer + 1;
-	T * pSrc = pArray->pBuffer;
+	unsigned int cItemShift = pArray->cItem - i;
+	T * pDst = pArray->pBuffer + i + 1;
+	T * pSrc = pArray->pBuffer + i;
 
 	memmove(pDst, pSrc, cItemShift * sizeof(T));
 
-	pArray->pBuffer[0] = t;
+	pArray->pBuffer[i] = t;
 	pArray->cItem++;
+}
+
+template <typename T>
+void prepend(DynamicArray<T> * pArray, const T & t)
+{
+	insert(pArray, t, 0);
 }
 
 template <typename T>

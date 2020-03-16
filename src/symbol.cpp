@@ -210,13 +210,15 @@ bool tryInsert(
 		// Check for duplicate in own scope w/ same parameter signature
 
 		{
-			DynamicArray<SymbolInfo> * paFuncsSameNameAndScope;
+			DynamicArray<SymbolInfo *> apFuncsSameNameAndScope;
+			init(&apFuncsSameNameAndScope);
+			Defer(dispose(&apFuncsSameNameAndScope));
 
-			paFuncsSameNameAndScope = lookupFuncSymb(*pSymbolTable, ident);
+			lookupFuncSymb(*pSymbolTable, ident, &apFuncsSameNameAndScope);
 
-			for (int i = 0; i < paFuncsSameNameAndScope->cItem; i++)
+			for (int i = 0; i < apFuncsSameNameAndScope.cItem; i++)
 			{
-				SymbolInfo * pSymbInfoCandidate = &(*paFuncsSameNameAndScope)[i];
+				SymbolInfo * pSymbInfoCandidate = apFuncsSameNameAndScope[i];
 				Assert(pSymbInfoCandidate->symbolk == SYMBOLK_Func);
 
 				AstFuncDefnStmt * pFuncDefnStmtOther = pSymbInfoCandidate->pFuncDefnStmt;
@@ -273,28 +275,79 @@ NULLABLE SymbolInfo * lookupVarSymb(const SymbolTable & symbTable, const ScopedI
 	return lookup(symbTable.varTable, ident);
 }
 
+NULLABLE SymbolInfo * lookupVarSymb(const SymbolTable & symbTable, Token * pIdentToken, const Stack<Scope> scopeStack)
+{
+	for (int i = 0; i < count(scopeStack); i++)
+	{
+		ScopedIdentifier candidateIdent;
+		setIdent(&candidateIdent, pIdentToken, peekFar(scopeStack, i).id);
+
+		SymbolInfo * pSymbInfo = lookupVarSymb(symbTable, candidateIdent);
+		if (pSymbInfo)
+		{
+			return pSymbInfo;
+		}
+	}
+
+	return nullptr;
+}
+
 NULLABLE SymbolInfo * lookupTypeSymb(const SymbolTable & symbTable, const ScopedIdentifier & ident)
 {
 	return lookup(symbTable.typeTable, ident);
 }
 
-NULLABLE DynamicArray<SymbolInfo> * lookupFuncSymb(const SymbolTable & symbTable, const ScopedIdentifier & ident)
+void lookupFuncSymb(const SymbolTable & symbTable, const ScopedIdentifier & ident, DynamicArray<SymbolInfo *> * poResults)
 {
-	return lookup(symbTable.funcTable, ident);
+	DynamicArray<SymbolInfo> * paSymbol = lookup(symbTable.funcTable, ident);
+	if (!paSymbol)
+	{
+		return;
+	}
+
+	for (int iSymbol = 0; iSymbol < paSymbol->cItem; iSymbol++)
+	{
+		append(poResults, &(*paSymbol)[iSymbol]);
+	}
 }
 
-void lookupFuncSymb(const SymbolTable & symbTable, Token * pFuncToken, const Stack<Scope> scopeStack, DynamicArray<SymbolInfo> * poResults)
+void lookupFuncSymb(const SymbolTable & symbTable, Token * pIdentToken, const Stack<Scope> scopeStack, DynamicArray<SymbolInfo *> * poResults)
 {
 	for (int i = 0; i < count(scopeStack); i++)
 	{
 		ScopedIdentifier candidateIdent;
-		setIdent(&candidateIdent, pFuncToken, peekFar(scopeStack, i).id);
+		setIdent(&candidateIdent, pIdentToken, peekFar(scopeStack, i).id);
 
-		auto * pArray = lookupFuncSymb(symbTable, candidateIdent);
+		DynamicArray<SymbolInfo *> apSymbInfoRaw;
+		init(&apSymbInfoRaw);
+		Defer(dispose(&apSymbInfoRaw));
 
-		if (pArray)
+		lookupFuncSymb(symbTable, candidateIdent, &apSymbInfoRaw);
+
+		// @Slow
+
+		for (int iSymbInfo = 0; iSymbInfo < apSymbInfoRaw.cItem; iSymbInfo++)
 		{
-			appendMultiple(poResults, pArray->pBuffer, pArray->cItem);
+			SymbolInfo * pSymbInfo = apSymbInfoRaw[iSymbInfo];
+			Assert(pSymbInfo->symbolk == SYMBOLK_Func);
+
+			bool shadowed = false;
+			for (int iSymbInfoResult = 0; iSymbInfoResult < poResults->cItem; iSymbInfoResult++)
+			{
+				SymbolInfo * pSymbInfoResult = (*poResults)[iSymbInfoResult];
+				Assert(pSymbInfoResult->symbolk == SYMBOLK_Func);
+
+				if (pSymbInfoResult->pFuncDefnStmt->typid == pSymbInfo->pFuncDefnStmt->typid)
+				{
+					shadowed = true;
+					break;
+				}
+			}
+
+			if (!shadowed)
+			{
+				append(poResults, pSymbInfo);
+			}
 		}
 	}
 }

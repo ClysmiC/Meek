@@ -85,6 +85,22 @@ bool isFuncTypeResolved(const FuncType & funcType)
 	return true;
 }
 
+NULLABLE const FuncType * funcTypeFromDefnStmt(const TypeTable & typeTable, const AstFuncDefnStmt & defnStmt)
+{
+	Assert(isTypeResolved(defnStmt.typid));
+	const Type * pType = lookupType(typeTable, defnStmt.typid);
+	Assert(pType);
+
+	if (pType->isFuncType)
+	{
+		return &pType->funcType;
+	}
+	else
+	{
+		return nullptr;
+	}
+}
+
 bool isTypeInferred(const Type & type)
 {
 	bool result = (type.ident.pToken->lexeme == "var");
@@ -314,27 +330,51 @@ bool areVarDeclListTypesEq(const DynamicArray<AstNode *> & apVarDecls0, const Dy
 	return true;
 }
 
-bool areTypidListAndVarDeclListTypesEq(const DynamicArray<TYPID> & aTypid, const DynamicArray<AstNode *> & apVarDecls)
+bool areTypidListTypesEq(const DynamicArray<TYPID> & aTypid0, const DynamicArray<TYPID> & aTypid1)
 {
-	AssertInfo(areVarDeclListTypesFullyResolved(apVarDecls), "This shouldn't be called before types are resolved!");
-	AssertInfo(areTypidListTypesFullyResolved(aTypid), "This shouldn't be called before types are resolved!");
-
-	if (aTypid.cItem != apVarDecls.cItem) return false;
-
-	for (int i = 0; i < aTypid.cItem; i++)
+	if (aTypid0.cItem != aTypid1.cItem)
 	{
-		TYPID typid0 = aTypid[i];
+		return false;
+	}
 
-		Assert(apVarDecls[i]->astk == ASTK_VarDeclStmt);
-		auto * pVarDeclStmt = Down(apVarDecls[i], VarDeclStmt);
+	for (int iTypid = 0; iTypid < aTypid0.cItem; iTypid++)
+	{
+		TYPID typid0 = aTypid0[iTypid];
+		TYPID typid1 = aTypid1[iTypid];
 
-		TYPID typid1 = pVarDeclStmt->typid;
+		Assert(isTypeResolved(typid0));
+		Assert(isTypeResolved(typid1));
 
-		if (typid0 != typid1) return false;
+		if (typid0 != typid1)
+		{
+			return false;
+		}
 	}
 
 	return true;
 }
+
+//bool areTypidListAndVarDeclListTypesEq(const DynamicArray<TYPID> & aTypid, const DynamicArray<AstNode *> & apVarDecls)
+//{
+//	AssertInfo(areVarDeclListTypesFullyResolved(apVarDecls), "This shouldn't be called before types are resolved!");
+//	AssertInfo(areTypidListTypesFullyResolved(aTypid), "This shouldn't be called before types are resolved!");
+//
+//	if (aTypid.cItem != apVarDecls.cItem) return false;
+//
+//	for (int i = 0; i < aTypid.cItem; i++)
+//	{
+//		TYPID typid0 = aTypid[i];
+//
+//		Assert(apVarDecls[i]->astk == ASTK_VarDeclStmt);
+//		auto * pVarDeclStmt = Down(apVarDecls[i], VarDeclStmt);
+//
+//		TYPID typid1 = pVarDeclStmt->typid;
+//
+//		if (typid0 != typid1) return false;
+//	}
+//
+//	return true;
+//}
 
 void init(TypeTable * pTable)
 {
