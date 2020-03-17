@@ -109,9 +109,6 @@ enum ASTK : u8
 	ASTK_GrpMax,
 
 	ASTK_Program,
-
-	// NOTE: If you add more misc ASTK's down here (i.e., not Stmt, Expr, Err), make sure to update
-	//	the ASTCATK functions
 };
 
 // IMPORTANT: All AstNodes in the tree are the exact same struct (AstNode). Switch on the ASTK to
@@ -202,6 +199,9 @@ struct AstErr
 
 	DynamicArray<AstNode *> apChildren;
 };
+#if 0
+static constexpr uint s_nodeSizeDebug = sizeof(AstErr);
+#endif
 
 
 
@@ -263,30 +263,33 @@ struct AstSymbolExpr
 
 	union
 	{
-		struct _UnresolvedSymbExpr
+		struct UUnresolvedData
 		{
 			bool ignoreVars;
 			DynamicArray<SymbolInfo *> apCandidates;	// Candidates set by resolve pass. Parent node is responsible for choosing the correct candidate.
 		} unresolvedData;
 
-		struct _VarSymbExpr
+		struct UVarData
 		{
 			NULLABLE AstVarDeclStmt * pDeclCached;		// Set in resolve pass. Not a child node.
 		} varData;
 
-		struct _MemberVarSymbExpr
+		struct UMemberData
 		{
 			AstNode * pOwner;
 			NULLABLE AstVarDeclStmt * pDeclCached;		// Set in resolve pass. Not a child node.
 		} memberData;
 
-		struct _FuncVarSymbExpr
+		struct UFuncData
 		{
 			DynamicArray<TYPID> aTypidDisambig;			// Disambiguating typeid's supplied by the programmer
 			NULLABLE AstFuncDefnStmt * pDefnCached;		// Set in resolve pass. Not a child node.
 		} funcData;
 	};
 };
+#if 0
+static constexpr uint s_nodeSizeDebug = sizeof(AstSymbolExpr);
+#endif
 
 struct AstPointerDereferenceExpr
 {
@@ -336,6 +339,9 @@ struct AstExpr
 
 	TYPID typid = TYPID_Unresolved;
 };
+#if 0
+static constexpr uint s_nodeSizeDebug = sizeof(AstExpr);
+#endif
 
 
 
@@ -387,7 +393,7 @@ struct AstFuncDefnStmt
 	SYMBSEQID symbseqid;
 	TYPID typid;			// typid corresponding to this func type (not the typid of the return value(s))
 };
-#if 0
+#if 1
 	static constexpr uint s_nodeSizeDebug = sizeof(AstFuncDefnStmt);
 #endif
 
@@ -418,34 +424,6 @@ struct AstReturnStmt
 struct AstBreakStmt {};
 struct AstContinueStmt {};
 
-//struct AstFuncDefnHeaderGrp
-//{
-//	ScopedIdentifier ident;
-//	SYMBSEQID symbseqid;
-//	AstNode * pParamListGrp;
-//	AstNode * pReturnListGrp;
-//};
-//
-//struct AstFuncLiteralHeaderGrp
-//{
-//	AstNode * pParamListGrp;
-//	AstNode * pReturnListGrp;
-//};
-//
-//struct AstParamListGrp
-//{
-//	DynamicArray<AstNode *> apVarDecls;
-//};
-//
-//struct AstReturnListGrp
-//{
-//	DynamicArray<AstNode *> apVarDecls;
-//};
-//
-//struct AstTypeListGrp
-//{
-//};
-
 
 
 // Program
@@ -461,11 +439,9 @@ struct AstProgram
 
 struct AstNode
 {
-	// Compiler implicitly deleted this constructor because of the union trickery it seems. Lame.
-
 	AstNode() {}
 
-	// First union trick is to force this struct to 32 bytes
+	// First union trick is to force this struct to 64 bytes
 
 	union
 	{
@@ -501,11 +477,7 @@ struct AstNode
 
 				// GRP
 
-				//AstFuncDefnHeaderGrp	funcDefnHeaderGrp;
-				//AstFuncLiteralHeaderGrp	funcLiteralHeaderGrp;
-				//AstParamListGrp			paramListGrp;
-				//AstReturnListGrp		returnListGrp;
-				//AstTypeListGrp			typeListGrp;
+				AstParamsReturnsGrp		paramsReturnsGrp;
 
 				// PROGRAM
 
@@ -528,11 +500,17 @@ struct AstNode
 	};
 };
 
-StaticAssert(sizeof(AstNode) <= 64);		// Goal: Make it so each AstNode fits in a cache line.
+// TODO: try to make this true again:
+
+// StaticAssert(sizeof(AstNode) <= 64);		// Goal: Make it so each AstNode fits in a cache line.
 											//  For any additional per-node data that isn't "hot", use decorator tables. See ast_decorate.h/.cpp
 											// TODO: Make sure we have an option for our allocator to align these to cache lines!
 											//  (have dynamic allocator allocate an extra 64 bytes and point the "actual" buffer to
 											//  an aligned spot?
+
+#if 0
+static constexpr uint s_nodeSizeDebug = sizeof(AstNode);
+#endif
 
 
 

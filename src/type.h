@@ -42,23 +42,32 @@ struct FuncType
 
 struct Type
 {
+	Type() {}
+
 	union
 	{
-		ScopedIdentifier ident;		// !isFuncType
-		FuncType funcType;			// isFuncType
+		struct UNonFuncTypeData
+		{
+			ScopedIdentifier ident;
+		} nonFuncTypeData;
+
+		struct UFuncTypeData
+		{
+			FuncType funcType;
+		} funcTypeData;
 	};
 
 	DynamicArray<TypeModifier> aTypemods;
 	bool isFuncType = false;
+	bool isInferred = false;
 };
 
 void init(Type * pType, bool isFuncType);
-void initMove(Type * pType, Type * pTypeSrc);
-void initCopy(Type * pType, const Type & typeSrc);
+//void initMove(Type * pType, Type * pTypeSrc);
+//void initCopy(Type * pType, const Type & typeSrc);
 void dispose(Type * pType);
 
 bool isTypeResolved(const Type & type);
-bool isTypeInferred(const Type & type);
 bool isUnmodifiedType(const Type & type);
 bool isPointerType(const Type & type);
 
@@ -106,7 +115,7 @@ struct TypePendingResolve
 {
 	// Info we need to resolve the type
 
-	Stack<Scope> scopeStack;
+	Scope * pScope;
 	Type * pType;
 
 	// Typid value to poke into corresponding AST node when we succeed resolving
@@ -134,15 +143,12 @@ struct TypeTable
 };
 
 void init(TypeTable * pTable);
-void insertBuiltInTypes(TypeTable * pTable);
 NULLABLE const Type * lookupType(const TypeTable & table, TYPID typid);
 
 NULLABLE const FuncType * funcTypeFromDefnStmt(const TypeTable & typeTable, const AstFuncDefnStmt & defnStmt);
 
 
 TYPID ensureInTypeTable(TypeTable * pTable, const Type & type, bool debugAssertIfAlreadyInTable=false);
-
-bool tryResolveType(Type * pType, const SymbolTable & symbolTable, const Stack<Scope> & scopeStack);
 
 bool tryResolveAllTypes(Parser * pParser);
 

@@ -38,11 +38,13 @@ void init(Parser * pParser, Scanner * pScanner)
 	init(&pParser->astAlloc);
 	init(&pParser->tokenAlloc);
 	init(&pParser->typeAlloc);
-	init(&pParser->scopeStack);
-	init(&pParser->symbTable);
 	init(&pParser->typeTable);
+	init(&pParser->scopeAlloc);
 	init(&pParser->astDecs);
 	init(&pParser->apErrorNodes);
+
+	pParser->pScopeRoot = allocate(&pParser->scopeAlloc);
+	init(pParser->pScopeRoot, SCOPEID_BuiltIn, SCOPEK_BuiltIn, nullptr);
 }
 
 AstNode * parseProgram(Parser * pParser, bool * poSuccess)
@@ -50,14 +52,7 @@ AstNode * parseProgram(Parser * pParser, bool * poSuccess)
 	// NOTE: Empty program is valid to parse, but I may still decide that
 	//	that is a semantic error...
 
-	pushScope(pParser, SCOPEK_BuiltIn);
-	Assert(peekScope(pParser).id == SCOPEID_BuiltIn);
-
-	insertBuiltInTypes(&pParser->typeTable);
-	insertBuiltInSymbols(&pParser->symbTable);
-
 	pushScope(pParser, SCOPEK_Global);
-	Assert(peekScope(pParser).id == SCOPEID_Global);
 
 	DynamicArray<AstNode *> apNodes;
 	init(&apNodes);
@@ -445,7 +440,7 @@ AstNode * parseExprStmtOrAssignStmt(Parser * pParser)
 
 AstNode * parseStructDefnStmt(Parser * pParser)
 {
-	SCOPEID declScope = peekScope(pParser).id;
+	Scope * pScopeDefn = pParser->pScopeCurrent;
 	int iStart = peekTokenStartEnd(pParser->pScanner).iStart;
 
 	// Parse 'struct'
@@ -471,8 +466,8 @@ AstNode * parseStructDefnStmt(Parser * pParser)
 		return Up(pErr);
 	}
 
-	Token * pIdentTok = claimPendingToken(pParser);
-	Assert(pIdentTok->tokenk == TOKENK_Identifier);
+	Token * pTokenIdent = claimPendingToken(pParser);
+	Assert(pTokenIdent->tokenk == TOKENK_Identifier);
 
 	// Parse '{'
 
@@ -485,9 +480,8 @@ AstNode * parseStructDefnStmt(Parser * pParser)
 		return Up(pErr);
 	}
 
-	bool success = false;
-	pushScope(pParser, SCOPEK_StructDefn);
-	Defer(if (!success) popScope(pParser));		// NOTE: In success case we pop it manually before inserting into symbol table
+	Scope * pScopeIntroduced = pushScope(pParser, SCOPEK_StructDefn);
+	Defer(popScope(pParser));
 
 	// TODO: Allow nested struct definitions!
 
@@ -528,27 +522,27 @@ AstNode * parseStructDefnStmt(Parser * pParser)
 
 	int iEnd = prevTokenStartEnd(pParser->pScanner).iEnd;
 
-	success = true;
-
 	auto * pNode = AstNew(pParser, StructDefnStmt, makeStartEnd(iStart, iEnd));
-	setIdent(&pNode->ident, pIdentTok, declScope);
+	pNode->ident.lexeme = pTokenIdent->lexeme;
+	pNode->ident.scopeid = pScopeDefn->id;
 	initMove(&pNode->apVarDeclStmt, &apVarDeclStmt);
-	pNode->scopeid = peekScope(pParser).id;
+	pNode->scopeid = pScopeIntroduced->id;
 
 	// Insert into symbol table of enclosing scope
 
-	popScope(pParser);
-
 	SymbolInfo structDefnInfo;
-	setSymbolInfo(&structDefnInfo, pNode->ident, SYMBOLK_Struct, Up(pNode));
-	tryInsert(&pParser->symbTable, pNode->ident, structDefnInfo, pParser->scopeStack);
+	structDefnInfo.symbolk = SYMBOLK_Struct;
+	structDefnInfo.structData.pStructDefnStmt = pNode;
+
+	defineSymbol(pScopeDefn, pNode->ident.lexeme, structDefnInfo);
 
 	// Insert into type table
 
 	Type type;
 	init(&type, false /* isFuncType */);
 
-	type.ident = pNode->ident;
+	type.nonFuncTypeData.ident.lexeme = pNode->ident.lexeme;
+	type.nonFuncTypeData.ident.scopeid = pNode->ident.scopeid;
 	pNode->typidSelf = ensureInTypeTable(&pParser->typeTable, type, true /* debugAssertIfAlreadyInTable */ );
 
 	return Up(pNode);
@@ -560,7 +554,7 @@ AstNode * parseVarDeclStmt(Parser * pParser, EXPECTK expectkName, EXPECTK expect
 	AssertInfo(expectkSemicolon != EXPECTK_Optional, "Semicolon should either be required or forbidden");
 
 	AstErr * pErr = nullptr;
-	Token * pVarIdent = nullptr;
+	Token * pTokenIdent = nullptr;
 
 	int iStart = peekTokenStartEnd(pParser->pScanner).iStart;
 
@@ -584,8 +578,8 @@ AstNode * parseVarDeclStmt(Parser * pParser, EXPECTK expectkName, EXPECTK expect
 	{
 		if (tryConsumeToken(pParser->pScanner, TOKENK_Identifier, ensurePendingToken(pParser)))
 		{
-			pVarIdent = claimPendingToken(pParser);
-			Assert(pVarIdent->tokenk == TOKENK_Identifier);
+			pTokenIdent = claimPendingToken(pParser);
+			Assert(pTokenIdent->tokenk == TOKENK_Identifier);
 		}
 		else if (expectkName == EXPECTK_Required)
 		{
@@ -636,7 +630,7 @@ AstNode * parseVarDeclStmt(Parser * pParser, EXPECTK expectkName, EXPECTK expect
 
 	// Providing init expr isn't allowed if the var isn't named...
 
-	if (!pVarIdent && pInitExpr)
+	if (!pTokenIdent && pInitExpr)
 	{
 		Assert(iEqualStart != -1);
 		auto startEndPrev = prevTokenStartEnd(pParser->pScanner);
@@ -665,21 +659,29 @@ AstNode * parseVarDeclStmt(Parser * pParser, EXPECTK expectkName, EXPECTK expect
 
 	int iEnd = prevTokenStartEnd(pParser->pScanner).iEnd;
 
-	SCOPEID declScope = peekScope(pParser).id;
-
 	auto * pNode = AstNew(pParser, VarDeclStmt, makeStartEnd(iStart, iEnd));
-	setIdent(&pNode->ident, pVarIdent, declScope);
+	if (pTokenIdent)
+	{
+		pNode->ident.lexeme = pTokenIdent->lexeme;
+		pNode->ident.scopeid = pParser->pScopeCurrent->id;
+	}
+	else
+	{
+		setLexeme(&pNode->ident.lexeme, "");
+		pNode->ident.scopeid = SCOPEID_Nil;
+	}
 	pNode->pInitExpr = pInitExpr;
 
 	// Remember to poke in the typid once this type is resolved
 
 	pTypePendingResolve->pTypidUpdateOnResolve = &pNode->typid;
 
-	if (pNode->ident.pToken)
+	if (pTokenIdent)
 	{
 		SymbolInfo varDeclInfo;
-		setSymbolInfo(&varDeclInfo, pNode->ident, SYMBOLK_Var, Up(pNode));
-		tryInsert(&pParser->symbTable, pNode->ident, varDeclInfo, pParser->scopeStack);
+		varDeclInfo.symbolk = SYMBOLK_Var;
+		varDeclInfo.varData.pVarDeclStmt = pNode;
+		defineSymbol(pParser->pScopeCurrent, pTokenIdent->lexeme, varDeclInfo);
 	}
 
 	return Up(pNode);
@@ -687,9 +689,9 @@ AstNode * parseVarDeclStmt(Parser * pParser, EXPECTK expectkName, EXPECTK expect
 LFailCleanup:
 
 	Assert(pErr);
-	if (pVarIdent)
+	if (pTokenIdent)
 	{
-		release(&pParser->tokenAlloc, pVarIdent);
+		release(&pParser->tokenAlloc, pTokenIdent);
 	}
 
 	if (pTypePendingResolve)
@@ -939,7 +941,7 @@ AstNode * parseBlockStmt(Parser * pParser, bool pushPopScope)
 
 	auto * pNode = AstNew(pParser, BlockStmt, makeStartEnd(iStart, iEnd));
 	initMove(&pNode->apStmts, &apStmts);
-	pNode->scopeid = peekScope(pParser).id;
+	pNode->scopeid = pParser->pScopeCurrent->id;
 
 	return Up(pNode);
 }
@@ -1540,18 +1542,20 @@ ParseTypeResult tryParseType(Parser * pParser)
 		init(pType, false /* isFuncType */);
 		reinitMove(&pType->aTypemods, &aTypemods);
 
-		Token * pTypeIdent = ensureAndClaimPendingToken(pParser);
-		consumeToken(pParser->pScanner, pTypeIdent);
+		Token * pTokenIdent = ensureAndClaimPendingToken(pParser);
+		consumeToken(pParser->pScanner, pTokenIdent);
 
-		setIdentNoScope(&pType->ident, pTypeIdent);
+		pType->nonFuncTypeData.ident.lexeme = pTokenIdent->lexeme;
+		pType->nonFuncTypeData.ident.scopeid = SCOPEID_Nil;		// Not yet known
 
 		TypePendingResolve * pTypePendingResolve = appendNew(&pParser->typeTable.typesPendingResolution);
+		pTypePendingResolve->pScope = pParser->pScopeCurrent;
 		pTypePendingResolve->pType = pType;
 		pTypePendingResolve->pTypidUpdateOnResolve = nullptr;    // NOTE: Caller sets this value
-		initCopy(&pTypePendingResolve->scopeStack, pParser->scopeStack);
 
 		result.success = true;
 		result.pTypePendingResolve = pTypePendingResolve;
+
 		return result;
 	}
 	else if (tokenkPeek == TOKENK_Fn)
@@ -1565,7 +1569,7 @@ ParseTypeResult tryParseType(Parser * pParser)
 
 		ParseFuncHeaderParam param;
 		param.funcheaderk = FUNCHEADERK_Type;
-		param.paramType.pioFuncType = &pFnTypeUnderConstruction->funcType;
+		param.paramType.pioFuncType = &pFnTypeUnderConstruction->funcTypeData.funcType;
 
 		AstErr * pErr = tryParseFuncHeader(pParser, param);
 		if (pErr)
@@ -1578,12 +1582,13 @@ ParseTypeResult tryParseType(Parser * pParser)
 		// Success!
 
 		TypePendingResolve * pTypePendingResolve = appendNew(&pParser->typeTable.typesPendingResolution);
+		pTypePendingResolve->pScope = pParser->pScopeCurrent;
 		pTypePendingResolve->pType = pFnTypeUnderConstruction;
 		pTypePendingResolve->pTypidUpdateOnResolve = nullptr;    // NOTE: Caller sets this value
-		initCopy(&pTypePendingResolve->scopeStack, pParser->scopeStack);
 
 		result.success = true;
 		result.pTypePendingResolve = pTypePendingResolve;
+
 		return result;
 	}
 	else
@@ -1625,22 +1630,22 @@ AstErr * tryParseFuncHeader(Parser * pParser, const ParseFuncHeaderParam & param
 		FUNCHEADERK funcheaderk;
 		PARAMK paramk;
 
-		struct _FuncHeaderDefn				// FUNCHEADERK_Defn
+		struct UFuncHeaderDefn				// FUNCHEADERK_Defn
 		{
 			AstFuncDefnStmt * pioNode;
 		} paramDefn;
 
-		struct _FuncHeaderLiteral			// FUNCHEADERK_Literal
+		struct UFuncHeaderLiteral			// FUNCHEADERK_Literal
 		{
 			AstFuncLiteralExpr * pioNode;
 		} paramLiteral;
 
-		struct _FuncHeaderType				// FUNCHEADERK_Type
+		struct UFuncHeaderType				// FUNCHEADERK_Type
 		{
 			FuncType * pioFuncType;
 		} paramType;
 
-		struct _FuncHeaderSymbolExpr		// FUNCHEADERK_SymbolExpr
+		struct UFuncHeaderSymbolExpr		// FUNCHEADERK_SymbolExpr
 		{
 			AstSymbolExpr * pSymbExpr;
 		} paramSymbolExpr;
@@ -1855,7 +1860,8 @@ AstErr * tryParseFuncHeader(Parser * pParser, const ParseFuncHeaderParam & param
 			return UpErr(pErr);
 		}
 
-		setIdentNoScope(&param.paramDefn.pioNode->ident, claimPendingToken(pParser));		// Caller manages setting the scope on this ident.
+		param.paramDefn.pioNode->ident.lexeme = pParser->pPendingToken->lexeme;
+		param.paramDefn.pioNode->ident.scopeid = SCOPEID_Nil;		// NOTE (andrew) This gets set by caller
 	}
 	else
 	{
@@ -2133,8 +2139,11 @@ AstNode * parseFuncDefnStmtOrLiteralExpr(Parser * pParser, FUNCHEADERK funcheade
 	
 	// NOTE (andrew) Push scope before parsing header so that the symbols declared in the header
 	//	are subsumed by the function's scope.
+	
+	Scope * pScopeOuter = pParser->pScopeCurrent;
+	Scope * pScopeInner = pushScope(pParser, SCOPEK_CodeBlock);
 
-	pushScope(pParser, SCOPEK_CodeBlock);
+	Defer(popScope(pParser));
 
 	ParseFuncHeaderParam parseFuncHeaderParam;
 	parseFuncHeaderParam.funcheaderk = funcheaderk;
@@ -2201,20 +2210,16 @@ AstNode * parseFuncDefnStmtOrLiteralExpr(Parser * pParser, FUNCHEADERK funcheade
 	{
 		AstFuncDefnStmt * pNode = Down(pNodeUnderConstruction, FuncDefnStmt);
 		pNode->pBodyStmt = pBody;
-		pNode->scopeid = peekScope(pParser).id;
-
-		popScope(pParser);
-
-		// Insert into symbol table (pop first so the scope stack doesn't include the scope that the function itself pushed)
-		// TODO (andrew): Should place this in the symbol table before parsing body so that we can get it in even if the body has
-		//	errors. If doing that need to make sure we have the right scope id! Since we need to push a scope id for the parameters,
-		//	then would have to pop out for the fn name and then go back into the originially pushed scope for the fn body!
-
-		resolveIdentScope(&pNode->ident, peek(pParser->scopeStack).id);
+		pNode->ident.scopeid = pScopeOuter->id;
+		pNode->scopeid = pScopeInner->id;
 
 		SymbolInfo funcDefnInfo;
-		setSymbolInfo(&funcDefnInfo, pNode->ident, SYMBOLK_Func, Up(pNode));
-		tryInsert(&pParser->symbTable, pNode->ident, funcDefnInfo, pParser->scopeStack);
+		funcDefnInfo.symbolk = SYMBOLK_Func;
+		funcDefnInfo.funcData.pFuncDefnStmt = pNode;
+
+		Assert(pNode->ident.lexeme.strv.cCh > 0);
+
+		defineSymbol(pScopeOuter, pNode->ident.lexeme, funcDefnInfo);
 
 		return Up(pNode);
 	}
@@ -2222,9 +2227,7 @@ AstNode * parseFuncDefnStmtOrLiteralExpr(Parser * pParser, FUNCHEADERK funcheade
 	{
 		AstFuncLiteralExpr * pNode = Down(pNodeUnderConstruction, FuncLiteralExpr);
 		pNode->pBodyStmt = pBody;
-		pNode->scopeid = peekScope(pParser).id;
-
-		popScope(pParser);
+		pNode->scopeid = pScopeInner->id;
 
 		return Up(pNode);
 	}
@@ -2238,8 +2241,6 @@ LFailCleanup:
 	dispose(&pParamsReturnsUnderConstruction->apReturnVarDecls);
 	release(&pParser->astAlloc, Up(pParamsReturnsUnderConstruction));
 	release(&pParser->astAlloc, pNodeUnderConstruction);
-
-	popScope(pParser);
 
 	return Up(pErr);
 }
@@ -2285,62 +2286,27 @@ AstNode * handleScanOrUnexpectedTokenkErr(Parser * pParser, DynamicArray<AstNode
 	}
 }
 
-void pushScope(Parser * pParser, SCOPEK scopek)
+Scope * pushScope(Parser * pParser, SCOPEK scopek)
 {
-	Scope s;
-	s.scopek = scopek;
+	Assert(pParser->pScopeCurrent);
 
-	if (scopek == SCOPEK_BuiltIn)
-	{
-		for (int i = 0; i < pParser->scopeStack.a.cItem; i++)
-		{
-			AssertInfo(pParser->scopeStack.a[i].id != SCOPEID_BuiltIn, "Shouldn't contain built-in scope id twice!");
-		}
+	Scope * pScope = allocate(&pParser->scopeAlloc);
+	init(pScope, pParser->scopeidNext, scopek, pParser->pScopeCurrent);
 
-		s.id = SCOPEID_BuiltIn;
-	}
-	else if (scopek == SCOPEK_Global)
-	{
-		for (int i = 0; i < pParser->scopeStack.a.cItem; i++)
-		{
-			AssertInfo(pParser->scopeStack.a[i].id != SCOPEID_Global, "Shouldn't contain global scope id twice!");
-		}
+	pParser->pScopeCurrent = pScope;
 
-		s.id = SCOPEID_Global;
-	}
-	else
-	{
-		s.id = pParser->scopeidNext;
-		pParser->scopeidNext = static_cast<SCOPEID>(pParser->scopeidNext + 1);
-	}
-
-
-	push(&pParser->scopeStack, s);
+	return pParser->pScopeCurrent;
 }
 
-Scope peekScope(Parser * pParser)
+Scope * popScope(Parser * pParser)
 {
-	bool success;
-	Scope s = peek(pParser->scopeStack, &success);
-	Assert(success);
-	return s;
-}
+	Assert(pParser->pScopeCurrent);
+	Assert(pParser->pScopeCurrent->pScopeParent);
 
-Scope peekScopePrev(Parser * pParser)
-{
-	bool success;
-	Scope s = peekFar(pParser->scopeStack, 1, &success);
-	Assert(success);
-	return s;
-}
+	Scope * pScopeResult = pParser->pScopeCurrent;
+	pParser->pScopeCurrent = pParser->pScopeCurrent->pScopeParent;
 
-Scope popScope(Parser * pParser)
-{
-	bool success;
-	Scope s = pop(&pParser->scopeStack, &success);
-	Assert(success);
-
-	return s;
+	return pScopeResult;
 }
 
 void reportScanAndParseErrors(const Parser & parser)

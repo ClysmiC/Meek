@@ -15,14 +15,13 @@ enum SYMBSEQID : u32
 
 enum SCOPEID : u32
 {
-	SCOPEID_Unresolved,
 	SCOPEID_BuiltIn,
 	SCOPEID_Global,
 
 	SCOPEID_UserDefinedStart,
 
-	SCOPEID_Max = static_cast<u32>(0xFF'FF'FF'FF),
-	SCOPEID_Nil = static_cast<u32>(-1)
+	SCOPEID_Max = static_cast<u32>(0xFF'FF'FF'FF - 1),
+	SCOPEID_Nil = static_cast<u32>(0xFF'FF'FF'FF)
 };
 
 

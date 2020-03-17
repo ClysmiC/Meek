@@ -29,18 +29,22 @@ struct Parser
 	DynamicPoolAllocator<AstNode> astAlloc;
 	DynamicPoolAllocator<Token> tokenAlloc;
 	DynamicPoolAllocator<Type> typeAlloc;
+	DynamicPoolAllocator<Scope> scopeAlloc;
 
 
 	// Scope
 
 	SCOPEID scopeidNext = SCOPEID_UserDefinedStart;
-	Stack<Scope> scopeStack;
+	Scope * pScopeRoot = nullptr;
+	Scope * pScopeCurrent = nullptr;
+
+	// Stack<Scope> scopeStack;
 
 	// TODO: Move all of these tables out to some god-struct and make these just pointers. No reason for the parser to own this stuff.
 
 	// Symbol Table
 
-	SymbolTable symbTable;
+	// SymbolTable symbTable;
 
 	// Type Table
 
@@ -105,10 +109,8 @@ void reportScanAndParseErrors(const Parser & parser);
 
 // Scope management
 
-void pushScope(Parser * pParser, SCOPEK scopek);
-Scope peekScope(Parser * pParser);
-Scope peekScopePrev(Parser * pParser);
-Scope popScope(Parser * pParser);
+Scope * pushScope(Parser * pParser, SCOPEK scopek);
+Scope * popScope(Parser * pParser);
 
 
 // Node allocation
@@ -184,22 +186,22 @@ struct ParseFuncHeaderParam
 
 	union
 	{
-		struct _FuncHeaderDefn				// FUNCHEADERK_Defn
+		struct UFuncHeaderDefn				// FUNCHEADERK_Defn
 		{
 			AstFuncDefnStmt * pioNode;
 		} paramDefn;
 
-		struct _FuncHeaderLiteral			// FUNCHEADERK_Literal
+		struct UFuncHeaderLiteral			// FUNCHEADERK_Literal
 		{
 			AstFuncLiteralExpr * pioNode;
 		} paramLiteral;
 
-		struct _FuncHeaderType				// FUNCHEADERK_Type
+		struct UFuncHeaderType				// FUNCHEADERK_Type
 		{
 			FuncType * pioFuncType;
 		} paramType;
 
-		struct _FuncHeaderSymbolExpr		// FUNCHEADERK_SymbolExpr
+		struct UFuncHeaderSymbolExpr		// FUNCHEADERK_SymbolExpr
 		{
 			AstSymbolExpr * pSymbExpr;
 		} paramSymbolExpr;

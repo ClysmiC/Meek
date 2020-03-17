@@ -11,52 +11,52 @@ void init(Type * pType, bool isFuncType)
 
 	if (pType->isFuncType)
 	{
-		init(&pType->funcType);
+		init(&pType->funcTypeData.funcType);
 	}
 	else
 	{
-		Token * pToken = nullptr;
-		setIdentNoScope(&pType->ident, pToken);
+		setLexeme(&pType->nonFuncTypeData.ident.lexeme, "");
+		pType->nonFuncTypeData.ident.scopeid = SCOPEID_Nil;
 	}
 }
 
-void initMove(Type * pType, Type * pTypeSrc)
-{
-	pType->isFuncType = pTypeSrc->isFuncType;
-	initMove(&pType->aTypemods, &pTypeSrc->aTypemods);
-
-	if (pType->isFuncType)
-	{
-		initMove(&pType->funcType, &pTypeSrc->funcType);
-	}
-}
-
-void initCopy(Type * pType, const Type & typeSrc)
-{
-	pType->isFuncType = typeSrc.isFuncType;
-	initCopy(&pType->aTypemods, typeSrc.aTypemods);
-
-	if (pType->isFuncType)
-	{
-		initCopy(&pType->funcType, typeSrc.funcType);
-	}
-	else
-	{
-		// META: This assignment is fine since ScopedIdentifier doesn't own any resources. How would I make this more robust
-		//	if I wanted to change ScopedIdentifier to allow it to own resources in the future? Writing an initCopy for ident
-		//	that just does this assignment seems like too much boilerplate. I would also like to prefer avoiding C++ constructor
-		//	craziness. Is there a middle ground? How do I want to handle this in Meek?
-
-		pType->ident = typeSrc.ident;
-	}
-}
+//void initMove(Type * pType, Type * pTypeSrc)
+//{
+//	pType->isFuncType = pTypeSrc->isFuncType;
+//	initMove(&pType->aTypemods, &pTypeSrc->aTypemods);
+//
+//	if (pType->isFuncType)
+//	{
+//		initMove(&pType->funcType, &pTypeSrc->funcType);
+//	}
+//}
+//
+//void initCopy(Type * pType, const Type & typeSrc)
+//{
+//	pType->isFuncType = typeSrc.isFuncType;
+//	initCopy(&pType->aTypemods, typeSrc.aTypemods);
+//
+//	if (pType->isFuncType)
+//	{
+//		initCopy(&pType->funcType, typeSrc.funcType);
+//	}
+//	else
+//	{
+//		// META: This assignment is fine since ScopedIdentifier doesn't own any resources. How would I make this more robust
+//		//	if I wanted to change ScopedIdentifier to allow it to own resources in the future? Writing an initCopy for ident
+//		//	that just does this assignment seems like too much boilerplate. I would also like to prefer avoiding C++ constructor
+//		//	craziness. Is there a middle ground? How do I want to handle this in Meek?
+//
+//		pType->ident = typeSrc.ident;
+//	}
+//}
 
 void dispose(Type * pType)
 {
 	dispose(&pType->aTypemods);
 	if (pType->isFuncType)
 	{
-		dispose(&pType->funcType);
+		dispose(&pType->funcTypeData.funcType);
 	}
 }
 
@@ -64,10 +64,12 @@ bool isTypeResolved(const Type & type)
 {
 	if (type.isFuncType)
 	{
-		return isFuncTypeResolved(type.funcType);
+		return isFuncTypeResolved(type.funcTypeData.funcType);
 	}
-
-	return isScopeSet(type.ident);
+	else
+	{
+		return type.nonFuncTypeData.ident.scopeid != SCOPEID_Nil;
+	}
 }
 
 bool isFuncTypeResolved(const FuncType & funcType)
@@ -93,18 +95,12 @@ NULLABLE const FuncType * funcTypeFromDefnStmt(const TypeTable & typeTable, cons
 
 	if (pType->isFuncType)
 	{
-		return &pType->funcType;
+		return &pType->funcTypeData.funcType;
 	}
 	else
 	{
 		return nullptr;
 	}
-}
-
-bool isTypeInferred(const Type & type)
-{
-	bool result = (type.ident.pToken->lexeme == "var");
-	return result;
 }
 
 bool isUnmodifiedType(const Type & type)
@@ -158,11 +154,11 @@ bool typeEq(const Type & t0, const Type & t1)
 
 	if (t0.isFuncType)
 	{
-		return funcTypeEq(t0.funcType, t1.funcType);
+		return funcTypeEq(t0.funcTypeData.funcType, t1.funcTypeData.funcType);
 	}
 	else
 	{
-		return scopedIdentEq(t0.ident, t1.ident);
+		return scopedIdentEq(t0.nonFuncTypeData.ident, t1.nonFuncTypeData.ident);
 	}
 }
 
@@ -189,12 +185,11 @@ uint typeHash(const Type & t)
 
 	if (t.isFuncType)
 	{
-		return combineHash(hash, funcTypeHash(t.funcType));
+		return combineHash(hash, funcTypeHash(t.funcTypeData.funcType));
 	}
 	else
 	{
-		Assert(isScopeSet(t.ident));
-		return combineHash(hash, scopedIdentHashPrecomputed(t.ident));
+		return scopedIdentHash(t.nonFuncTypeData.ident);
 	}
 }
 
@@ -384,101 +379,81 @@ void init(TypeTable * pTable)
 		typeHash,
 		typeEq);
 
-	init(&pTable->typesPendingResolution);
-}
+	init (&pTable->typesPendingResolution);
 
-void insertBuiltInTypes(TypeTable * pTable)
-{
+	// Insert built in types
+
 	// void
+
 	{
-		static Token voidToken;
-		voidToken.id = -1;
-		voidToken.startEnd = gc_startEndBuiltInPseudoToken;
-		voidToken.tokenk = TOKENK_Identifier;
-		voidToken.lexeme = makeStringView("void");
 
 		ScopedIdentifier voidIdent;
-		setIdent(&voidIdent, &voidToken, SCOPEID_BuiltIn);
+		setLexeme(&voidIdent.lexeme, "void");
+		voidIdent.scopeid = SCOPEID_BuiltIn;
 
 		Type voidType;
 		init(&voidType, false /* isFuncType */);
-		voidType.ident = voidIdent;
+		voidType.nonFuncTypeData.ident = voidIdent;
 
 		Verify(isTypeResolved(voidType));
 		Verify(ensureInTypeTable(pTable, voidType) == TYPID_Void);
 	}
 
 	// int
-	{
-		static Token intToken;
-		intToken.id = -1;
-		intToken.startEnd = gc_startEndBuiltInPseudoToken;
-		intToken.tokenk = TOKENK_Identifier;
-		intToken.lexeme = makeStringView("int");
 
+	{
 		ScopedIdentifier intIdent;
-		setIdent(&intIdent, &intToken, SCOPEID_BuiltIn);
+		setLexeme(&intIdent.lexeme, "int");
+		intIdent.scopeid = SCOPEID_BuiltIn;
 
 		Type intType;
 		init(&intType, false /* isFuncType */);
-		intType.ident = intIdent;
+		intType.nonFuncTypeData.ident = intIdent;
 
 		Verify(isTypeResolved(intType));
 		Verify(ensureInTypeTable(pTable, intType) == TYPID_Int);
 	}
 
 	// float
-	{
-		static Token floatToken;
-		floatToken.id = -1;
-		floatToken.startEnd = gc_startEndBuiltInPseudoToken;
-		floatToken.tokenk = TOKENK_Identifier;
-		floatToken.lexeme = makeStringView("float");
 
+	{
 		ScopedIdentifier floatIdent;
-		setIdent(&floatIdent, &floatToken, SCOPEID_BuiltIn);
+		setLexeme(&floatIdent.lexeme, "float");
+		floatIdent.scopeid = SCOPEID_BuiltIn;
 
 		Type floatType;
 		init(&floatType, false /* isFuncType */);
-		floatType.ident = floatIdent;
+		floatType.nonFuncTypeData.ident = floatIdent;
 
 		Verify(isTypeResolved(floatType));
 		Verify(ensureInTypeTable(pTable, floatType) == TYPID_Float);
 	}
 
 	// bool
-	{
-		static Token boolToken;
-		boolToken.id = -1;
-		boolToken.startEnd = gc_startEndBuiltInPseudoToken;
-		boolToken.tokenk = TOKENK_Identifier;
-		boolToken.lexeme = makeStringView("bool");
 
+	{
 		ScopedIdentifier boolIdent;
-		setIdent(&boolIdent, &boolToken, SCOPEID_BuiltIn);
+		setLexeme(&boolIdent.lexeme, "bool");
+		boolIdent.scopeid = SCOPEID_BuiltIn;
 
 		Type boolType;
 		init(&boolType, false /* isFuncType */);
-		boolType.ident = boolIdent;
+		boolType.nonFuncTypeData.ident = boolIdent;
 
 		Verify(isTypeResolved(boolType));
 		Verify(ensureInTypeTable(pTable, boolType) == TYPID_Bool);
 	}
 
 	// string
-	{
-		static Token stringToken;
-		stringToken.id = -1;
-		stringToken.startEnd = gc_startEndBuiltInPseudoToken;
-		stringToken.tokenk = TOKENK_Identifier;
-		stringToken.lexeme = makeStringView("string");
 
+	{
 		ScopedIdentifier stringIdent;
-		setIdent(&stringIdent, &stringToken, SCOPEID_BuiltIn);
+		setLexeme(&stringIdent.lexeme, "string");
+		stringIdent.scopeid = SCOPEID_BuiltIn;
 
 		Type stringType;
 		init(&stringType, false /* isFuncType */);
-		stringType.ident = stringIdent;
+		stringType.nonFuncTypeData.ident = stringIdent;
 
 		Verify(isTypeResolved(stringType));
 		Verify(ensureInTypeTable(pTable, stringType) == TYPID_String);
@@ -510,71 +485,62 @@ TYPID ensureInTypeTable(TypeTable * pTable, const Type & type, bool debugAssertI
 	return typidInsert;
 }
 
-bool tryResolveType(Type * pType, const SymbolTable & symbolTable, const Stack<Scope> & scopeStack)
-{
-	if (!pType->isFuncType)
-	{
-		// Non-func type
-
-		ScopedIdentifier candidate = pType->ident;
-
-		for (int i = 0; i < count(scopeStack); i++)
-		{
-			Scope candidateScope =peekFar(scopeStack, i);
-
-			candidate.defnclScopeid = candidateScope.id;
-			candidate.hash = scopedIdentHash(candidate);
-
-			if (lookupTypeSymb(symbolTable, candidate))
-			{
-				pType->ident = candidate;
-				return true;
-			}
-		}
-
-		return false;
-	}
-	else
-	{
-		// Func type
-
-		for (int i = 0; i < pType->funcType.paramTypids.cItem; i++)
-		{
-			if (!isTypeResolved(pType->funcType.paramTypids[i]))
-			{
-				return false;
-			}
-		}
-
-		for (int i = 0; i < pType->funcType.returnTypids.cItem; i++)
-		{
-			if (!isTypeResolved(pType->funcType.returnTypids[i]))
-			{
-				return false;
-			}
-		}
-
-		return true;
-	}
-}
-
 bool tryResolveAllTypes(Parser * pParser)
 {
+	auto tryResolvePendingType = [](const TypePendingResolve & typePending)
+	{
+		Type * pType = typePending.pType;
+		if (!typePending.pType->isFuncType)
+		{
+			// Non-func type
+
+			ScopedIdentifier candidate = typePending.pType->nonFuncTypeData.ident;
+
+			Scope * pScope = typePending.pScope;
+			SymbolInfo symbInfo = lookupTypeSymbol(*typePending.pScope, typePending.pType->nonFuncTypeData.ident.lexeme);
+
+			if (symbInfo.symbolk == SYMBOLK_Nil)
+				return false;
+
+			pType->nonFuncTypeData.ident.scopeid = scopeidFromSymbolInfo(symbInfo);
+			return true;
+		}
+		else
+		{
+			// Func type
+
+			for (int i = 0; i < pType->funcTypeData.funcType.paramTypids.cItem; i++)
+			{
+				if (!isTypeResolved(pType->funcTypeData.funcType.paramTypids[i]))
+				{
+					return false;
+				}
+			}
+
+			for (int i = 0; i < pType->funcTypeData.funcType.returnTypids.cItem; i++)
+			{
+				if (!isTypeResolved(pType->funcTypeData.funcType.returnTypids[i]))
+				{
+					return false;
+				}
+			}
+
+			return true;
+		}
+	};
+
 	// NOTE: This *should* be doable in a single pass after we have inserted all declared type symbols into the symbol table.
 	//	That might change if I add typedefs, since typedefs may form big dependency chains.
 
 	for (int i = pParser->typeTable.typesPendingResolution.cItem - 1; i >= 0; i--)
 	{
 		TypePendingResolve * pTypePending = &pParser->typeTable.typesPendingResolution[i];
-
-		if (tryResolveType(pTypePending->pType, pParser->symbTable, pTypePending->scopeStack))
+		if (tryResolvePendingType(*pTypePending))
 		{
 			TYPID typid = ensureInTypeTable(&pParser->typeTable, *(pTypePending->pType));
 			*(pTypePending->pTypidUpdateOnResolve) = typid;
 
-			dispose(&pTypePending->scopeStack);
-			releaseType(pParser, pTypePending->pType);
-
+			releaseType(pParser, pTypePending->pType);		// TODO: Come up with a better strategy for this...
 			unorderedRemove(&pParser->typeTable.typesPendingResolution, i);
 		}
 	}
@@ -650,8 +616,8 @@ void debugPrintType(const Type& type)
 
 	if (!type.isFuncType)
 	{
-		print(type.ident.pToken->lexeme);
-		printfmt(" (scopeid: %d)", type.ident.defnclScopeid);
+		print(type.nonFuncTypeData.ident.lexeme.strv);
+		printfmt(" (scopeid: %d)", type.nonFuncTypeData.ident.scopeid);
 	}
 	else
 	{

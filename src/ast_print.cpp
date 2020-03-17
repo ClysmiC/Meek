@@ -167,16 +167,16 @@ void debugPrintType(DebugPrintCtx * pCtx, TYPID typid, int level, bool skipAfter
 		print("(params)");
 		printTabs(pCtx, level, false, false);
 
-		for (int i = 0; i < pType->funcType.paramTypids.cItem; i++)
+		for (int i = 0; i < pType->funcTypeData.funcType.paramTypids.cItem; i++)
 		{
-			bool isLastChild = i == pType->funcType.paramTypids.cItem - 1;
+			bool isLastChild = i == pType->funcTypeData.funcType.paramTypids.cItem - 1;
 
 			println();
 			printTabs(pCtx, level, false, false);
 
 			printfmt("(%s %d):", "param", i);
 
-			debugPrintType(pCtx, pType->funcType.paramTypids[i], levelNext, false);
+			debugPrintType(pCtx, pType->funcTypeData.funcType.paramTypids[i], levelNext, false);
 
 			if (!isLastChild)
 			{
@@ -191,9 +191,9 @@ void debugPrintType(DebugPrintCtx * pCtx, TYPID typid, int level, bool skipAfter
 		print("(return values)");
 		printTabs(pCtx, level, false, false);
 
-		for (int i = 0; i < pType->funcType.returnTypids.cItem; i++)
+		for (int i = 0; i < pType->funcTypeData.funcType.returnTypids.cItem; i++)
 		{
-			bool isLastChild = i == pType->funcType.returnTypids.cItem - 1;
+			bool isLastChild = i == pType->funcTypeData.funcType.returnTypids.cItem - 1;
 			bool shouldSetSkip = skipAfterArrow && isLastChild;
 
 			println();
@@ -201,7 +201,7 @@ void debugPrintType(DebugPrintCtx * pCtx, TYPID typid, int level, bool skipAfter
 
 			printfmt("(%s %d):", "return", i);
 
-			debugPrintType(pCtx, pType->funcType.returnTypids[i], levelNext, isLastChild);
+			debugPrintType(pCtx, pType->funcTypeData.funcType.returnTypids[i], levelNext, isLastChild);
 
 			if (!isLastChild)
 			{
@@ -214,7 +214,7 @@ void debugPrintType(DebugPrintCtx * pCtx, TYPID typid, int level, bool skipAfter
 	{
 		println();
 		printTabs(pCtx, level, true, skipAfterArrow);
-		print(pType->ident.pToken->lexeme);
+		print(pType->nonFuncTypeData.ident.lexeme.strv);
 	}
 };
 
@@ -455,7 +455,7 @@ void debugPrintSubAst(DebugPrintCtx * pCtx, const AstNode & node, int level, boo
 		{
 			auto * pExpr = DownConst(&node, BinopExpr);
 
-			print(pExpr->pOp->lexeme);
+			print(pExpr->pOp->lexeme.strv);
 			println();
 
 			printTabs(pCtx, levelNext, false, false);
@@ -481,14 +481,14 @@ void debugPrintSubAst(DebugPrintCtx * pCtx, const AstNode & node, int level, boo
 		{
 			auto * pExpr = DownConst(&node, LiteralExpr);
 
-			print(pExpr->pToken->lexeme);
+			print(pExpr->pToken->lexeme.strv);
 		} break;
 
 		case ASTK_UnopExpr:
 		{
 			auto * pExpr = DownConst(&node, UnopExpr);
 
-			print(pExpr->pOp->lexeme);
+			print(pExpr->pOp->lexeme.strv);
 			println();
 
 			printTabs(pCtx, levelNext, false, false);
@@ -504,14 +504,14 @@ void debugPrintSubAst(DebugPrintCtx * pCtx, const AstNode & node, int level, boo
 				case SYMBEXPRK_Var:
 				{
 					print("(var symbol): ");
-					print(pExpr->pTokenIdent->lexeme);
+					print(pExpr->pTokenIdent->lexeme.strv);
 				}
 				break;
 
 				case SYMBEXPRK_MemberVar:
 				{
 					print("(member var symbol): ");
-					print(pExpr->pTokenIdent->lexeme);
+					print(pExpr->pTokenIdent->lexeme.strv);
 					println();
 
 					printTabs(pCtx, levelNext, false, false);
@@ -526,7 +526,7 @@ void debugPrintSubAst(DebugPrintCtx * pCtx, const AstNode & node, int level, boo
 				case SYMBEXPRK_Func:
 				{
 					print("(func symbol): ");
-					print(pExpr->pTokenIdent->lexeme);
+					print(pExpr->pTokenIdent->lexeme.strv);
 
 					// TODO: maybe print type disambig ??
 				}
@@ -535,7 +535,7 @@ void debugPrintSubAst(DebugPrintCtx * pCtx, const AstNode & node, int level, boo
 				case SYMBEXPRK_Unresolved:
 				{
 					print("(unresolved symbol): ");
-					print(pExpr->pTokenIdent->lexeme);
+					print(pExpr->pTokenIdent->lexeme.strv);
 				}
 				break;
 
@@ -637,7 +637,7 @@ void debugPrintSubAst(DebugPrintCtx * pCtx, const AstNode & node, int level, boo
 		{
 			auto * pStmt = DownConst(&node, AssignStmt);
 
-			print(pStmt->pAssignToken->lexeme);
+			print(pStmt->pAssignToken->lexeme.strv);
 			println();
 
 			printTabs(pCtx, levelNext, false, false);
@@ -670,14 +670,14 @@ void debugPrintSubAst(DebugPrintCtx * pCtx, const AstNode & node, int level, boo
 			printTabs(pCtx, levelNext, false, false);
 			println();
 
-			if (pStmt->ident.pToken)
+			if (pStmt->ident.lexeme.strv.cCh > 0)
 			{
 				printTabs(pCtx, levelNext, false, false);
 				print("(ident):");
 				println();
 
 				printTabs(pCtx, levelNext, true, false);
-				print(pStmt->ident.pToken->lexeme);
+				print(pStmt->ident.lexeme.strv);
 				println();
 
 				printTabs(pCtx, levelNext, false, false);
@@ -718,7 +718,7 @@ void debugPrintSubAst(DebugPrintCtx * pCtx, const AstNode & node, int level, boo
 
 			println();
 			printTabs(pCtx, levelNext, true, false);
-			print(pStmt->ident.pToken->lexeme);
+			print(pStmt->ident.lexeme.strv);
 
 			println();
 			printTabs(pCtx, levelNext, false, false);
@@ -741,7 +741,7 @@ void debugPrintSubAst(DebugPrintCtx * pCtx, const AstNode & node, int level, boo
 
 			println();
 			printTabs(pCtx, levelNext, true, false);
-			print(pStmt->ident.pToken->lexeme);
+			print(pStmt->ident.lexeme.strv);
 
 			println();
 			printTabs(pCtx, levelNext, false, false);

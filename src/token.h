@@ -166,6 +166,41 @@ inline StartEndIndices makeStartEnd(int startAndEnd)
 	return makeStartEnd(startAndEnd, startAndEnd);
 }
 
+struct Lexeme
+{
+	StringView strv = { 0 };
+
+	u32 hash = 0;
+};
+
+inline void setLexeme(Lexeme * pLexeme, const StringView & strv)
+{
+	pLexeme->strv = strv;
+	pLexeme->hash = startHash(strv.pCh, strv.cCh);
+}
+
+inline void setLexeme(Lexeme * pLexeme, const char * pChz)
+{
+	pLexeme->strv.pCh = pChz;
+	pLexeme->strv.cCh = strlen(pChz);
+	pLexeme->hash = startHash(pLexeme->strv.pCh, pLexeme->strv.cCh);
+}
+
+u32 lexemeHash(const Lexeme & lexeme)
+{
+	return lexeme.hash;
+}
+
+bool lexemeEq(const Lexeme & lexeme0, const Lexeme & lexeme1)
+{
+	if (lexeme0.hash != lexeme1.hash)
+	{
+		return false;
+	}
+
+	return lexeme0.strv == lexeme1.strv;
+}
+
 struct Token
 {
 	int id = 0;		// Is this necessary / used anywhere??
@@ -175,7 +210,7 @@ struct Token
 	TOKENK tokenk = TOKENK_Nil;
 	GRFERRTOK grferrtok = GRFERRTOK_None;      // TOKENK_Error
 
-	StringView lexeme = { 0 };
+	Lexeme lexeme = { 0 };
 };
 
 struct ReservedWord
@@ -204,8 +239,10 @@ inline void nillify(Token * poToken)
 	poToken->tokenk = TOKENK_Nil;
 	poToken->grferrtok = GRFERRTOK_None;
 
-	poToken->lexeme.pCh = nullptr;
-	poToken->lexeme.cCh = 0;
+
+	poToken->lexeme.strv.pCh = nullptr;
+	poToken->lexeme.strv.cCh = 0;
+	poToken->lexeme.hash = 0;
 }
 
 // TODO: use a dict or trie for reserved words

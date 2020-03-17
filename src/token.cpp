@@ -5,7 +5,6 @@
 #include <stdio.h>
 
 const StartEndIndices gc_startEndBubble(-1, -1);
-const StartEndIndices gc_startEndBuiltInPseudoToken(-1, -1);
 
 const TOKENK g_aTokenkLiteral[] = {
 	TOKENK_IntLiteral,
