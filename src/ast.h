@@ -266,7 +266,7 @@ struct AstSymbolExpr
 		struct UUnresolvedData
 		{
 			bool ignoreVars;
-			DynamicArray<SymbolInfo *> apCandidates;	// Candidates set by resolve pass. Parent node is responsible for choosing the correct candidate.
+			DynamicArray<SymbolInfo> aCandidates;		// Candidates set by resolve pass. Parent node is responsible for choosing the correct candidate.
 		} unresolvedData;
 
 		struct UVarData

@@ -4,22 +4,27 @@
 #include "symbol.h"
 
 struct AstNode;
+struct Parser;
 struct TypeTable;
 
 struct ResolvePass
 {
+
+	SYMBSEQID lastSymbseqid = SYMBSEQID_Unset;      // TODO: USE THIS
+
+	SCOPEID scopeidCur = SCOPEID_Global;
+	TypeTable * pTypeTable;
+	DynamicArray<Scope *> * pMpScopeidScope;
+
+	DynamicArray<ScopedIdentifier> unresolvedIdents;
+
+	// FnCtx for making sure return values match expected types
+
 	struct FnCtx
 	{
 		DynamicArray<TYPID> aTypidReturn;
 	};
 
-	SYMBSEQID lastSymbseqid = SYMBSEQID_Unset;      // TODO: USE THIS
-
-	Stack<Scope> scopeStack;
-	SymbolTable * pSymbTable;
-	TypeTable * pTypeTable;
-
-	DynamicArray<ScopedIdentifier> unresolvedIdents;
 	Stack<FnCtx> fnCtxStack;
 
 	int cNestedBreakable = 0;		// TODO: Support labeled break?
@@ -27,14 +32,14 @@ struct ResolvePass
 	bool hadError = false;
 };
 
-void init(ResolvePass * pPass);
+void init(ResolvePass * pPass, Parser * pParser);
 
 
-inline void dispose(ResolvePass * pResolvePass)
-{
-	dispose(&pResolvePass->scopeStack);
-	dispose(&pResolvePass->unresolvedIdents);
-}
+//inline void dispose(ResolvePass * pResolvePass)
+//{
+//	dispose(&pResolvePass->scopeStack);
+//	dispose(&pResolvePass->unresolvedIdents);
+//}
 
 TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode);
 void resolveStmt(ResolvePass * pPass, AstNode * pNode);

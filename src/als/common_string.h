@@ -153,21 +153,21 @@ struct StringView
 	const char * pCh = nullptr;
 };
 
-//inline StringView makeStringView(const char * pStr)
-//{
-//	StringView result;
-//	result.pCh = pStr;
-//	result.cCh = 0;
-//
-//	const char * pCursor = pStr;
-//	while (*pCursor)
-//	{
-//		result.cCh++;
-//		pCursor++;
-//	}
-//
-//	return result;
-//}
+inline StringView makeStringView(const char * pStr)
+{
+	StringView result;
+	result.pCh = pStr;
+	result.cCh = 0;
+
+	const char * pCursor = pStr;
+	while (*pCursor)
+	{
+		result.cCh++;
+		pCursor++;
+	}
+
+	return result;
+}
 
 inline bool operator==(const StringView& strv0, const StringView& strv1)
 {

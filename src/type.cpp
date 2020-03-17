@@ -31,25 +31,25 @@ void init(Type * pType, bool isFuncType)
 //	}
 //}
 //
-//void initCopy(Type * pType, const Type & typeSrc)
-//{
-//	pType->isFuncType = typeSrc.isFuncType;
-//	initCopy(&pType->aTypemods, typeSrc.aTypemods);
-//
-//	if (pType->isFuncType)
-//	{
-//		initCopy(&pType->funcType, typeSrc.funcType);
-//	}
-//	else
-//	{
-//		// META: This assignment is fine since ScopedIdentifier doesn't own any resources. How would I make this more robust
-//		//	if I wanted to change ScopedIdentifier to allow it to own resources in the future? Writing an initCopy for ident
-//		//	that just does this assignment seems like too much boilerplate. I would also like to prefer avoiding C++ constructor
-//		//	craziness. Is there a middle ground? How do I want to handle this in Meek?
-//
-//		pType->ident = typeSrc.ident;
-//	}
-//}
+void initCopy(Type * pType, const Type & typeSrc)
+{
+	pType->isFuncType = typeSrc.isFuncType;
+	initCopy(&pType->aTypemods, typeSrc.aTypemods);
+
+	if (pType->isFuncType)
+	{
+		initCopy(&pType->funcTypeData.funcType, typeSrc.funcTypeData.funcType);
+	}
+	else
+	{
+		// META: This assignment is fine since ScopedIdentifier doesn't own any resources. How would I make this more robust
+		//	if I wanted to change ScopedIdentifier to allow it to own resources in the future? Writing an initCopy for ident
+		//	that just does this assignment seems like too much boilerplate. I would also like to prefer avoiding C++ constructor
+		//	craziness. Is there a middle ground? How do I want to handle this in Meek?
+
+		pType->nonFuncTypeData.ident = typeSrc.nonFuncTypeData.ident;
+	}
+}
 
 void dispose(Type * pType)
 {
@@ -199,11 +199,11 @@ void init(FuncType * pFuncType)
 	init(&pFuncType->returnTypids);
 }
 
-void initMove(FuncType * pFuncType, FuncType * pFuncTypeSrc)
-{
-	initMove(&pFuncType->paramTypids, &pFuncTypeSrc->paramTypids);
-	initMove(&pFuncType->returnTypids, &pFuncTypeSrc->returnTypids);
-}
+//void initMove(FuncType * pFuncType, FuncType * pFuncTypeSrc)
+//{
+//	initMove(&pFuncType->paramTypids, &pFuncTypeSrc->paramTypids);
+//	initMove(&pFuncType->returnTypids, &pFuncTypeSrc->returnTypids);
+//}
 
 void initCopy(FuncType * pFuncType, const FuncType & funcTypeSrc)
 {

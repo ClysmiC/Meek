@@ -2,35 +2,26 @@
 
 #include "ast.h"
 #include "error.h"
+#include "parse.h"
 #include "print.h"
 #include "symbol.h"
 #include "type.h"
 
 #define SetBubbleIfUnresolved(typid) do { if (!isTypeResolved(typid)) (typid) = TYPID_BubbleError; } while(0)
 
-void init(ResolvePass * pPass)
+void init(ResolvePass * pPass, Parser * pParser)
 {
 	pPass->lastSymbseqid = SYMBSEQID_Unset;
-	init(&pPass->scopeStack);
 	init(&pPass->unresolvedIdents);
 	init(&pPass->fnCtxStack);
 
 	pPass->hadError = false;
 	pPass->cNestedBreakable = 0;
 
-	// HMM: Does this belong in init?
+	pPass->scopeidCur = SCOPEID_Global;
 
-	{
-		Scope scopeBuiltIn;
-		scopeBuiltIn.id = SCOPEID_BuiltIn;
-		scopeBuiltIn.scopek = SCOPEK_BuiltIn;
-		push(&pPass->scopeStack, scopeBuiltIn);
-
-		Scope scopeGlobal;
-		scopeGlobal.id = SCOPEID_Global;
-		scopeGlobal.scopek = SCOPEK_Global;
-		push(&pPass->scopeStack, scopeGlobal);
-	}
+	pPass->pMpScopeidScope = &pParser->mpScopeidScope;
+	pPass->pTypeTable = &pParser->typeTable;
 }
 
 TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
@@ -144,36 +135,33 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 			{
 				case SYMBEXPRK_Unresolved:
 				{
-					Assert(pExpr->unresolvedData.apCandidates.cItem == 0);
-
-					//
-					// NOTE (andrew) We are only responsible for gathering the candidates here. The parent node is responsible for
-					//	for choosing one. The order that we collect the candidates matter, as the selection algorithm is as follows:
-					//
+					Assert(pExpr->unresolvedData.aCandidates.cItem == 0);
 
 					// Lookup all funcs matching this identifier
 
+					Scope * pScopeCur = (*pPass->pMpScopeidScope)[pPass->scopeidCur];
+
 					{
-						lookupFuncSymb(*pPass->pSymbTable, pExpr->pTokenIdent, pPass->scopeStack, &pExpr->unresolvedData.apCandidates);
+						lookupFuncSymbol(*pScopeCur, pExpr->pTokenIdent->lexeme, &pExpr->unresolvedData.aCandidates);
 					}
 
 					// Lookup var matching this identifier, and slot it in where it fits
 
 					{
-						SymbolInfo * pSymbInfoVar = lookupVarSymb(*pPass->pSymbTable, pExpr->pTokenIdent, pPass->scopeStack);
+						SymbolInfo symbInfoVar = lookupVarSymbol(*pScopeCur, pExpr->pTokenIdent->lexeme);
 
-						if (pSymbInfoVar)
+						if (symbInfoVar.symbolk != SYMBOLK_Nil)
 						{
-							Assert(pSymbInfoVar->symbolk == SYMBOLK_Var);
-							SCOPEID scopeidVar = pSymbInfoVar->pVarDeclStmt->ident.defnclScopeid;
+							Assert(symbInfoVar.symbolk == SYMBOLK_Var);
+							SCOPEID scopeidVar = symbInfoVar.varData.pVarDeclStmt->ident.scopeid;
 
 							int iInsert = 0;
-							for (int iCandidate = 0; iCandidate < pExpr->unresolvedData.apCandidates.cItem; iCandidate++)
+							for (int iCandidate = 0; iCandidate < pExpr->unresolvedData.aCandidates.cItem; iCandidate++)
 							{
-								SymbolInfo * pSymbInfoCandidate = pExpr->unresolvedData.apCandidates[iCandidate];
-								Assert(pSymbInfoCandidate->symbolk == SYMBOLK_Func);
+								SymbolInfo symbInfoCandidate = pExpr->unresolvedData.aCandidates[iCandidate];
+								Assert(symbInfoCandidate.symbolk == SYMBOLK_Func);
 
-								SCOPEID scopeidFunc = pSymbInfoCandidate->pFuncDefnStmt->ident.defnclScopeid;
+								SCOPEID scopeidFunc = symbInfoCandidate.funcData.pFuncDefnStmt->ident.scopeid;
 								
 								if (scopeidVar >= scopeidFunc)
 								{
@@ -182,38 +170,38 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 								}
 							}
 
-							insert(&pExpr->unresolvedData.apCandidates, pSymbInfoVar, iInsert);
+							insert(&pExpr->unresolvedData.aCandidates, symbInfoVar, iInsert);
 						}
 					}
 
-					if (pExpr->unresolvedData.apCandidates.cItem == 1)
+					if (pExpr->unresolvedData.aCandidates.cItem == 1)
 					{
-						SymbolInfo * pSymbInfo = pExpr->unresolvedData.apCandidates[0];
-						if (pSymbInfo->symbolk == SYMBOLK_Var)
+						SymbolInfo symbInfo = pExpr->unresolvedData.aCandidates[0];
+						if (symbInfo.symbolk == SYMBOLK_Var)
 						{
 							pExpr->symbexprk = SYMBEXPRK_Var;
-							pExpr->varData.pDeclCached = pSymbInfo->pVarDeclStmt;
+							pExpr->varData.pDeclCached = symbInfo.varData.pVarDeclStmt;
 
 							typidResult = pExpr->varData.pDeclCached->typid;
 						}
 						else
 						{
-							Assert(pSymbInfo->symbolk == SYMBOLK_Func);
+							Assert(symbInfo.symbolk == SYMBOLK_Func);
 
 							pExpr->symbexprk = SYMBEXPRK_Func;
-							pExpr->funcData.pDefnCached = pSymbInfo->pFuncDefnStmt;
+							pExpr->funcData.pDefnCached = symbInfo.funcData.pFuncDefnStmt;
 
 							typidResult = pExpr->funcData.pDefnCached->typid;
 						}
 					}
-					else if (pExpr->unresolvedData.apCandidates.cItem > 1)
+					else if (pExpr->unresolvedData.aCandidates.cItem > 1)
 					{
 						typidResult = TYPID_UnresolvedHasCandidates;
 					}
 					else
 					{
 						print("Unresolved variable ");
-						print(pExpr->pTokenIdent->lexeme);
+						print(pExpr->pTokenIdent->lexeme.strv);
 						println();
 
 						// HMM: Is this the right result value? Should we have a specific TYPID_UnresolvedIdentifier?
@@ -237,7 +225,6 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 					AssertInfo(!pExpr->memberData.pDeclCached, "This shouldn't be resolved yet because this is the code that should resolve it!");
 
 					TYPID ownerTypid = resolveExpr(pPass, pExpr->memberData.pOwner);
-					SCOPEID ownerScopeid = SCOPEID_Nil;
 
 					if (!isTypeResolved(ownerTypid))
 					{
@@ -248,53 +235,62 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 					const Type * pOwnerType = lookupType(*pPass->pTypeTable, ownerTypid);
 					Assert(pOwnerType);
 
-					SymbolInfo * pSymbInfoOwner = lookupTypeSymb(*pPass->pSymbTable, pOwnerType->ident);
-					Assert(pSymbInfoOwner);
-
-					if (pSymbInfoOwner->symbolk == SYMBOLK_Struct)
+					if (pOwnerType->isFuncType)
 					{
-						ownerScopeid = pSymbInfoOwner->pStructDefnStmt->scopeid;
+						print("Trying to access data member of a function?");
+						typidResult = TYPID_TypeError;
+						goto LEndSetTypidAndReturn;
 					}
 
-					ScopedIdentifier candidate;
-					setIdent(&candidate, pExpr->pTokenIdent, ownerScopeid);
-					SymbolInfo * pSymbInfo = lookupVarSymb(*pPass->pSymbTable, candidate);
+					SymbolInfo symbInfoMember;
+					{
+						Scope * pScopeOwnerOuter = (*pPass->pMpScopeidScope)[pOwnerType->nonFuncTypeData.ident.scopeid];
+						SymbolInfo symbInfoOwner = lookupTypeSymbol(*pScopeOwnerOuter, pOwnerType->nonFuncTypeData.ident.lexeme);
+						Assert(symbInfoOwner.symbolk == SYMBOLK_Struct);
 
-					if (!pSymbInfo)
+						Scope * pScopeOwnerInner = (*pPass->pMpScopeidScope)[symbInfoOwner.structData.pStructDefnStmt->scopeid];
+						symbInfoMember = lookupVarSymbol(*pScopeOwnerInner, pExpr->pTokenIdent->lexeme, FSYMBQ_IgnoreParent);
+					}
+
+					if (symbInfoMember.symbolk == SYMBOLK_Nil)
 					{
 						// Unresolved
 						// TODO: Add this to a resolve error list... don't print inline right here!
 
 						print("Unresolved member variable ");
-						print(pExpr->pTokenIdent->lexeme );
+						print(pExpr->pTokenIdent->lexeme.strv);
 						println();
 
 						typidResult = TYPID_Unresolved;
 						goto LEndSetTypidAndReturn;
 					}
 
+					Assert(symbInfoMember.symbolk == SYMBOLK_Var);
+
 					// Resolve!
 
-					pExpr->memberData.pDeclCached = pSymbInfo->pVarDeclStmt;
-					typidResult = pSymbInfo->pVarDeclStmt->typid;
+					pExpr->memberData.pDeclCached = symbInfoMember.varData.pVarDeclStmt;
+					typidResult = symbInfoMember.varData.pVarDeclStmt->typid;
 				} break;
 
 				case SYMBEXPRK_Func:
 				{
 					AssertInfo(!pExpr->funcData.pDefnCached, "This shouldn't be resolved yet because this is the code that should resolve it!");
 
-					DynamicArray<SymbolInfo *> apSymbInfoFuncCandidates;
-					init(&apSymbInfoFuncCandidates);
-					Defer(dispose(&apSymbInfoFuncCandidates));
+					Scope * pScopeCur = (*pPass->pMpScopeidScope)[pPass->scopeidCur];
 
-					lookupFuncSymb(*pPass->pSymbTable, pExpr->pTokenIdent, pPass->scopeStack, &apSymbInfoFuncCandidates);
+					DynamicArray<SymbolInfo> aSymbInfoFuncCandidates;
+					init(&aSymbInfoFuncCandidates);
+					Defer(dispose(&aSymbInfoFuncCandidates));
+
+					lookupFuncSymbol(*pScopeCur, pExpr->pTokenIdent->lexeme, &aSymbInfoFuncCandidates);
 
 					AstFuncDefnStmt * pFuncDefnStmtMatch = nullptr;
-					for (int iCandidate = 0; iCandidate < apSymbInfoFuncCandidates.cItem; iCandidate++)
+					for (int iCandidate = 0; iCandidate < aSymbInfoFuncCandidates.cItem; iCandidate++)
 					{
-						Assert(apSymbInfoFuncCandidates[iCandidate]->symbolk == SYMBOLK_Func);
+						Assert(aSymbInfoFuncCandidates[iCandidate].symbolk == SYMBOLK_Func);
 
-						AstFuncDefnStmt * pCandidateDefnStmt = apSymbInfoFuncCandidates[iCandidate]->pFuncDefnStmt;
+						AstFuncDefnStmt * pCandidateDefnStmt = aSymbInfoFuncCandidates[iCandidate].funcData.pFuncDefnStmt;
 						if (pCandidateDefnStmt->pParamsReturnsGrp->apParamVarDecls.cItem != pExpr->funcData.aTypidDisambig.cItem)
 						{
 							continue;
@@ -343,7 +339,7 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 						// TODO: Add this to a resolve error list... don't print inline right here!
 
 						print("Unresolved func identifier ");
-						print(pExpr->pTokenIdent->lexeme);
+						print(pExpr->pTokenIdent->lexeme.strv);
 						println();
 
 						typidResult = TYPID_Unresolved;
@@ -485,7 +481,7 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 				}
 				else
 				{
-					const FuncType * pFuncType = &pType->funcType;
+					const FuncType * pFuncType = &pType->funcTypeData.funcType;
 
 					if (pFuncType->paramTypids.cItem != aTypidArg.cItem)
 					{
@@ -549,7 +545,7 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 				{
 					pNodeDefnclMatch = Up(pFuncSymbolExpr->funcData.pDefnCached);
 				}
-				else if (pFuncSymbolExpr->symbexprk = SYMBEXPRK_Var)
+				else if (pFuncSymbolExpr->symbexprk == SYMBEXPRK_Var)
 				{
 					pNodeDefnclMatch = Up(pFuncSymbolExpr->varData.pDeclCached);
 				}
@@ -557,31 +553,33 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 				{
 					Assert(pFuncSymbolExpr->symbexprk == SYMBEXPRK_Unresolved);
 
+					// TODO: Move this out to be a symbol-table related query in symbol.cpp
+
 					// NOTE (andrew) The ordering of the candidates was set by resolveExpr(..), and is important for correctness. To facilitate
 					//	easy removal from the array, we want to iterate backwards. Thus, we reverse the array to allow us to iterate backwards
 					//	but maintain the intended order. We reverse back after we are finished to maintain original order for posterity.
 
-					DynamicArray<SymbolInfo *> apSymbInfoExactMatch;
-					init(&apSymbInfoExactMatch);
-					Defer(dispose(&apSymbInfoExactMatch));
+					DynamicArray<SymbolInfo> aSymbInfoExactMatch;
+					init(&aSymbInfoExactMatch);
+					Defer(dispose(&aSymbInfoExactMatch));
 
-					DynamicArray<SymbolInfo *> apSymbInfoLooseMatch;
-					init(&apSymbInfoLooseMatch);
-					Defer(dispose(&apSymbInfoLooseMatch));
+					DynamicArray<SymbolInfo> aSymbInfoLooseMatch;
+					init(&aSymbInfoLooseMatch);
+					Defer(dispose(&aSymbInfoLooseMatch));
 
-					for (int iFuncCandidate = 0; iFuncCandidate < pFuncSymbolExpr->unresolvedData.apCandidates.cItem; iFuncCandidate++)
+					for (int iFuncCandidate = 0; iFuncCandidate < pFuncSymbolExpr->unresolvedData.aCandidates.cItem; iFuncCandidate++)
 					{
-						SymbolInfo * pSymbInfoFuncCandidate = pFuncSymbolExpr->unresolvedData.apCandidates[iFuncCandidate];
+						SymbolInfo symbInfoFuncCandidate = pFuncSymbolExpr->unresolvedData.aCandidates[iFuncCandidate];
 
 						TYPID typidCandidate = TYPID_Unresolved;
-						if (pSymbInfoFuncCandidate->symbolk == SYMBOLK_Var)
+						if (symbInfoFuncCandidate.symbolk == SYMBOLK_Var)
 						{
-							typidCandidate = pSymbInfoFuncCandidate->pVarDeclStmt->typid;	
+							typidCandidate = symbInfoFuncCandidate.varData.pVarDeclStmt->typid;	
 						}
 						else
 						{
-							Assert(pSymbInfoFuncCandidate->symbolk == SYMBOLK_Func);
-							typidCandidate = pSymbInfoFuncCandidate->pFuncDefnStmt->typid;
+							Assert(symbInfoFuncCandidate.symbolk == SYMBOLK_Func);
+							typidCandidate = symbInfoFuncCandidate.funcData.pFuncDefnStmt->typid;
 						}
 
 						if (!isTypeResolved(typidCandidate))
@@ -597,7 +595,7 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 							continue;
 						}
 
-						const FuncType * pFuncTypeCandidate = &pTypeCandidate->funcType;
+						const FuncType * pFuncTypeCandidate = &pTypeCandidate->funcTypeData.funcType;
 
 						if (pFuncTypeCandidate->paramTypids.cItem != aTypidArg.cItem)
 						{
@@ -647,25 +645,25 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 
 								auto * pNodeArgSymbExpr = Down(pNodeArg, SymbolExpr);
 								Assert(pNodeArgSymbExpr->symbexprk == SYMBEXPRK_Unresolved);
-								Assert(pNodeArgSymbExpr->unresolvedData.apCandidates.cItem > 1);
+								Assert(pNodeArgSymbExpr->unresolvedData.aCandidates.cItem > 1);
 
 								int cMatchExact = 0;
 								int cMatchLoose = 0;
 								TYPID typidMatchExact = TYPID_Unresolved;
 								TYPID typidMatchLoose = TYPID_Unresolved;
-								for (int iArgCandidate = 0; iArgCandidate < pNodeArgSymbExpr->unresolvedData.apCandidates.cItem; iArgCandidate++)
+								for (int iArgCandidate = 0; iArgCandidate < pNodeArgSymbExpr->unresolvedData.aCandidates.cItem; iArgCandidate++)
 								{
-									SymbolInfo * pSymbInfoArgCandidate = pNodeArgSymbExpr->unresolvedData.apCandidates[iArgCandidate];
+									SymbolInfo symbInfoArgCandidate = pNodeArgSymbExpr->unresolvedData.aCandidates[iArgCandidate];
 									
 									TYPID typidArgCandidate = TYPID_Unresolved;
-									if (pSymbInfoArgCandidate->symbolk == SYMBOLK_Var)
+									if (symbInfoArgCandidate.symbolk == SYMBOLK_Var)
 									{
-										typidArgCandidate = pSymbInfoArgCandidate->pVarDeclStmt->typid;
+										typidArgCandidate = symbInfoArgCandidate.varData.pVarDeclStmt->typid;
 									}
 									else
 									{
-										Assert(pSymbInfoArgCandidate->symbolk == SYMBOLK_Func);
-										typidArgCandidate = pSymbInfoArgCandidate->pFuncDefnStmt->typid;
+										Assert(symbInfoArgCandidate.symbolk == SYMBOLK_Func);
+										typidArgCandidate = symbInfoArgCandidate.funcData.pFuncDefnStmt->typid;
 									}
 
 									Assert(isTypeResolved(typidArgCandidate));		// HMM: Is this actually Assertable?
@@ -717,7 +715,7 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 									//	discard this func candidate from consideration anyways.
 
 									print("Ambiguous function call ");
-									print(pFuncSymbolExpr->pTokenIdent->lexeme);
+									print(pFuncSymbolExpr->pTokenIdent->lexeme.strv);
 									typidResult = TYPID_TypeError;
 									goto LEndSetTypidAndReturn;
 								}
@@ -733,50 +731,50 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 						{
 							case MATCHK_MatchExact:
 							{
-								append(&apSymbInfoExactMatch, pSymbInfoFuncCandidate);
+								append(&aSymbInfoExactMatch, symbInfoFuncCandidate);
 							} break;
 
 							case MATCHK_MatchLoose:
 							{
-								append(&apSymbInfoLooseMatch, pSymbInfoFuncCandidate);
+								append(&aSymbInfoLooseMatch, symbInfoFuncCandidate);
 							} break;
 						}
 					}
 
-					Assert(apSymbInfoExactMatch.cItem <= 1);		// TODO: I don't think this is assertable... there could be a func var and a fn def that both exact match...
+					Assert(aSymbInfoExactMatch.cItem <= 1);		// TODO: I don't think this is assertable... there could be a func var and a fn def that both exact match...
 
-					if (apSymbInfoExactMatch.cItem == 1)
+					if (aSymbInfoExactMatch.cItem == 1)
 					{
-						SymbolInfo * pSymbInfoExactMatch = apSymbInfoExactMatch[0];
-						if (pSymbInfoExactMatch->symbolk == SYMBOLK_Var)
+						SymbolInfo symbInfoExactMatch = aSymbInfoExactMatch[0];
+						if (symbInfoExactMatch.symbolk == SYMBOLK_Var)
 						{
-							pNodeDefnclMatch = Up(pSymbInfoExactMatch->pVarDeclStmt);
+							pNodeDefnclMatch = Up(symbInfoExactMatch.varData.pVarDeclStmt);
 						}
 						else
 						{
-							Assert(pSymbInfoExactMatch->symbolk == SYMBOLK_Func);
-							pNodeDefnclMatch = Up(pSymbInfoExactMatch->pFuncDefnStmt);
+							Assert(symbInfoExactMatch.symbolk == SYMBOLK_Func);
+							pNodeDefnclMatch = Up(symbInfoExactMatch.funcData.pFuncDefnStmt);
 						}
 					}
-					else if (apSymbInfoLooseMatch.cItem == 1)
+					else if (aSymbInfoLooseMatch.cItem == 1)
 					{
-						SymbolInfo * pSymbInfoExactMatch = apSymbInfoLooseMatch[0];
-						if (pSymbInfoExactMatch->symbolk == SYMBOLK_Var)
+						SymbolInfo symbInfoLooseMatch = aSymbInfoLooseMatch[0];
+						if (symbInfoLooseMatch.symbolk == SYMBOLK_Var)
 						{
-							pNodeDefnclMatch = Up(pSymbInfoExactMatch->pVarDeclStmt);
+							pNodeDefnclMatch = Up(symbInfoLooseMatch.varData.pVarDeclStmt);
 						}
 						else
 						{
-							Assert(pSymbInfoExactMatch->symbolk == SYMBOLK_Func);
-							pNodeDefnclMatch = Up(pSymbInfoExactMatch->pFuncDefnStmt);
+							Assert(symbInfoLooseMatch.symbolk == SYMBOLK_Func);
+							pNodeDefnclMatch = Up(symbInfoLooseMatch.funcData.pFuncDefnStmt);
 						}
 					}
-					else if (apSymbInfoLooseMatch.cItem > 1)
+					else if (aSymbInfoLooseMatch.cItem > 1)
 					{
 						// TODO: better reporting
 
 						print("Ambiguous function call ");
-						print(pFuncSymbolExpr->pTokenIdent->lexeme);
+						print(pFuncSymbolExpr->pTokenIdent->lexeme.strv);
 						typidResult = TYPID_TypeError;
 						goto LEndSetTypidAndReturn;
 					}
@@ -785,7 +783,7 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 						// TODO: better reporting
 
 						print("No func named ");
-						print(pFuncSymbolExpr->pTokenIdent->lexeme);
+						print(pFuncSymbolExpr->pTokenIdent->lexeme.strv);
 						print(" matches the provided parameters");
 						typidResult = TYPID_TypeError;
 						goto LEndSetTypidAndReturn;
@@ -819,7 +817,7 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 
 				Assert(pType);
 				Assert(pType->isFuncType);
-				if (pType->funcType.returnTypids.cItem == 0)
+				if (pType->funcTypeData.funcType.returnTypids.cItem == 0)
 				{
 					typidResult = TYPID_Void;
 				}
@@ -827,8 +825,8 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 				{
 					// TODO: multiple return values
 
-					Assert(pType->funcType.returnTypids.cItem == 1);
-					typidResult = pType->funcType.returnTypids[0];
+					Assert(pType->funcTypeData.funcType.returnTypids.cItem == 1);
+					typidResult = pType->funcTypeData.funcType.returnTypids[0];
 				}
 			}
 		} break;
@@ -845,12 +843,9 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 
 			// Push scope and resolve children
 
-			Scope scope;
-			scope.id = pExpr->scopeid;
-			scope.scopek = SCOPEK_CodeBlock;
-
-			push(&pPass->scopeStack, scope);
-			Defer(pop(&pPass->scopeStack));
+			SCOPEID scopeidRestore = pPass->scopeidCur;
+			pPass->scopeidCur = pExpr->scopeid;
+			Defer(pPass->scopeidCur = scopeidRestore);
 
 			auto * papParamVarDecls = &pExpr->pParamsReturnsGrp->apParamVarDecls;
 			for (int i = 0; i < papParamVarDecls->cItem; i++)
@@ -934,24 +929,17 @@ void resolveStmt(ResolvePass * pPass, AstNode * pNode)
 		case ASTK_VarDeclStmt:
 		{
 			auto * pStmt = Down(pNode, VarDeclStmt);
-			AssertInfo(isScopeSet(pStmt->ident), "The name of the thing you are declaring should be resolved to itself...");
+
 
 			AssertInfo(isTypeResolved(pStmt->typid), "Inferred types are TODO");
 			const Type * pType = lookupType(*pPass->pTypeTable, pStmt->typid);
 
-			if (pStmt->ident.pToken)
+			if (pStmt->ident.lexeme.strv.cCh > 0)
 			{
 #if DEBUG
-				SymbolInfo * pSymbInfo = lookupVarSymb(*pPass->pSymbTable, pStmt->ident);
-				AssertInfo(pSymbInfo, "We should have put this var decl in the symbol table when we parsed it...");
-				Assert(pSymbInfo->symbolk == SYMBOLK_Var);
-
-				// HMM: This assert seems like it should be fine, but it fires when we have a redefined variable, since the 2nd defn
-				//  will find the first defn in the symbol table. We *do* report that error elsewhere, so it would be nice to know at this
-				//  point if we have reported the error so that we could assert EITHER that it has been reported, or that the below assert
-				//  is true.
-
-				// AssertInfo(pSymbInfo->pVarDeclStmt == pStmt, "At var declaration we should be able to look up the var in the symbol table and find ourselves...");
+				Scope * pScopeCur = (*pPass->pMpScopeidScope)[pPass->scopeidCur];
+				SymbolInfo symbInfo = lookupVarSymbol(*pScopeCur, pStmt->ident.lexeme);
+				Assert(symbInfo.symbolk == SYMBOLK_Var);
 #endif
 				// Record symbseqid for variable
 
@@ -980,12 +968,9 @@ void resolveStmt(ResolvePass * pPass, AstNode * pNode)
 			auto * pStmt = Down(pNode, StructDefnStmt);
 
 #if DEBUG
-			// Verify assumptions
-
-			SymbolInfo * pSymbInfo = lookupTypeSymb(*pPass->pSymbTable, pStmt->ident);
-			AssertInfo(pSymbInfo, "We should have put this struct decl in the symbol table when we parsed it...");
-			Assert(pSymbInfo->symbolk == SYMBOLK_Struct);
-			AssertInfo(pSymbInfo->pStructDefnStmt == pStmt, "At struct definition we should be able to look up the struct in the symbol table and find ourselves...");
+			Scope * pScopeOuter = (*pPass->pMpScopeidScope)[pPass->scopeidCur];
+			SymbolInfo symbInfo = lookupTypeSymbol(*pScopeOuter, pStmt->ident.lexeme);
+			Assert(symbInfo.symbolk == SYMBOLK_Struct);
 #endif
 
 			// Record sequence id
@@ -995,12 +980,9 @@ void resolveStmt(ResolvePass * pPass, AstNode * pNode)
 
 			// Record scope id
 
-			Scope scope;
-			scope.id = pStmt->scopeid;
-			scope.scopek = SCOPEK_StructDefn;
-
-			push(&pPass->scopeStack, scope);
-			Defer(pop(&pPass->scopeStack));
+			SCOPEID scopeidRestore = pPass->scopeidCur;
+			pPass->scopeidCur = pStmt->scopeid;
+			Defer(pPass->scopeidCur = scopeidRestore);
 
 			// Resolve member decls
 
@@ -1015,32 +997,12 @@ void resolveStmt(ResolvePass * pPass, AstNode * pNode)
 			auto * pStmt = Down(pNode, FuncDefnStmt);
 
 #if DEBUG
-			{
-				// Verify assumptions
-
-				DynamicArray<SymbolInfo * > apSymbInfo;
-				init(&apSymbInfo);
-				Defer(dispose(&apSymbInfo));
-
-				lookupFuncSymb(*pPass->pSymbTable, pStmt->ident, &apSymbInfo);
-
-				AssertInfo(apSymbInfo.cItem > 0, "We should have put this func decl in the symbol table when we parsed it...");
-				bool found = false;
-
-				for (int i = 0; i < apSymbInfo.cItem; i++)
-				{
-					SymbolInfo * pSymbInfo = apSymbInfo[i];
-					Assert(pSymbInfo->symbolk == SYMBOLK_Func);
-
-					if (pStmt->typid == pSymbInfo->pFuncDefnStmt->typid)
-					{
-						found = true;
-						break;
-					}
-				}
-
-				AssertInfo(found, "At struct definition we should be able to look up the struct in the symbol table and find ourselves...");
-			}
+			Scope * pScopeCur = (*pPass->pMpScopeidScope)[pPass->scopeidCur];
+			DynamicArray<SymbolInfo> aSymbInfo;
+			init(&aSymbInfo);
+			Defer(dispose(&aSymbInfo));
+			lookupFuncSymbol(*pScopeCur, pStmt->ident.lexeme, &aSymbInfo);
+			AssertInfo(aSymbInfo.cItem > 0, "We should have put this func decl in the symbol table when we parsed it...");
 #endif
 
 			// Record sequence id
@@ -1050,12 +1012,9 @@ void resolveStmt(ResolvePass * pPass, AstNode * pNode)
 
 			// Record scope id
 
-			Scope scope;
-			scope.id = pStmt->scopeid;
-			scope.scopek = SCOPEK_CodeBlock;
-
-			push(&pPass->scopeStack, scope);
-			Defer(pop(&pPass->scopeStack));
+			SCOPEID scopeidRestore = pPass->scopeidCur;
+			pPass->scopeidCur = pStmt->scopeid;
+			Defer(pPass->scopeidCur = scopeidRestore);
 
 			// Resolve params
 
@@ -1090,23 +1049,14 @@ void resolveStmt(ResolvePass * pPass, AstNode * pNode)
 
 		case ASTK_BlockStmt:
 		{
-			// NOTE: For functions, block statements aren't responsible for pushing a new scope, since
-			//	the block scope should be the same as the scope of the params. That's why we only
-			//	push/pop if we are actually a different scope!
-
 			auto * pStmt = Down(pNode, BlockStmt);
 
-			bool shouldPushPop = peek(pPass->scopeStack).id != pStmt->scopeid;
+			// NOTE (andrew) The scope push/pop here may be a no-op if this block is from a function
+			//	definition (since blocks get their scope folded into the function definition's scope)
 
-			if (shouldPushPop)
-			{
-				Scope scope;
-				scope.id = pStmt->scopeid;
-				scope.scopek = SCOPEK_CodeBlock;
-
-				push(&pPass->scopeStack, scope);
-			}
-			Defer(if (shouldPushPop) pop(&pPass->scopeStack));
+			SCOPEID scopeidRestore = pPass->scopeidCur;
+			pPass->scopeidCur = pStmt->scopeid;
+			Defer(pPass->scopeidCur = scopeidRestore);
 
 			for (int i = 0; i < pStmt->apStmts.cItem; i++)
 			{

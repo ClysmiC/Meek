@@ -64,7 +64,7 @@ struct Type
 
 void init(Type * pType, bool isFuncType);
 //void initMove(Type * pType, Type * pTypeSrc);
-//void initCopy(Type * pType, const Type & typeSrc);
+void initCopy(Type * pType, const Type & typeSrc);
 void dispose(Type * pType);
 
 bool isTypeResolved(const Type & type);
@@ -85,7 +85,7 @@ bool funcTypeEq(const FuncType & f0, const FuncType & f1);
 uint funcTypeHash(const FuncType & f);
 
 void init(FuncType * pFuncType);
-void initMove(FuncType * pFuncType, FuncType * pFuncTypeSrc);
+// void initMove(FuncType * pFuncType, FuncType * pFuncTypeSrc);
 void initCopy(FuncType * pFuncType, const FuncType & funcTypeSrc);
 void dispose(FuncType * pFuncType);
 

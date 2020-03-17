@@ -8,7 +8,7 @@ int intValue(AstLiteralExpr * pLiteralExpr)
 
 	if (!pLiteralExpr->isValueSet)
 	{
-		StringView lexeme = pLiteralExpr->pToken->lexeme;
+		StringView lexeme = pLiteralExpr->pToken->lexeme.strv;
 		int base = 10;
 
 		// NOTE: Scanner will assign at most one '-' to

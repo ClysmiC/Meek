@@ -182,16 +182,16 @@ inline void setLexeme(Lexeme * pLexeme, const StringView & strv)
 inline void setLexeme(Lexeme * pLexeme, const char * pChz)
 {
 	pLexeme->strv.pCh = pChz;
-	pLexeme->strv.cCh = strlen(pChz);
+	pLexeme->strv.cCh = int(strlen(pChz));
 	pLexeme->hash = startHash(pLexeme->strv.pCh, pLexeme->strv.cCh);
 }
 
-u32 lexemeHash(const Lexeme & lexeme)
+inline u32 lexemeHash(const Lexeme & lexeme)
 {
 	return lexeme.hash;
 }
 
-bool lexemeEq(const Lexeme & lexeme0, const Lexeme & lexeme1)
+inline bool lexemeEq(const Lexeme & lexeme0, const Lexeme & lexeme1)
 {
 	if (lexeme0.hash != lexeme1.hash)
 	{

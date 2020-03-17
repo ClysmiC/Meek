@@ -85,7 +85,7 @@ int main()
 			}
 			else
 			{
-				print(pType->ident.pToken->lexeme);
+				print(pType->nonFuncTypeData.ident.lexeme.strv);
 				println();
 			}
 		}
@@ -96,23 +96,21 @@ int main()
 	// TODO (andrew) Probably just eagerly insert func names into the symbol table like we do for others, and generate types pending resolution
 	//	that will poke in the typid's of the args. Then, this function could be a simple audit to make sure that there are no redefined funcs.
 
-	if (!tryResolvePendingFuncSymbolsAfterTypesResolved(&parser.symbTable))
-	{
-		print("Couldn't resolve all func symbols\n");
-		return 1;
-	}
+	//if (!tryResolvePendingFuncSymbolsAfterTypesResolved(&parser.symbTable))
+	//{
+	//	print("Couldn't resolve all func symbols\n");
+	//	return 1;
+	//}
 
 	ResolvePass resolvePass;
-	init(&resolvePass);
-	resolvePass.pSymbTable = &parser.symbTable;
-	resolvePass.pTypeTable = &parser.typeTable;
+	init(&resolvePass, &parser);
 	doResolvePass(&resolvePass, pAstRoot);
 
 	print("Resolve pass all done\n");
 
 	println();
 	println();
-	debugPrintSymbolTable(parser.symbTable);
+	/*debugPrintSymbolTable(parser.symbTable);*/
 
 	println();
 	debugPrintTypeTable(parser.typeTable);

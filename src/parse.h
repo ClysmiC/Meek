@@ -38,7 +38,7 @@ struct Parser
 	Scope * pScopeRoot = nullptr;
 	Scope * pScopeCurrent = nullptr;
 
-	// Stack<Scope> scopeStack;
+	DynamicArray<Scope *> mpScopeidScope;
 
 	// TODO: Move all of these tables out to some god-struct and make these just pointers. No reason for the parser to own this stuff.
 

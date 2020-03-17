@@ -3,6 +3,7 @@
 #include "als.h"
 
 #include "id_def.h"
+#include "token.h"
 
 struct AstNode;
 struct AstVarDeclStmt;

@@ -43,8 +43,13 @@ void init(Parser * pParser, Scanner * pScanner)
 	init(&pParser->astDecs);
 	init(&pParser->apErrorNodes);
 
+	init(&pParser->mpScopeidScope);
+
 	pParser->pScopeRoot = allocate(&pParser->scopeAlloc);
 	init(pParser->pScopeRoot, SCOPEID_BuiltIn, SCOPEK_BuiltIn, nullptr);
+
+	Assert(pParser->mpScopeidScope.cItem == SCOPEID_BuiltIn);
+	append(&pParser->mpScopeidScope, pParser->pScopeRoot);
 }
 
 AstNode * parseProgram(Parser * pParser, bool * poSuccess)
@@ -1371,7 +1376,7 @@ AstNode * parseFuncSymbolExpr(Parser * pParser)
 		pNode->pTokenIdent = pTokenIdent;
 		pNode->symbexprk = SYMBEXPRK_Unresolved;
 		pNode->unresolvedData.ignoreVars = true;
-		init(&pNode->unresolvedData.apCandidates);
+		init(&pNode->unresolvedData.aCandidates);
 
 		return Up(pNode);
 	}
@@ -1466,7 +1471,7 @@ AstNode * parseVarOrMemberVarSymbolExpr(Parser * pParser, NULLABLE AstNode * pMe
 		// Cannot determine yet if this is a var or func
 
 		pNode->symbexprk = SYMBEXPRK_Unresolved;
-		init(&pNode->unresolvedData.apCandidates);
+		init(&pNode->unresolvedData.aCandidates);
 		pNode->unresolvedData.ignoreVars = false;
 	}
 
@@ -2291,10 +2296,13 @@ Scope * pushScope(Parser * pParser, SCOPEK scopek)
 	Assert(pParser->pScopeCurrent);
 
 	Scope * pScope = allocate(&pParser->scopeAlloc);
+
 	init(pScope, pParser->scopeidNext, scopek, pParser->pScopeCurrent);
 
-	pParser->pScopeCurrent = pScope;
+	Assert(pParser->mpScopeidScope.cItem == pScope->id);
+	append(&pParser->mpScopeidScope, pScope);
 
+	pParser->pScopeCurrent = pScope;
 	return pParser->pScopeCurrent;
 }
 

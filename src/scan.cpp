@@ -747,7 +747,7 @@ void makeToken(Scanner * pScanner, TOKENK tokenk, StringView lexeme, Token * poT
 		poToken->startEnd.iStart = pScanner->iTextTokenStart;
 		poToken->startEnd.iEnd = pScanner->iText;
 		poToken->tokenk = tokenk;
-		poToken->lexeme = lexeme;
+		setLexeme(&poToken->lexeme, lexeme);
 		poToken->grferrtok = 0;
 
 		forceWrite(&pScanner->prevBuffer, *poToken);
