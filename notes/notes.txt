@@ -1,61 +1,18 @@
-Add hint to varexpr to manually disambiguate things.
-Allowed hints:
-	fn
-	type
-	
-If there is no hint, varexprs get looked up in the following order:
+type coercion
 
-Name resolution for varexpr
+int = 32 bit int
+float = 32 bit float
 
--Always search for a variable. If we find one, that's the one.
+if those ranges don't suffice for you, you should have enough domain knowledge to know to use s64 / f64 instead. The existence of those more specific types are self-documenting.
 
 
-Need a way to specify a particular overload of a function:
-
-fn theThingImpl()
-{
-	print("hi");
-}
-
-fn theThingImpl(int i)
-{
-	print(i);
-}
-
-fn delegate (fn () theThing)
-{
-	theThing();
-}
-
-fn delegate (fn (int) theThing)
-{
-	theThing(4);
-}
-
-fn main()
-{
-	deletage(fn theThingImpl);		// Error, ambiguous argument
-	delegate(fn theThingImpl());	// prints "hi"
-	delegate(fn theThingImpl(int));	// prints "4";
-}
+you can only coerce if you don't lose information
+u8 -> u16 -> u32 -> u64
+s8 -> s16 -> s32 -> s64
 
 
+all comparisons < > <= >= on numeric values will do necessary type casts before comparing. MAYBE not between int/float values if the cast can get it wrong...
 
+you can coerce from any ptr to byte ptr. (maybe need to be the same degree, however? i.e., can't coerce ^^int to ^byte)
 
-
-
-
-
-
-Order of things
-
-parse
-	-all type definitions get put into type table
-	-all references to types get put into pending list
-		-types of vars
-		-types of funcs		// should these 2 be separate? vars can be of func type...
-		
-resolve all pending types
-
-resolve pass
-	
+nothing implicitly coerces to/from boolean (MAYBE a null pointer does to false)...

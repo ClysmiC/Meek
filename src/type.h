@@ -84,6 +84,16 @@ uint typeHash(const Type & t);
 bool funcTypeEq(const FuncType & f0, const FuncType & f1);
 uint funcTypeHash(const FuncType & f);
 
+inline uint typeHashPtr(Type * const& pType)
+{
+	return typeHash(*pType);
+}
+
+inline bool typeEqPtr(Type * const& pType0, Type * const& pType1)
+{
+	return typeEq(*pType0, *pType1);
+}
+
 void init(FuncType * pFuncType);
 // void initMove(FuncType * pFuncType, FuncType * pFuncTypeSrc);
 void initCopy(FuncType * pFuncType, const FuncType & funcTypeSrc);
@@ -110,43 +120,46 @@ inline bool typidEq(const TYPID & typid0, const TYPID & typid1)
 	return typid0 == typid1;
 }
 
-
-struct TypePendingResolve
-{
-	// Info we need to resolve the type
-
-	Scope * pScope;
-	Type * pType;
-
-	// Typid value to poke into corresponding AST node when we succeed resolving
-
-	TYPID * pTypidUpdateOnResolve;
-};
-
-// Life-cycle of a type
-//	- During parse, types are allocated by a pool allocator and filled out w/ all known info.
-//	- We store a pointer to it in the "pending resolution" list. After parsing,
-//		we iterate over the list as many times as needed to insert all types pending resolution. Once resolved,
-//		we copy them into table then dispose/release the original.
-
 struct TypeTable
 {
-	// Parser * pParser;		// HACK: Need to access parser to release Types once they get resolved, since the originals are pool allocated from the parser
-	BiHashMap<TYPID, Type> table;
+	struct TypePendingResolve
+	{
+		// Info we need to resolve the type
 
-	// Due to order independence of certain types of declarations, unresolved types are put in
-	//	a "pending" list which gets resolved at a later time.
+		Type type;
+		Scope * pScope;
+
+		// Typid value to poke into corresponding AST node when we succeed resolving
+
+		TYPID * pTypidUpdateOnResolve;
+	};
 
 	DynamicArray<TypePendingResolve> typesPendingResolution;
+	BiHashMap<TYPID, Type> table;
 
 	TYPID typidNext = TYPID_ActualTypesStart;
 };
 
 void init(TypeTable * pTable);
 NULLABLE const Type * lookupType(const TypeTable & table, TYPID typid);
-
 NULLABLE const FuncType * funcTypeFromDefnStmt(const TypeTable & typeTable, const AstFuncDefnStmt & defnStmt);
 
+PENDINGTYPID registerPendingNonFuncType(
+	TypeTable * pTable,
+	Scope * pScope,
+	Lexeme ident,
+	const DynamicArray<TypeModifier> & aTypemod,
+	NULLABLE TYPID * pTypidUpdateOnResolve=nullptr);
+
+PENDINGTYPID registerPendingFuncType(
+	TypeTable * pTable,
+	Scope * pScope,
+	const DynamicArray<TypeModifier> & aTypemod,
+	const DynamicArray<PENDINGTYPID> & aPendingTypidParams,
+	const DynamicArray<PENDINGTYPID> & aPendingTypidReturns,
+	NULLABLE TYPID * pTypidUpdateOnResolve=nullptr);
+
+void setPendingTypeUpdateOnResolvePtr(TypeTable * pTable, PENDINGTYPID pendingTypid, TYPID * pTypidUpdateOnResolve);
 
 TYPID ensureInTypeTable(TypeTable * pTable, const Type & type, bool debugAssertIfAlreadyInTable=false);
 

@@ -37,7 +37,6 @@ void init(Parser * pParser, Scanner * pScanner)
 	pParser->pScanner = pScanner;
 	init(&pParser->astAlloc);
 	init(&pParser->tokenAlloc);
-	init(&pParser->typeAlloc);
 	init(&pParser->typeTable);
 	init(&pParser->scopeAlloc);
 	init(&pParser->astDecs);
@@ -565,16 +564,16 @@ AstNode * parseVarDeclStmt(Parser * pParser, EXPECTK expectkName, EXPECTK expect
 
 	// Parse type
 
-	TypePendingResolve * pTypePendingResolve = nullptr;
+	// TypePendingResolve * pTypePendingResolve = nullptr;
+
+	PENDINGTYPID pendingTypid = PENDINGTYPID_Nil;
 	{
 		ParseTypeResult parseTypeResult = tryParseType(pParser);
-		if (!parseTypeResult.success)
+		if (!parseTypeResult.ptrk == PTRK_Error)
 		{
-			pErr = parseTypeResult.pErr;
+			pErr = parseTypeResult.errorData.pErr;
 			goto LFailCleanup;
 		}
-
-		pTypePendingResolve = parseTypeResult.pTypePendingResolve;
 	}
 
 	// Parse name
@@ -679,7 +678,7 @@ AstNode * parseVarDeclStmt(Parser * pParser, EXPECTK expectkName, EXPECTK expect
 
 	// Remember to poke in the typid once this type is resolved
 
-	pTypePendingResolve->pTypidUpdateOnResolve = &pNode->typid;
+	setPendingTypeUpdateOnResolvePtr(&pParser->typeTable, pendingTypid, &pNode->typid);
 
 	if (pTokenIdent)
 	{
@@ -697,19 +696,6 @@ LFailCleanup:
 	if (pTokenIdent)
 	{
 		release(&pParser->tokenAlloc, pTokenIdent);
-	}
-
-	if (pTypePendingResolve)
-	{
-		for (int iModifier = 0; iModifier < pTypePendingResolve->pType->aTypemods.cItem; iModifier++)
-		{
-			TypeModifier * pTypemod = &pTypePendingResolve->pType->aTypemods[iModifier];
-
-			if (pTypemod->typemodk == TYPEMODK_Array)
-			{
-				append(&pErr->apChildren, pTypemod->pSubscriptExpr);
-			}
-		}
 	}
 
 	return Up(pErr);
@@ -1382,37 +1368,43 @@ AstNode * parseFuncSymbolExpr(Parser * pParser)
 	}
 	else if (tokenkNextNext == TOKENK_OpenParen)
 	{
+		Lexeme ident;
+		DynamicArray<PENDINGTYPID> aPendingTypidParam;
+		init(&aPendingTypidParam);
+		Defer(dispose(&aPendingTypidParam));
+
 		ParseFuncHeaderParam parseFuncHeaderParam;
 		parseFuncHeaderParam.funcheaderk = FUNCHEADERK_SymbolExpr;
-
-		AstNode * pNodeUnderConstruction = nullptr;
-		DynamicArray<TYPID> * paTypidUnderConstruction = nullptr;
-		{
-			StartEndIndices startEndPlaceholder(-1, -1);
-
-			auto * pNode = AstNew(pParser, SymbolExpr, startEndPlaceholder);
-			pNode->symbexprk = SYMBEXPRK_Func;
-			pNode->funcData.pDefnCached = nullptr;
-			init(&pNode->funcData.aTypidDisambig);
-
-			parseFuncHeaderParam.paramSymbolExpr.pSymbExpr = pNode;
-
-			pNodeUnderConstruction = Up(pNode);
-			paTypidUnderConstruction = &pNode->funcData.aTypidDisambig;
-		}
+		parseFuncHeaderParam.paramSymbolExpr.paPendingTypidParam = &aPendingTypidParam;
+		parseFuncHeaderParam.paramSymbolExpr.poIdent = &ident;
 
 		AstErr * pErr = tryParseFuncHeader(pParser, parseFuncHeaderParam);
-
 		if (pErr)
 		{
-			dispose(paTypidUnderConstruction);
-			release(&pParser->astAlloc, pNodeUnderConstruction);
 			return Up(pErr);
 		}
 
 		// Success!
 
-		return pNodeUnderConstruction;
+		auto startEndPrev = prevTokenStartEnd(pParser->pScanner);
+
+		auto * pNode = AstNew(pParser, SymbolExpr, makeStartEnd(iStart + startEndPrev.iEnd));
+		pNode->symbexprk = SYMBEXPRK_Func;
+		pNode->funcData.pDefnCached = nullptr;		// Not yet resolved
+		init(&pNode->funcData.aTypidDisambig);
+
+		for (int iTypeDisambig = 0; iTypeDisambig < parseFuncHeaderParam.paramSymbolExpr.paPendingTypidParam->cItem; iTypeDisambig++)
+		{
+			TYPID * pTypid = appendNew(&pNode->funcData.aTypidDisambig);
+			*pTypid = TYPID_Unresolved;
+
+			setPendingTypeUpdateOnResolvePtr(
+				&pParser->typeTable,
+				(*parseFuncHeaderParam.paramSymbolExpr.paPendingTypidParam)[iTypeDisambig],
+				pTypid);
+		}
+
+		return Up(pNode);
 	}
 	else
 	{
@@ -1484,8 +1476,7 @@ ParseTypeResult tryParseType(Parser * pParser)
 	init(&aTypemods);
 	Defer(dispose(&aTypemods););
 
-	ParseTypeResult result { 0 };
-	Type * pFnTypeUnderConstruction = nullptr;
+	ParseTypeResult result;
 
 	while (peekToken(pParser->pScanner) != TOKENK_Identifier &&
 		   peekToken(pParser->pScanner) != TOKENK_Fn)
@@ -1498,9 +1489,9 @@ ParseTypeResult tryParseType(Parser * pParser)
 
 			if (isErrorNode(*pSubscriptExpr))
 			{
-				result.success = false;
-				result.pErr = DownErr(pSubscriptExpr);
-				goto LFailCleanup;
+				result.ptrk = PTRK_Error;
+				result.errorData.pErr = DownErr(pSubscriptExpr);
+				return result;
 			}
 
 			if (!tryConsumeToken(pParser->pScanner, TOKENK_CloseBracket))
@@ -1510,9 +1501,9 @@ ParseTypeResult tryParseType(Parser * pParser)
 				auto * pErr = AstNewErr1Child(pParser, ExpectedTokenkErr, makeStartEnd(startEndPrev.iEnd + 1), pSubscriptExpr);
 				append(&pErr->aTokenkValid, TOKENK_CloseBracket);
 
-				result.success = false;
-				result.pErr = UpErr(pErr);
-				goto LFailCleanup;
+				result.ptrk = PTRK_Error;
+				result.errorData.pErr = UpErr(pErr);
+				return result;
 			}
 
 			TypeModifier mod;
@@ -1532,9 +1523,9 @@ ParseTypeResult tryParseType(Parser * pParser)
 		{
 			AstNode * pErr = handleScanOrUnexpectedTokenkErr(pParser, nullptr);
 
-			result.success = false;
-			result.pErr = DownErr(pErr);
-			goto LFailCleanup;
+			result.ptrk = PTRK_Error;
+			result.errorData.pErr = DownErr(pErr);
+			return result;
 		}
 	}
 
@@ -1543,23 +1534,18 @@ ParseTypeResult tryParseType(Parser * pParser)
 	{
 		// Non-func type
 
-		Type * pType = newType(pParser);
-		init(pType, false /* isFuncType */);
-		reinitMove(&pType->aTypemods, &aTypemods);
+		// Success!
 
 		Token * pTokenIdent = ensureAndClaimPendingToken(pParser);
 		consumeToken(pParser->pScanner, pTokenIdent);
 
-		pType->nonFuncTypeData.ident.lexeme = pTokenIdent->lexeme;
-		pType->nonFuncTypeData.ident.scopeid = SCOPEID_Nil;		// Not yet known
-
-		TypePendingResolve * pTypePendingResolve = appendNew(&pParser->typeTable.typesPendingResolution);
-		pTypePendingResolve->pScope = pParser->pScopeCurrent;
-		pTypePendingResolve->pType = pType;
-		pTypePendingResolve->pTypidUpdateOnResolve = nullptr;    // NOTE: Caller sets this value
-
-		result.success = true;
-		result.pTypePendingResolve = pTypePendingResolve;
+		result.ptrk = PTRK_NonFuncType;
+		result.nonErrorData.pendingTypid =
+			registerPendingNonFuncType(
+				&pParser->typeTable,
+				pParser->pScopeCurrent,
+				pTokenIdent->lexeme,
+				aTypemods);
 
 		return result;
 	}
@@ -1567,32 +1553,37 @@ ParseTypeResult tryParseType(Parser * pParser)
 	{
 		// Func type
 
-		pFnTypeUnderConstruction = newType(pParser);
-		init(pFnTypeUnderConstruction, true /* isFuncType */);
+		DynamicArray<PENDINGTYPID> aPendingTypidParam;
+		init(&aPendingTypidParam);
+		Defer(dispose(&aPendingTypidParam));
 
-		reinitMove(&pFnTypeUnderConstruction->aTypemods, &aTypemods);
+		DynamicArray<PENDINGTYPID> aPendingTypidReturn;
+		init(&aPendingTypidReturn);
+		Defer(dispose(&aPendingTypidReturn));
 
 		ParseFuncHeaderParam param;
 		param.funcheaderk = FUNCHEADERK_Type;
-		param.paramType.pioFuncType = &pFnTypeUnderConstruction->funcTypeData.funcType;
+		param.paramType.paPendingTypidParam = &aPendingTypidParam;
+		param.paramType.paPendingTypidReturn = &aPendingTypidReturn;
 
 		AstErr * pErr = tryParseFuncHeader(pParser, param);
 		if (pErr)
 		{
-			result.success = false;
-			result.pErr = pErr;
-			goto LFailCleanup;
+			result.ptrk = PTRK_Error;
+			result.errorData.pErr = pErr;
+			return result;
 		}
 
 		// Success!
 
-		TypePendingResolve * pTypePendingResolve = appendNew(&pParser->typeTable.typesPendingResolution);
-		pTypePendingResolve->pScope = pParser->pScopeCurrent;
-		pTypePendingResolve->pType = pFnTypeUnderConstruction;
-		pTypePendingResolve->pTypidUpdateOnResolve = nullptr;    // NOTE: Caller sets this value
-
-		result.success = true;
-		result.pTypePendingResolve = pTypePendingResolve;
+		result.ptrk = PTRK_FuncType;
+		result.nonErrorData.pendingTypid =
+			registerPendingFuncType(
+				&pParser->typeTable,
+				pParser->pScopeCurrent,
+				aTypemods,
+				aPendingTypidParam,
+				aPendingTypidReturn);
 
 		return result;
 	}
@@ -1600,32 +1591,10 @@ ParseTypeResult tryParseType(Parser * pParser)
 	{
 		AstNode * pErr = handleScanOrUnexpectedTokenkErr(pParser, nullptr);
 		
-		result.success = false;
-		result.pErr = DownErr(pErr);
-		goto LFailCleanup;
+		result.ptrk = PTRK_Error;
+		result.errorData.pErr = DownErr(pErr);
+		return result;
 	}
-
-LFailCleanup:
-	Assert(result.success == false);
-	Assert(result.pErr);
-
-	DynamicArray<TypeModifier> * paTypemods = (pFnTypeUnderConstruction) ? &pFnTypeUnderConstruction->aTypemods : &aTypemods;
-	for (int iTypemod = 0; iTypemod < paTypemods->cItem; iTypemod++)
-	{
-		TypeModifier * pTypemod = &(*paTypemods)[iTypemod];
-		if (pTypemod->typemodk == TYPEMODK_Array)
-		{
-			append(&result.pErr->apChildren, pTypemod->pSubscriptExpr);
-		}
-	}
-
-	if (pFnTypeUnderConstruction)
-	{
-		dispose(pFnTypeUnderConstruction);
-		releaseType(pParser, pFnTypeUnderConstruction);
-	}
-
-	return result;
 }
 
 AstErr * tryParseFuncHeader(Parser * pParser, const ParseFuncHeaderParam & param)
@@ -1647,12 +1616,13 @@ AstErr * tryParseFuncHeader(Parser * pParser, const ParseFuncHeaderParam & param
 
 		struct UFuncHeaderType				// FUNCHEADERK_Type
 		{
-			FuncType * pioFuncType;
+			DynamicArray<PENDINGTYPID> * paPendingTypidParam;
+			DynamicArray<PENDINGTYPID> * paPendingTypidReturn;
 		} paramType;
 
 		struct UFuncHeaderSymbolExpr		// FUNCHEADERK_SymbolExpr
 		{
-			AstSymbolExpr * pSymbExpr;
+			DynamicArray<PENDINGTYPID> * paPendingTypidParam;
 		} paramSymbolExpr;
 	};
 
@@ -1675,12 +1645,13 @@ AstErr * tryParseFuncHeader(Parser * pParser, const ParseFuncHeaderParam & param
 
 			case FUNCHEADERK_Type:
 			{
-				pPplParam->paramType.pioFuncType = pfhParam.paramType.pioFuncType;
+				pPplParam->paramType.paPendingTypidParam = pfhParam.paramType.paPendingTypidParam;
+				pPplParam->paramType.paPendingTypidReturn = pfhParam.paramType.paPendingTypidReturn;
 			} break;
 
 			case FUNCHEADERK_SymbolExpr:
 			{
-				pPplParam->paramSymbolExpr.pSymbExpr = pfhParam.paramSymbolExpr.pSymbExpr;
+				pPplParam->paramSymbolExpr.paPendingTypidParam = pfhParam.paramSymbolExpr.paPendingTypidParam;
 			} break;
 
 			default:
@@ -1784,11 +1755,10 @@ AstErr * tryParseFuncHeader(Parser * pParser, const ParseFuncHeaderParam & param
 				// Type
 
 				ParseTypeResult parseTypeResult = tryParseType(pParser);
-				if (!parseTypeResult.success)
+				if (!parseTypeResult.ptrk == PTRK_Error)
 				{
-					return DownErr(parseTypeResult.pErr);
+					return DownErr(parseTypeResult.errorData.pErr);
 				}
-
 
 				if (param.funcheaderk == FUNCHEADERK_Type)
 				{
@@ -1806,13 +1776,12 @@ AstErr * tryParseFuncHeader(Parser * pParser, const ParseFuncHeaderParam & param
 
 					if (param.paramk == PARAMK_Param)
 					{
-						TYPID * pTypid = appendNew(&param.paramType.pioFuncType->paramTypids);
-						parseTypeResult.pTypePendingResolve->pTypidUpdateOnResolve = pTypid;
+						append(param.paramType.paPendingTypidParam, parseTypeResult.nonErrorData.pendingTypid);
 					}
 					else
 					{
-						TYPID * pTypid = appendNew(&param.paramType.pioFuncType->returnTypids);
-						parseTypeResult.pTypePendingResolve->pTypidUpdateOnResolve = pTypid;
+						Assert(param.paramk == PARAMK_Return);
+						append(param.paramType.paPendingTypidReturn, parseTypeResult.nonErrorData.pendingTypid);
 					}
 				}
 				else
@@ -1822,10 +1791,8 @@ AstErr * tryParseFuncHeader(Parser * pParser, const ParseFuncHeaderParam & param
 
 					Assert(param.funcheaderk == FUNCHEADERK_SymbolExpr);
 					Assert(param.paramk == PARAMK_Param);
-					Assert(param.paramSymbolExpr.pSymbExpr->symbexprk == SYMBEXPRK_Func);
 
-					TYPID * pTypid = appendNew(&param.paramSymbolExpr.pSymbExpr->funcData.aTypidDisambig);
-					parseTypeResult.pTypePendingResolve->pTypidUpdateOnResolve = pTypid;
+					append(param.paramSymbolExpr.paPendingTypidParam, parseTypeResult.nonErrorData.pendingTypid);
 				}
 			}
 
@@ -1836,8 +1803,6 @@ AstErr * tryParseFuncHeader(Parser * pParser, const ParseFuncHeaderParam & param
 
 		return nullptr;
 	};
-
-	Assert(Implies(param.funcheaderk == FUNCHEADERK_SymbolExpr, param.paramSymbolExpr.pSymbExpr->symbexprk == SYMBEXPRK_Func));
 
 	int iStart = peekTokenStartEnd(pParser->pScanner).iStart;
 
@@ -1933,7 +1898,7 @@ AstErr * tryParseFuncHeader(Parser * pParser, const ParseFuncHeaderParam & param
 			return UpErr(pErr);
 		}
 
-		param.paramSymbolExpr.pSymbExpr->pTokenIdent = claimPendingToken(pParser);
+		*param.paramSymbolExpr.poIdent = pParser->pPendingToken->lexeme;
 	}
 
 	// Success!

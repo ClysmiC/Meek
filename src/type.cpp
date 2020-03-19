@@ -7,6 +7,8 @@
 void init(Type * pType, bool isFuncType)
 {
 	pType->isFuncType = isFuncType;
+	pType->isInferred = false;
+
 	init(&pType->aTypemods);
 
 	if (pType->isFuncType)
@@ -101,6 +103,75 @@ NULLABLE const FuncType * funcTypeFromDefnStmt(const TypeTable & typeTable, cons
 	{
 		return nullptr;
 	}
+}
+
+PENDINGTYPID registerPendingNonFuncType(
+	TypeTable * pTable,
+	Scope * pScope,
+	Lexeme ident,
+	const DynamicArray<TypeModifier> & aTypemod,
+	NULLABLE TYPID * pTypidUpdateOnResolve)
+{
+	PENDINGTYPID result = PENDINGTYPID(pTable->typesPendingResolution.cItem);
+
+	const bool isFuncType = false;
+	TypeTable::TypePendingResolve * pTypePending = appendNew(&pTable->typesPendingResolution);
+	init(&pTypePending->type, isFuncType);
+	pTypePending->pScope = pScope;
+	pTypePending->type.nonFuncTypeData.ident.lexeme = ident;
+	pTypePending->type.nonFuncTypeData.ident.scopeid = SCOPEID_Nil;		// Not yet known
+
+	// @Slow - move?
+
+	reinitCopy(&pTypePending->type.aTypemods, aTypemod);
+
+	return result;
+}
+
+PENDINGTYPID registerPendingFuncType(
+	TypeTable * pTable,
+	Scope * pScope,
+	const DynamicArray<TypeModifier> & aTypemod,
+	const DynamicArray<PENDINGTYPID> & aPendingTypidParams,
+	const DynamicArray<PENDINGTYPID> & aPendingTypidReturns,
+	NULLABLE TYPID * pTypidUpdateOnResolve)
+{
+	PENDINGTYPID result = PENDINGTYPID(pTable->typesPendingResolution.cItem);
+
+	const bool isFuncType = true;
+	TypeTable::TypePendingResolve * pTypePending = appendNew(&pTable->typesPendingResolution);
+	init(&pTypePending->type, isFuncType);
+	pTypePending->pScope = pScope;
+
+	// @Slow - move?
+
+	reinitCopy(&pTypePending->type.aTypemods, aTypemod);
+
+	for (int iParam = 0; iParam < aPendingTypidParams.cItem; iParam++)
+	{
+		TYPID * pTypidParam = appendNew(&pTypePending->type.funcTypeData.funcType.paramTypids);
+		*pTypidParam = TYPID_Unresolved;
+		setPendingTypeUpdateOnResolvePtr(pTable, aPendingTypidParams[iParam], pTypidParam);
+	}
+
+	for (int iReturn = 0; iReturn < aPendingTypidReturns.cItem; iReturn++)
+	{
+		TYPID * pTypidReturn = appendNew(&pTypePending->type.funcTypeData.funcType.returnTypids);
+		*pTypidReturn = TYPID_Unresolved;
+		setPendingTypeUpdateOnResolvePtr(pTable, aPendingTypidReturns[iReturn], pTypidReturn);
+	}
+
+	return result;
+}
+
+void setPendingTypeUpdateOnResolvePtr(TypeTable * pTable, PENDINGTYPID pendingTypid, TYPID * pTypidUpdateOnResolve)
+{
+	Assert(pendingTypid < PENDINGTYPID(pTable->typesPendingResolution.cItem));
+
+	TypeTable::TypePendingResolve * pTypePending = &pTable->typesPendingResolution[pendingTypid];
+	Assert(pTypePending->pTypidUpdateOnResolve == nullptr);
+
+	pTypePending->pTypidUpdateOnResolve = pTypidUpdateOnResolve;
 }
 
 bool isUnmodifiedType(const Type & type)
@@ -487,39 +558,34 @@ TYPID ensureInTypeTable(TypeTable * pTable, const Type & type, bool debugAssertI
 
 bool tryResolveAllTypes(Parser * pParser)
 {
-	auto tryResolvePendingType = [](const TypePendingResolve & typePending)
+	auto tryResolvePendingType = [](TypeTable::TypePendingResolve * pTypePending)
 	{
-		Type * pType = typePending.pType;
-		if (!typePending.pType->isFuncType)
+		if (!pTypePending->type.isFuncType)
 		{
 			// Non-func type
 
-			ScopedIdentifier candidate = typePending.pType->nonFuncTypeData.ident;
-
-			Scope * pScope = typePending.pScope;
-			SymbolInfo symbInfo = lookupTypeSymbol(*typePending.pScope, typePending.pType->nonFuncTypeData.ident.lexeme);
-
+			SymbolInfo symbInfo = lookupTypeSymbol(*pTypePending->pScope, pTypePending->type.nonFuncTypeData.ident.lexeme);
 			if (symbInfo.symbolk == SYMBOLK_Nil)
 				return false;
 
-			pType->nonFuncTypeData.ident.scopeid = scopeidFromSymbolInfo(symbInfo);
+			pTypePending->type.nonFuncTypeData.ident.scopeid = scopeidFromSymbolInfo(symbInfo);
 			return true;
 		}
 		else
 		{
 			// Func type
 
-			for (int i = 0; i < pType->funcTypeData.funcType.paramTypids.cItem; i++)
+			for (int i = 0; i < pTypePending->type.funcTypeData.funcType.paramTypids.cItem; i++)
 			{
-				if (!isTypeResolved(pType->funcTypeData.funcType.paramTypids[i]))
+				if (!isTypeResolved(pTypePending->type.funcTypeData.funcType.paramTypids[i]))
 				{
 					return false;
 				}
 			}
 
-			for (int i = 0; i < pType->funcTypeData.funcType.returnTypids.cItem; i++)
+			for (int i = 0; i < pTypePending->type.funcTypeData.funcType.returnTypids.cItem; i++)
 			{
-				if (!isTypeResolved(pType->funcTypeData.funcType.returnTypids[i]))
+				if (!isTypeResolved(pTypePending->type.funcTypeData.funcType.returnTypids[i]))
 				{
 					return false;
 				}
@@ -532,15 +598,22 @@ bool tryResolveAllTypes(Parser * pParser)
 	// NOTE: This *should* be doable in a single pass after we have inserted all declared type symbols into the symbol table.
 	//	That might change if I add typedefs, since typedefs may form big dependency chains.
 
+	// HMM: Is it worth actually keeping the pending types that fail to resolve around? Might be useful for error
+	//	reporting, but could probably just dispose all of them and empty the array.
+
 	for (int i = pParser->typeTable.typesPendingResolution.cItem - 1; i >= 0; i--)
 	{
-		TypePendingResolve * pTypePending = &pParser->typeTable.typesPendingResolution[i];
-		if (tryResolvePendingType(*pTypePending))
-		{
-			TYPID typid = ensureInTypeTable(&pParser->typeTable, *(pTypePending->pType));
-			*(pTypePending->pTypidUpdateOnResolve) = typid;
+		TypeTable::TypePendingResolve * pTypePending = &pParser->typeTable.typesPendingResolution[i];
 
-			releaseType(pParser, pTypePending->pType);		// TODO: Come up with a better strategy for this...
+		if (tryResolvePendingType(pTypePending))
+		{
+			TYPID typid = ensureInTypeTable(&pParser->typeTable, pTypePending->type);
+			if (pTypePending->pTypidUpdateOnResolve)
+			{
+				*(pTypePending->pTypidUpdateOnResolve) = typid;
+			}
+
+			dispose(&pTypePending->type);
 			unorderedRemove(&pParser->typeTable.typesPendingResolution, i);
 		}
 	}

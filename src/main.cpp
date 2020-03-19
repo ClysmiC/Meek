@@ -77,7 +77,7 @@ int main()
 
 		for (int i = 0; i < parser.typeTable.typesPendingResolution.cItem; i++)
 		{
-			Type * pType = parser.typeTable.typesPendingResolution[i].pType;
+			Type * pType = &parser.typeTable.typesPendingResolution[i].type;
 
 			if (pType->isFuncType)
 			{

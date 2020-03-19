@@ -96,6 +96,8 @@ typedef u16 GRFSYMBQ;
 
 void init(Scope * pScope, SCOPEID scopeid, SCOPEK scopek, Scope * pScopeParent);
 void defineSymbol(Scope * pScope, const Lexeme & lexeme, const SymbolInfo & symbInfo);
+void finalizeTypes(Scope * pScope);
+bool auditDuplicateSymbols(Scope * pScope);
 
 SCOPEID scopeidFromSymbolInfo(const SymbolInfo & symbInfo);
 SymbolInfo lookupVarSymbol(const Scope & scope, const Lexeme & lexeme, GRFSYMBQ grfsymbq = GRFSYMBQ_None);

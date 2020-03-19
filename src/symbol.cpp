@@ -100,6 +100,112 @@ void defineSymbol(Scope * pScope, const Lexeme & lexeme, const SymbolInfo & symb
 	append(paSymbInfo, symbInfo);
 }
 
+void finalizeTypes(Scope * pScope)
+{
+	// @Slow - could be combined with auditDuplicateSymbols to avoid doing an extra pass
+
+	for (auto it = iter(pScope->symbolsDefined); it.pValue; iterNext(&it))
+	{
+		Lexeme lexeme = *it.pKey;
+		DynamicArray<SymbolInfo> * paSymbInfo = it.pValue;
+
+		for (int iSymbInfo = 0; iSymbInfo < paSymbInfo->cItem; iSymbInfo++)
+		{
+			SymbolInfo symbInfo = (*paSymbInfo)[iSymbInfo];
+			if (symbInfo.symbolk != SYMBOLK_Var && symbInfo.symbolk != SYMBOLK_Func)
+				continue;
+
+			if (symbInfo.symbolk == SYMBOLK_Var)
+			{
+				AstVarDeclStmt * pDeclStmt = symbInfo.varData.pVarDeclStmt;
+				Assert(pDeclStmt->typid == TYPID_Unresolved);
+
+				// TODO: finish
+			}
+			else
+			{
+				Assert(symbInfo.symbolk == SYMBOLK_Func);
+
+				AstFuncDefnStmt * pDefnStmt = symbInfo.funcData.pFuncDefnStmt;
+				Assert(pDefnStmt->typid == TYPID_Unresolved);
+
+				// TODO: finish
+			}
+		}
+	}
+}
+
+bool auditDuplicateSymbols(Scope * pScope)
+{
+	bool duplicateFound = false;
+	for (auto it = iter(pScope->symbolsDefined); it.pValue; iterNext(&it))
+	{
+		Lexeme lexeme = *it.pKey;
+		DynamicArray<SymbolInfo> * paSymbInfo = it.pValue;
+
+		int cVar = 0;
+		int cType = 0;
+
+		for (int iSymbInfo = 0; iSymbInfo < paSymbInfo->cItem; iSymbInfo++)
+		{
+			SymbolInfo symbInfo = (*paSymbInfo)[iSymbInfo];
+
+			switch (symbInfo.symbolk)
+			{
+				case SYMBOLK_Var:
+				{
+					cVar++;
+
+					if (cVar > 1)
+					{
+						// TODO: better error story
+
+						print("Duplicate variable ");
+						print(lexeme.strv);
+
+						duplicateFound = true;
+
+						remove(paSymbInfo, iSymbInfo);
+						iSymbInfo--;
+					}
+				}
+
+				case SYMBOLK_Struct:
+				{
+					if (cType > 1)
+					{
+						// TODO: better error story
+
+						print("Duplicate type ");
+						print(lexeme.strv);
+
+						duplicateFound = true;
+
+						remove(paSymbInfo, iSymbInfo);
+						iSymbInfo--;
+					}
+				}
+
+				case SYMBOLK_Func:
+				{
+					// @Slow
+
+					for (int iSymbInfoOther = iSymbInfo + 1; iSymbInfoOther < paSymbInfo->cItem; iSymbInfoOther++)
+					{
+						SymbolInfo symbInfoOther = (*paSymbInfo)[iSymbInfo];
+						if (symbInfoOther.symbolk != SYMBOLK_Func)
+							continue;
+
+						// TODO: detect same types and report error
+					}
+				}
+			}
+		}
+	}
+
+	return !duplicateFound;
+}
+
 SCOPEID scopeidFromSymbolInfo(const SymbolInfo & symbInfo)
 {
 	switch (symbInfo.symbolk)
@@ -148,7 +254,6 @@ SymbolInfo lookupVarSymbol(const Scope & scope, const Lexeme & lexeme, GRFSYMBQ 
 
 	Assert(aSymbInfo.cItem <= 1);
 
-
 	if (aSymbInfo.cItem == 1)
 	{
 		return aSymbInfo[0];
@@ -177,7 +282,6 @@ SymbolInfo lookupTypeSymbol(const Scope & scope, const Lexeme & lexeme, GRFSYMBQ
 
 	Assert(aSymbInfo.cItem <= 1);
 
-
 	if (aSymbInfo.cItem == 1)
 	{
 		return aSymbInfo[0];
@@ -194,9 +298,6 @@ void lookupFuncSymbol(const Scope & scope, const Lexeme & lexeme, DynamicArray<S
 {
 	Assert((grfsymbq & FSYMBQ_IgnoreFuncs) == 0);
 	grfsymbq |= (FSYMBQ_IgnoreVars | FSYMBQ_IgnoreTypes);
-
-	// @Slow - using dynamic array when we know we have a fixed number of results, just to
-	//	conform to the API.
 
 	lookupSymbol(scope, lexeme, poResult, grfsymbq);
 }

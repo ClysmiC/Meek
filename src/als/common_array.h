@@ -184,6 +184,13 @@ void initCopy(DynamicArray<T> * pArray, const DynamicArray<T> & arraySrc)
 	}
 }
 
+template <typename T>
+void reinitCopy(DynamicArray<T> * pArray, const DynamicArray<T> & arraySrc)
+{
+	dispose(pArray);
+	initCopy(pArray, arraySrc);
+}
+
 // These extract functions feel a bit too clever/unsafe... if they bite me once or twice I might just delete them.
 
 template <typename T, typename E>

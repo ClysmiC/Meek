@@ -9,6 +9,12 @@
     #define ALS_DEBUG
 #endif
 
+// Disable warnings
+
+#pragma warning(disable: 26812)     // "prefer enum class" ; Disabling because enum class doesn't support bitwise operators without ugly overloads or macros
+#pragma warning(disable: 26495)     // "member variable is uninitialized. Always initialize a member variable" ; Disabling because it really dislikes my type punning AST trick
+#pragma warning(disable: 6385)      // "reading invalid data from array" ; Disabling because it dislikes mp_ variables
+
 #include "macro.h"
 #include "common.h"
 
@@ -27,8 +33,3 @@
 #endif
 
 
-// Disable warnings
-
-#pragma warning(disable: 26812)     // "prefer enum class" ; Disabling because enum class doesn't support bitwise operators without ugly overloads or macros
-#pragma warning(disable: 26495)     // "member variable is uninitialized. Always initialize a member variable" ; Disabling because it really dislikes my type punning AST trick
-#pragma warning(disable: 6385)      // "reading invalid data from array" ; Disabling because it dislikes mp_ variables
