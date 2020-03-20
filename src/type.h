@@ -134,7 +134,8 @@ struct TypeTable
 		TYPID * pTypidUpdateOnResolve;
 	};
 
-	DynamicArray<TypePendingResolve> typesPendingResolution;
+	DynamicArray<TypePendingResolve> nonFuncTypesPendingResolution;
+	DynamicArray<TypePendingResolve> funcTypesPendingResolution;
 	BiHashMap<TYPID, Type> table;
 
 	TYPID typidNext = TYPID_ActualTypesStart;
@@ -159,6 +160,8 @@ PENDINGTYPID registerPendingFuncType(
 	const DynamicArray<PENDINGTYPID> & aPendingTypidReturns,
 	NULLABLE TYPID * pTypidUpdateOnResolve=nullptr);
 
+inline bool isFuncType(PENDINGTYPID pendingTypid) { return pendingTypid & 1 << 31; }
+
 void setPendingTypeUpdateOnResolvePtr(TypeTable * pTable, PENDINGTYPID pendingTypid, TYPID * pTypidUpdateOnResolve);
 
 TYPID ensureInTypeTable(TypeTable * pTable, const Type & type, bool debugAssertIfAlreadyInTable=false);
@@ -171,6 +174,6 @@ bool canCoerce(TYPID typidFrom, TYPID typidTo);
 
 
 #if DEBUG
-void debugPrintType(const Type& type);
-void debugPrintTypeTable(const TypeTable& typeTable);
+void debugPrintType(const Type & type);
+void debugPrintTypeTable(const TypeTable & typeTable);
 #endif

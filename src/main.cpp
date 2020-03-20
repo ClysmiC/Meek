@@ -73,23 +73,7 @@ int main()
 
 	if (!tryResolveAllTypes(&parser))
 	{
-		print("Unable to resolve following type(s):\n");
-
-		for (int i = 0; i < parser.typeTable.typesPendingResolution.cItem; i++)
-		{
-			Type * pType = &parser.typeTable.typesPendingResolution[i].type;
-
-			if (pType->isFuncType)
-			{
-				print("(skipping func type)\n");
-			}
-			else
-			{
-				print(pType->nonFuncTypeData.ident.lexeme.strv);
-				println();
-			}
-		}
-
+		print("Unable to resolve some types\n");
 		return 1;
 	}
 

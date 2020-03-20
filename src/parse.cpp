@@ -44,19 +44,23 @@ void init(Parser * pParser, Scanner * pScanner)
 
 	init(&pParser->mpScopeidScope);
 
-	pParser->pScopeRoot = allocate(&pParser->scopeAlloc);
-	init(pParser->pScopeRoot, SCOPEID_BuiltIn, SCOPEK_BuiltIn, nullptr);
+	Scope * pScopeBuiltIn = allocate(&pParser->scopeAlloc);
+	init(pScopeBuiltIn, SCOPEID_BuiltIn, SCOPEK_BuiltIn, nullptr);
 
-	Assert(pParser->mpScopeidScope.cItem == SCOPEID_BuiltIn);
-	append(&pParser->mpScopeidScope, pParser->pScopeRoot);
+	Scope * pScopeGlobal = allocate(&pParser->scopeAlloc);
+	init(pScopeGlobal, SCOPEID_Global, SCOPEK_Global, pScopeBuiltIn);
+
+	pParser->pScopeCurrent = pScopeGlobal;
+	pParser->scopeidNext = SCOPEID_UserDefinedStart;
+
+	append(&pParser->mpScopeidScope, pScopeBuiltIn);
+	append(&pParser->mpScopeidScope, pScopeGlobal);
 }
 
 AstNode * parseProgram(Parser * pParser, bool * poSuccess)
 {
 	// NOTE: Empty program is valid to parse, but I may still decide that
 	//	that is a semantic error...
-
-	pushScope(pParser, SCOPEK_Global);
 
 	DynamicArray<AstNode *> apNodes;
 	init(&apNodes);
@@ -569,11 +573,13 @@ AstNode * parseVarDeclStmt(Parser * pParser, EXPECTK expectkName, EXPECTK expect
 	PENDINGTYPID pendingTypid = PENDINGTYPID_Nil;
 	{
 		ParseTypeResult parseTypeResult = tryParseType(pParser);
-		if (!parseTypeResult.ptrk == PTRK_Error)
+		if (parseTypeResult.ptrk == PTRK_Error)
 		{
 			pErr = parseTypeResult.errorData.pErr;
 			goto LFailCleanup;
 		}
+
+		pendingTypid = parseTypeResult.nonErrorData.pendingTypid;
 	}
 
 	// Parse name
@@ -1597,7 +1603,7 @@ ParseTypeResult tryParseType(Parser * pParser)
 	}
 }
 
-AstErr * tryParseFuncHeader(Parser * pParser, const ParseFuncHeaderParam & param)
+NULLABLE AstErr * tryParseFuncHeader(Parser * pParser, const ParseFuncHeaderParam & param)
 {
 	struct ParseParamListParam
 	{
@@ -1755,7 +1761,7 @@ AstErr * tryParseFuncHeader(Parser * pParser, const ParseFuncHeaderParam & param
 				// Type
 
 				ParseTypeResult parseTypeResult = tryParseType(pParser);
-				if (!parseTypeResult.ptrk == PTRK_Error)
+				if (parseTypeResult.ptrk == PTRK_Error)
 				{
 					return DownErr(parseTypeResult.errorData.pErr);
 				}
@@ -2268,6 +2274,8 @@ Scope * pushScope(Parser * pParser, SCOPEK scopek)
 	append(&pParser->mpScopeidScope, pScope);
 
 	pParser->pScopeCurrent = pScope;
+	pParser->scopeidNext = SCOPEID(pParser->scopeidNext + 1);
+
 	return pParser->pScopeCurrent;
 }
 

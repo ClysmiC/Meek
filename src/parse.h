@@ -33,8 +33,7 @@ struct Parser
 
 	// Scope
 
-	SCOPEID scopeidNext = SCOPEID_UserDefinedStart;
-	Scope * pScopeRoot = nullptr;
+	SCOPEID scopeidNext = SCOPEID_Nil;
 	Scope * pScopeCurrent = nullptr;
 
 	DynamicArray<Scope *> mpScopeidScope;
@@ -87,8 +86,8 @@ enum FUNCHEADERK
 
 enum PARAMK
 {
-PARAMK_Param,
-PARAMK_Return
+	PARAMK_Param,
+	PARAMK_Return
 };
 
 

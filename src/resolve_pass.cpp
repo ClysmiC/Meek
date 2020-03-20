@@ -20,8 +20,16 @@ void init(ResolvePass * pPass, Parser * pParser)
 
 	pPass->scopeidCur = SCOPEID_Global;
 
-	pPass->pMpScopeidScope = &pParser->mpScopeidScope;
+	pPass->pMpScopeidPScope = &pParser->mpScopeidScope;
 	pPass->pTypeTable = &pParser->typeTable;
+}
+
+void auditDuplicateSymbols(ResolvePass * pPass)
+{
+	if (!auditDuplicateSymbols((*pPass->pMpScopeidPScope)[pPass->scopeidCur]))
+	{
+		pPass->hadError = true;
+	}
 }
 
 TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
@@ -139,7 +147,7 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 
 					// Lookup all funcs matching this identifier
 
-					Scope * pScopeCur = (*pPass->pMpScopeidScope)[pPass->scopeidCur];
+					Scope * pScopeCur = (*pPass->pMpScopeidPScope)[pPass->scopeidCur];
 
 					{
 						lookupFuncSymbol(*pScopeCur, pExpr->pTokenIdent->lexeme, &pExpr->unresolvedData.aCandidates);
@@ -244,11 +252,11 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 
 					SymbolInfo symbInfoMember;
 					{
-						Scope * pScopeOwnerOuter = (*pPass->pMpScopeidScope)[pOwnerType->nonFuncTypeData.ident.scopeid];
+						Scope * pScopeOwnerOuter = (*pPass->pMpScopeidPScope)[pOwnerType->nonFuncTypeData.ident.scopeid];
 						SymbolInfo symbInfoOwner = lookupTypeSymbol(*pScopeOwnerOuter, pOwnerType->nonFuncTypeData.ident.lexeme);
 						Assert(symbInfoOwner.symbolk == SYMBOLK_Struct);
 
-						Scope * pScopeOwnerInner = (*pPass->pMpScopeidScope)[symbInfoOwner.structData.pStructDefnStmt->scopeid];
+						Scope * pScopeOwnerInner = (*pPass->pMpScopeidPScope)[symbInfoOwner.structData.pStructDefnStmt->scopeid];
 						symbInfoMember = lookupVarSymbol(*pScopeOwnerInner, pExpr->pTokenIdent->lexeme, FSYMBQ_IgnoreParent);
 					}
 
@@ -277,7 +285,7 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 				{
 					AssertInfo(!pExpr->funcData.pDefnCached, "This shouldn't be resolved yet because this is the code that should resolve it!");
 
-					Scope * pScopeCur = (*pPass->pMpScopeidScope)[pPass->scopeidCur];
+					Scope * pScopeCur = (*pPass->pMpScopeidPScope)[pPass->scopeidCur];
 
 					DynamicArray<SymbolInfo> aSymbInfoFuncCandidates;
 					init(&aSymbInfoFuncCandidates);
@@ -847,6 +855,8 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 			pPass->scopeidCur = pExpr->scopeid;
 			Defer(pPass->scopeidCur = scopeidRestore);
 
+			auditDuplicateSymbols(pPass);
+
 			auto * papParamVarDecls = &pExpr->pParamsReturnsGrp->apParamVarDecls;
 			for (int i = 0; i < papParamVarDecls->cItem; i++)
 			{
@@ -937,7 +947,7 @@ void resolveStmt(ResolvePass * pPass, AstNode * pNode)
 			if (pStmt->ident.lexeme.strv.cCh > 0)
 			{
 #if DEBUG
-				Scope * pScopeCur = (*pPass->pMpScopeidScope)[pPass->scopeidCur];
+				Scope * pScopeCur = (*pPass->pMpScopeidPScope)[pPass->scopeidCur];
 				SymbolInfo symbInfo = lookupVarSymbol(*pScopeCur, pStmt->ident.lexeme);
 				Assert(symbInfo.symbolk == SYMBOLK_Var);
 #endif
@@ -968,7 +978,7 @@ void resolveStmt(ResolvePass * pPass, AstNode * pNode)
 			auto * pStmt = Down(pNode, StructDefnStmt);
 
 #if DEBUG
-			Scope * pScopeOuter = (*pPass->pMpScopeidScope)[pPass->scopeidCur];
+			Scope * pScopeOuter = (*pPass->pMpScopeidPScope)[pPass->scopeidCur];
 			SymbolInfo symbInfo = lookupTypeSymbol(*pScopeOuter, pStmt->ident.lexeme);
 			Assert(symbInfo.symbolk == SYMBOLK_Struct);
 #endif
@@ -984,6 +994,8 @@ void resolveStmt(ResolvePass * pPass, AstNode * pNode)
 			pPass->scopeidCur = pStmt->scopeid;
 			Defer(pPass->scopeidCur = scopeidRestore);
 
+			auditDuplicateSymbols(pPass);
+
 			// Resolve member decls
 
 			for (int i = 0; i < pStmt->apVarDeclStmt.cItem; i++)
@@ -997,7 +1009,7 @@ void resolveStmt(ResolvePass * pPass, AstNode * pNode)
 			auto * pStmt = Down(pNode, FuncDefnStmt);
 
 #if DEBUG
-			Scope * pScopeCur = (*pPass->pMpScopeidScope)[pPass->scopeidCur];
+			Scope * pScopeCur = (*pPass->pMpScopeidPScope)[pPass->scopeidCur];
 			DynamicArray<SymbolInfo> aSymbInfo;
 			init(&aSymbInfo);
 			Defer(dispose(&aSymbInfo));
@@ -1015,6 +1027,8 @@ void resolveStmt(ResolvePass * pPass, AstNode * pNode)
 			SCOPEID scopeidRestore = pPass->scopeidCur;
 			pPass->scopeidCur = pStmt->scopeid;
 			Defer(pPass->scopeidCur = scopeidRestore);
+
+			auditDuplicateSymbols(pPass);
 
 			// Resolve params
 
@@ -1057,6 +1071,8 @@ void resolveStmt(ResolvePass * pPass, AstNode * pNode)
 			SCOPEID scopeidRestore = pPass->scopeidCur;
 			pPass->scopeidCur = pStmt->scopeid;
 			Defer(pPass->scopeidCur = scopeidRestore);
+
+			auditDuplicateSymbols(pPass);
 
 			for (int i = 0; i < pStmt->apStmts.cItem; i++)
 			{
@@ -1181,13 +1197,4 @@ void doResolvePass(ResolvePass * pPass, AstNode * pNode)
 			reportIceAndExit("Unknown astcatk in doResolvePass: %d", category(pNode->astk));
 		} break;
 	}
-}
-
-void reportUnresolvedIdentError(ResolvePass * pPass, ScopedIdentifier ident)
-{
-	// TODO: Insert into some sort of error proxy table. But I would need all lookups to also check this table!
-
-	// SymbolInfo info;
-	// setSymbolInfo(&info, ident, SYMBOLK_ErrorProxy, nullptr);
-	// Verify(tryInsert(pPass->pSymbolTable, ident, info));
 }

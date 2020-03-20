@@ -100,40 +100,40 @@ void defineSymbol(Scope * pScope, const Lexeme & lexeme, const SymbolInfo & symb
 	append(paSymbInfo, symbInfo);
 }
 
-void finalizeTypes(Scope * pScope)
-{
-	// @Slow - could be combined with auditDuplicateSymbols to avoid doing an extra pass
-
-	for (auto it = iter(pScope->symbolsDefined); it.pValue; iterNext(&it))
-	{
-		Lexeme lexeme = *it.pKey;
-		DynamicArray<SymbolInfo> * paSymbInfo = it.pValue;
-
-		for (int iSymbInfo = 0; iSymbInfo < paSymbInfo->cItem; iSymbInfo++)
-		{
-			SymbolInfo symbInfo = (*paSymbInfo)[iSymbInfo];
-			if (symbInfo.symbolk != SYMBOLK_Var && symbInfo.symbolk != SYMBOLK_Func)
-				continue;
-
-			if (symbInfo.symbolk == SYMBOLK_Var)
-			{
-				AstVarDeclStmt * pDeclStmt = symbInfo.varData.pVarDeclStmt;
-				Assert(pDeclStmt->typid == TYPID_Unresolved);
-
-				// TODO: finish
-			}
-			else
-			{
-				Assert(symbInfo.symbolk == SYMBOLK_Func);
-
-				AstFuncDefnStmt * pDefnStmt = symbInfo.funcData.pFuncDefnStmt;
-				Assert(pDefnStmt->typid == TYPID_Unresolved);
-
-				// TODO: finish
-			}
-		}
-	}
-}
+//void finalizeTypes(Scope * pScope)
+//{
+//	// @Slow - could be combined with auditDuplicateSymbols to avoid doing an extra pass
+//
+//	for (auto it = iter(pScope->symbolsDefined); it.pValue; iterNext(&it))
+//	{
+//		Lexeme lexeme = *it.pKey;
+//		DynamicArray<SymbolInfo> * paSymbInfo = it.pValue;
+//
+//		for (int iSymbInfo = 0; iSymbInfo < paSymbInfo->cItem; iSymbInfo++)
+//		{
+//			SymbolInfo symbInfo = (*paSymbInfo)[iSymbInfo];
+//			if (symbInfo.symbolk != SYMBOLK_Var && symbInfo.symbolk != SYMBOLK_Func)
+//				continue;
+//
+//			if (symbInfo.symbolk == SYMBOLK_Var)
+//			{
+//				AstVarDeclStmt * pDeclStmt = symbInfo.varData.pVarDeclStmt;
+//				Assert(pDeclStmt->typid == TYPID_Unresolved);
+//
+//				// TODO: finish
+//			}
+//			else
+//			{
+//				Assert(symbInfo.symbolk == SYMBOLK_Func);
+//
+//				AstFuncDefnStmt * pDefnStmt = symbInfo.funcData.pFuncDefnStmt;
+//				Assert(pDefnStmt->typid == TYPID_Unresolved);
+//
+//				// TODO: finish
+//			}
+//		}
+//	}
+//}
 
 bool auditDuplicateSymbols(Scope * pScope)
 {
@@ -196,7 +196,18 @@ bool auditDuplicateSymbols(Scope * pScope)
 						if (symbInfoOther.symbolk != SYMBOLK_Func)
 							continue;
 
-						// TODO: detect same types and report error
+						if (symbInfo.funcData.pFuncDefnStmt->typid == symbInfoOther.funcData.pFuncDefnStmt->typid)
+						{
+							// TODO: better error story
+
+							print("Duplicate function with same signature ");
+							print(lexeme.strv);
+
+							duplicateFound = true;
+
+							remove(paSymbInfo, iSymbInfo);
+							iSymbInfo--;
+						}
 					}
 				}
 			}

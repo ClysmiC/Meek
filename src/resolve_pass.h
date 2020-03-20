@@ -14,7 +14,7 @@ struct ResolvePass
 
 	SCOPEID scopeidCur = SCOPEID_Global;
 	TypeTable * pTypeTable;
-	DynamicArray<Scope *> * pMpScopeidScope;
+	DynamicArray<Scope *> * pMpScopeidPScope;
 
 	DynamicArray<ScopedIdentifier> unresolvedIdents;
 
@@ -41,7 +41,8 @@ void init(ResolvePass * pPass, Parser * pParser);
 //	dispose(&pResolvePass->unresolvedIdents);
 //}
 
+void auditDuplicateSymbols(ResolvePass * pPass);
+
 TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode);
 void resolveStmt(ResolvePass * pPass, AstNode * pNode);
 void doResolvePass(ResolvePass * pPass, AstNode * pNode);
-void reportUnresolvedIdentError(ResolvePass * pPass, ScopedIdentifier ident);

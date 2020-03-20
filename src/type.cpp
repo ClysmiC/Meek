@@ -112,14 +112,15 @@ PENDINGTYPID registerPendingNonFuncType(
 	const DynamicArray<TypeModifier> & aTypemod,
 	NULLABLE TYPID * pTypidUpdateOnResolve)
 {
-	PENDINGTYPID result = PENDINGTYPID(pTable->typesPendingResolution.cItem);
+	PENDINGTYPID result = PENDINGTYPID(pTable->nonFuncTypesPendingResolution.cItem);
 
 	const bool isFuncType = false;
-	TypeTable::TypePendingResolve * pTypePending = appendNew(&pTable->typesPendingResolution);
+	TypeTable::TypePendingResolve * pTypePending = appendNew(&pTable->nonFuncTypesPendingResolution);
 	init(&pTypePending->type, isFuncType);
 	pTypePending->pScope = pScope;
 	pTypePending->type.nonFuncTypeData.ident.lexeme = ident;
 	pTypePending->type.nonFuncTypeData.ident.scopeid = SCOPEID_Nil;		// Not yet known
+	pTypePending->pTypidUpdateOnResolve = pTypidUpdateOnResolve;
 
 	// @Slow - move?
 
@@ -136,12 +137,14 @@ PENDINGTYPID registerPendingFuncType(
 	const DynamicArray<PENDINGTYPID> & aPendingTypidReturns,
 	NULLABLE TYPID * pTypidUpdateOnResolve)
 {
-	PENDINGTYPID result = PENDINGTYPID(pTable->typesPendingResolution.cItem);
+	PENDINGTYPID result = PENDINGTYPID(pTable->funcTypesPendingResolution.cItem);
+	result = PENDINGTYPID(result | 1 << 31);
 
 	const bool isFuncType = true;
-	TypeTable::TypePendingResolve * pTypePending = appendNew(&pTable->typesPendingResolution);
+	TypeTable::TypePendingResolve * pTypePending = appendNew(&pTable->funcTypesPendingResolution);
 	init(&pTypePending->type, isFuncType);
 	pTypePending->pScope = pScope;
+	pTypePending->pTypidUpdateOnResolve = pTypidUpdateOnResolve;
 
 	// @Slow - move?
 
@@ -166,12 +169,26 @@ PENDINGTYPID registerPendingFuncType(
 
 void setPendingTypeUpdateOnResolvePtr(TypeTable * pTable, PENDINGTYPID pendingTypid, TYPID * pTypidUpdateOnResolve)
 {
-	Assert(pendingTypid < PENDINGTYPID(pTable->typesPendingResolution.cItem));
+	if (isFuncType(pendingTypid))
+	{
+		int iPending = pendingTypid & ~(1 << 31);
+		Assert(iPending < pTable->funcTypesPendingResolution.cItem);
 
-	TypeTable::TypePendingResolve * pTypePending = &pTable->typesPendingResolution[pendingTypid];
-	Assert(pTypePending->pTypidUpdateOnResolve == nullptr);
+		TypeTable::TypePendingResolve * pTypePending = &pTable->funcTypesPendingResolution[iPending];
+		Assert(pTypePending->pTypidUpdateOnResolve == nullptr);
 
-	pTypePending->pTypidUpdateOnResolve = pTypidUpdateOnResolve;
+		pTypePending->pTypidUpdateOnResolve = pTypidUpdateOnResolve;
+	}
+	else
+	{
+		int iPending = pendingTypid;
+		Assert(iPending < pTable->nonFuncTypesPendingResolution.cItem);
+
+		TypeTable::TypePendingResolve * pTypePending = &pTable->nonFuncTypesPendingResolution[iPending];
+		Assert(pTypePending->pTypidUpdateOnResolve == nullptr);
+
+		pTypePending->pTypidUpdateOnResolve = pTypidUpdateOnResolve;
+	}
 }
 
 bool isUnmodifiedType(const Type & type)
@@ -450,7 +467,8 @@ void init(TypeTable * pTable)
 		typeHash,
 		typeEq);
 
-	init (&pTable->typesPendingResolution);
+	init(&pTable->nonFuncTypesPendingResolution);
+	init(&pTable->funcTypesPendingResolution);
 
 	// Insert built in types
 
@@ -595,30 +613,40 @@ bool tryResolveAllTypes(Parser * pParser)
 		}
 	};
 
-	// NOTE: This *should* be doable in a single pass after we have inserted all declared type symbols into the symbol table.
-	//	That might change if I add typedefs, since typedefs may form big dependency chains.
-
-	// HMM: Is it worth actually keeping the pending types that fail to resolve around? Might be useful for error
-	//	reporting, but could probably just dispose all of them and empty the array.
-
-	for (int i = pParser->typeTable.typesPendingResolution.cItem - 1; i >= 0; i--)
+	for (int iList = 0; iList < 2; iList++)
 	{
-		TypeTable::TypePendingResolve * pTypePending = &pParser->typeTable.typesPendingResolution[i];
+		// NOTE (andrew) Resolve non func types first
 
-		if (tryResolvePendingType(pTypePending))
+		DynamicArray<TypeTable::TypePendingResolve> * paTypePending =
+			(iList == 0) ?
+			&pParser->typeTable.nonFuncTypesPendingResolution :
+			&pParser->typeTable.funcTypesPendingResolution;
+
+		for (int i = paTypePending->cItem - 1; i >= 0; i--)
 		{
-			TYPID typid = ensureInTypeTable(&pParser->typeTable, pTypePending->type);
-			if (pTypePending->pTypidUpdateOnResolve)
-			{
-				*(pTypePending->pTypidUpdateOnResolve) = typid;
-			}
+			TypeTable::TypePendingResolve * pTypePending = &(*paTypePending)[i];
 
-			dispose(&pTypePending->type);
-			unorderedRemove(&pParser->typeTable.typesPendingResolution, i);
+			if (tryResolvePendingType(pTypePending))
+			{
+				TYPID typid = ensureInTypeTable(&pParser->typeTable, pTypePending->type);
+				if (pTypePending->pTypidUpdateOnResolve)
+				{
+					*(pTypePending->pTypidUpdateOnResolve) = typid;
+				}
+
+				dispose(&pTypePending->type);
+				unorderedRemove(paTypePending, i);
+			}
+			else
+			{
+				bool brk = true;
+			}
 		}
 	}
 
-	return (pParser->typeTable.typesPendingResolution.cItem == 0);
+	return
+		pParser->typeTable.nonFuncTypesPendingResolution.cItem == 0 &&
+		pParser->typeTable.funcTypesPendingResolution.cItem == 0;
 }
 
 TYPID typidFromLiteralk(LITERALK literalk)
