@@ -134,8 +134,7 @@ struct TypeTable
 		TYPID * pTypidUpdateOnResolve;
 	};
 
-	DynamicArray<TypePendingResolve> nonFuncTypesPendingResolution;
-	DynamicArray<TypePendingResolve> funcTypesPendingResolution;
+	DynamicArray<TypePendingResolve> typesPendingResolution;
 	BiHashMap<TYPID, Type> table;
 
 	TYPID typidNext = TYPID_ActualTypesStart;
@@ -159,8 +158,6 @@ PENDINGTYPID registerPendingFuncType(
 	const DynamicArray<PENDINGTYPID> & aPendingTypidParams,
 	const DynamicArray<PENDINGTYPID> & aPendingTypidReturns,
 	NULLABLE TYPID * pTypidUpdateOnResolve=nullptr);
-
-inline bool isFuncType(PENDINGTYPID pendingTypid) { return pendingTypid & 1 << 31; }
 
 void setPendingTypeUpdateOnResolvePtr(TypeTable * pTable, PENDINGTYPID pendingTypid, TYPID * pTypidUpdateOnResolve);
 

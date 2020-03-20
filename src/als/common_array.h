@@ -357,7 +357,7 @@ void remove(DynamicArray<T> * pArray, int iItem)
 	T * pDst = pArray->pBuffer + iItem;
 	T * pSrc = pDst + 1;
 
-	memmove(pDst, pSrc, cItemShift);
+	memmove(pDst, pSrc, cItemShift * sizeof(T));
 
 	pArray->cItem--;
 }

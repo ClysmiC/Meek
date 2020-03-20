@@ -112,10 +112,10 @@ PENDINGTYPID registerPendingNonFuncType(
 	const DynamicArray<TypeModifier> & aTypemod,
 	NULLABLE TYPID * pTypidUpdateOnResolve)
 {
-	PENDINGTYPID result = PENDINGTYPID(pTable->nonFuncTypesPendingResolution.cItem);
+	PENDINGTYPID result = PENDINGTYPID(pTable->typesPendingResolution.cItem);
 
 	const bool isFuncType = false;
-	TypeTable::TypePendingResolve * pTypePending = appendNew(&pTable->nonFuncTypesPendingResolution);
+	TypeTable::TypePendingResolve * pTypePending = appendNew(&pTable->typesPendingResolution);
 	init(&pTypePending->type, isFuncType);
 	pTypePending->pScope = pScope;
 	pTypePending->type.nonFuncTypeData.ident.lexeme = ident;
@@ -137,11 +137,10 @@ PENDINGTYPID registerPendingFuncType(
 	const DynamicArray<PENDINGTYPID> & aPendingTypidReturns,
 	NULLABLE TYPID * pTypidUpdateOnResolve)
 {
-	PENDINGTYPID result = PENDINGTYPID(pTable->funcTypesPendingResolution.cItem);
-	result = PENDINGTYPID(result | 1 << 31);
+	PENDINGTYPID result = PENDINGTYPID(pTable->typesPendingResolution.cItem);
 
 	const bool isFuncType = true;
-	TypeTable::TypePendingResolve * pTypePending = appendNew(&pTable->funcTypesPendingResolution);
+	TypeTable::TypePendingResolve * pTypePending = appendNew(&pTable->typesPendingResolution);
 	init(&pTypePending->type, isFuncType);
 	pTypePending->pScope = pScope;
 	pTypePending->pTypidUpdateOnResolve = pTypidUpdateOnResolve;
@@ -169,26 +168,12 @@ PENDINGTYPID registerPendingFuncType(
 
 void setPendingTypeUpdateOnResolvePtr(TypeTable * pTable, PENDINGTYPID pendingTypid, TYPID * pTypidUpdateOnResolve)
 {
-	if (isFuncType(pendingTypid))
-	{
-		int iPending = pendingTypid & ~(1 << 31);
-		Assert(iPending < pTable->funcTypesPendingResolution.cItem);
+	Assert(pendingTypid < pTable->typesPendingResolution.cItem);
 
-		TypeTable::TypePendingResolve * pTypePending = &pTable->funcTypesPendingResolution[iPending];
-		Assert(pTypePending->pTypidUpdateOnResolve == nullptr);
+	TypeTable::TypePendingResolve * pTypePending = &pTable->typesPendingResolution[pendingTypid];
+	Assert(pTypePending->pTypidUpdateOnResolve == nullptr);
 
-		pTypePending->pTypidUpdateOnResolve = pTypidUpdateOnResolve;
-	}
-	else
-	{
-		int iPending = pendingTypid;
-		Assert(iPending < pTable->nonFuncTypesPendingResolution.cItem);
-
-		TypeTable::TypePendingResolve * pTypePending = &pTable->nonFuncTypesPendingResolution[iPending];
-		Assert(pTypePending->pTypidUpdateOnResolve == nullptr);
-
-		pTypePending->pTypidUpdateOnResolve = pTypidUpdateOnResolve;
-	}
+	pTypePending->pTypidUpdateOnResolve = pTypidUpdateOnResolve;
 }
 
 bool isUnmodifiedType(const Type & type)
@@ -467,8 +452,7 @@ void init(TypeTable * pTable)
 		typeHash,
 		typeEq);
 
-	init(&pTable->nonFuncTypesPendingResolution);
-	init(&pTable->funcTypesPendingResolution);
+	init(&pTable->typesPendingResolution);
 
 	// Insert built in types
 
@@ -613,40 +597,30 @@ bool tryResolveAllTypes(Parser * pParser)
 		}
 	};
 
-	for (int iList = 0; iList < 2; iList++)
+	int cUnresolved = 0;
+	for (int i = 0; i < pParser->typeTable.typesPendingResolution.cItem; i++)
 	{
-		// NOTE (andrew) Resolve non func types first
-
-		DynamicArray<TypeTable::TypePendingResolve> * paTypePending =
-			(iList == 0) ?
-			&pParser->typeTable.nonFuncTypesPendingResolution :
-			&pParser->typeTable.funcTypesPendingResolution;
-
-		for (int i = paTypePending->cItem - 1; i >= 0; i--)
+		TypeTable::TypePendingResolve * pTypePending = &pParser->typeTable.typesPendingResolution[i];
+		if (tryResolvePendingType(pTypePending))
 		{
-			TypeTable::TypePendingResolve * pTypePending = &(*paTypePending)[i];
-
-			if (tryResolvePendingType(pTypePending))
+			TYPID typid = ensureInTypeTable(&pParser->typeTable, pTypePending->type);
+			if (pTypePending->pTypidUpdateOnResolve)
 			{
-				TYPID typid = ensureInTypeTable(&pParser->typeTable, pTypePending->type);
-				if (pTypePending->pTypidUpdateOnResolve)
-				{
-					*(pTypePending->pTypidUpdateOnResolve) = typid;
-				}
-
-				dispose(&pTypePending->type);
-				unorderedRemove(paTypePending, i);
-			}
-			else
-			{
-				bool brk = true;
+				*(pTypePending->pTypidUpdateOnResolve) = typid;
 			}
 		}
+		else
+		{
+			// TODO: print error
+
+			cUnresolved++;
+		}
+
+		dispose(&pTypePending->type);
 	}
 
-	return
-		pParser->typeTable.nonFuncTypesPendingResolution.cItem == 0 &&
-		pParser->typeTable.funcTypesPendingResolution.cItem == 0;
+	dispose(&pParser->typeTable.typesPendingResolution);
+	return cUnresolved == 0;
 }
 
 TYPID typidFromLiteralk(LITERALK literalk)
