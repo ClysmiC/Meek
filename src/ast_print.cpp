@@ -689,7 +689,7 @@ void debugPrintSubAst(DebugPrintCtx * pCtx, const AstNode & node, int level, boo
 
 			bool hasInitExpr = (pStmt->pInitExpr != nullptr);
 
-			debugPrintType(pCtx, pStmt->typid, levelNext, !hasInitExpr);
+			debugPrintType(pCtx, pStmt->typidDefn, levelNext, !hasInitExpr);
 			println();
 			printTabs(pCtx, levelNext, false, false);
 

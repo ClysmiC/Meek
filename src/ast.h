@@ -337,7 +337,7 @@ struct AstExpr
 		AstFuncLiteralExpr			funcLiteralExpr;
 	};
 
-	TYPID typid = TYPID_Unresolved;
+	TYPID typidEval = TYPID_Unresolved;
 };
 #if 0
 static constexpr uint s_nodeSizeDebug = sizeof(AstExpr);
@@ -366,7 +366,7 @@ struct AstVarDeclStmt
 	NULLABLE AstNode * pInitExpr;
 
 	VARSEQID varseqid;
-	TYPID typid;
+	TYPID typidDefn;
 };
 
 struct AstStructDefnStmt
@@ -374,7 +374,7 @@ struct AstStructDefnStmt
 	ScopedIdentifier ident;
 	DynamicArray<AstNode *> apVarDeclStmt;
 	SCOPEID scopeid;        // Scope introduced by this struct defn
-	TYPID typidSelf;
+	TYPID typidDefn;
 };
 #if 0
 	static constexpr uint s_nodeSizeDebug = sizeof(AstStructDefnStmt);
@@ -388,7 +388,7 @@ struct AstFuncDefnStmt
 
 	AstNode * pBodyStmt;
 	SCOPEID scopeid;        // Scope introduced by this func defn
-	TYPID typid;			// typid corresponding to this func type (not the typid of the return value(s))
+	TYPID typidDefn;
 };
 #if 0
 	static constexpr uint s_nodeSizeDebug = sizeof(AstFuncDefnStmt);

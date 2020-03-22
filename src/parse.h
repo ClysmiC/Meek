@@ -203,11 +203,15 @@ struct ParseFuncHeaderParam
 		struct UFuncHeaderDefn				// FUNCHEADERK_Defn
 		{
 			AstFuncDefnStmt * pioNode;
+			DynamicArray<PENDINGTYPID> * paPendingTypidParam;
+			DynamicArray<PENDINGTYPID> * paPendingTypidReturn;
 		} paramDefn;
 
 		struct UFuncHeaderLiteral			// FUNCHEADERK_Literal
 		{
 			AstFuncLiteralExpr * pioNode;
+			DynamicArray<PENDINGTYPID> * paPendingTypidParam;
+			DynamicArray<PENDINGTYPID> * paPendingTypidReturn;
 		} paramLiteral;
 
 		struct UFuncHeaderType				// FUNCHEADERK_Type

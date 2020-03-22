@@ -553,7 +553,7 @@ AstNode * parseStructDefnStmt(Parser * pParser)
 
 	type.nonFuncTypeData.ident.lexeme = pNode->ident.lexeme;
 	type.nonFuncTypeData.ident.scopeid = pNode->ident.scopeid;
-	pNode->typidSelf = ensureInTypeTable(&pParser->typeTable, &type, true /* debugAssertIfAlreadyInTable */ );
+	pNode->typidDefn = ensureInTypeTable(&pParser->typeTable, &type, true /* debugAssertIfAlreadyInTable */ );
 
 	return Up(pNode);
 }
@@ -686,7 +686,7 @@ AstNode * parseVarDeclStmt(Parser * pParser, EXPECTK expectkName, EXPECTK expect
 
 	// Remember to poke in the typid once this type is resolved
 
-	setPendingTypeUpdateOnResolvePtr(&pParser->typeTable, pendingTypid, &pNode->typid);
+	setPendingTypeUpdateOnResolvePtr(&pParser->typeTable, pendingTypid, &pNode->typidDefn);
 
 	if (pTokenIdent)
 	{
@@ -2129,6 +2129,18 @@ AstNode * parseFuncDefnStmtOrLiteralExpr(Parser * pParser, FUNCHEADERK funcheade
 	ParseFuncHeaderParam parseFuncHeaderParam;
 	parseFuncHeaderParam.funcheaderk = funcheaderk;
 
+	DynamicArray<PENDINGTYPID> aPendingTypidParam;
+	init(&aPendingTypidParam);
+	Defer(dispose(&aPendingTypidParam));
+
+	DynamicArray<PENDINGTYPID> aPendingTypidReturn;
+	init(&aPendingTypidReturn);
+	Defer(dispose(&aPendingTypidReturn));
+
+	DynamicArray<TypeModifier> aTypemodDummy;
+	init(&aTypemodDummy);
+	Defer(dispose(&aTypemodDummy));
+
 	// NOTE (andrew) We break our normal pattern and allocate the node eagerly here because parseFuncHeaderGrp
 	//	needs the node to fill its info out. We are responsible for the cleanup if we hit any errors.
 
@@ -2146,6 +2158,8 @@ AstNode * parseFuncDefnStmtOrLiteralExpr(Parser * pParser, FUNCHEADERK funcheade
 			auto * pDefnNodeUnderConstruction = AstNew(pParser, FuncDefnStmt, startEndPlaceholder);
 			pDefnNodeUnderConstruction->pParamsReturnsGrp = pParamsReturnsUnderConstruction;
 			parseFuncHeaderParam.paramDefn.pioNode = pDefnNodeUnderConstruction;
+			parseFuncHeaderParam.paramDefn.paPendingTypidParam = &aPendingTypidParam;
+			parseFuncHeaderParam.paramDefn.paPendingTypidReturn = &aPendingTypidReturn;
 
 			pNodeUnderConstruction = Up(pDefnNodeUnderConstruction);
 		}
@@ -2154,6 +2168,8 @@ AstNode * parseFuncDefnStmtOrLiteralExpr(Parser * pParser, FUNCHEADERK funcheade
 			auto * pLiteralNodeUnderConstruction = AstNew(pParser, FuncLiteralExpr, startEndPlaceholder);
 			pLiteralNodeUnderConstruction->pParamsReturnsGrp = pParamsReturnsUnderConstruction;
 			parseFuncHeaderParam.paramLiteral.pioNode = pLiteralNodeUnderConstruction;
+			parseFuncHeaderParam.paramLiteral.paPendingTypidParam = &aPendingTypidParam;
+			parseFuncHeaderParam.paramLiteral.paPendingTypidReturn = &aPendingTypidReturn;
 
 			pNodeUnderConstruction = Up(pLiteralNodeUnderConstruction);
 		}
@@ -2201,6 +2217,13 @@ AstNode * parseFuncDefnStmtOrLiteralExpr(Parser * pParser, FUNCHEADERK funcheade
 		Assert(pNode->ident.lexeme.strv.cCh > 0);
 
 		defineSymbol(pScopeOuter, pNode->ident.lexeme, funcDefnInfo);
+		registerPendingFuncType(
+			&pParser->typeTable,
+			pScopeOuter,
+			aTypemodDummy,
+			aPendingTypidParam,
+			aPendingTypidReturn,
+			&pNode->typidDefn);
 
 		return Up(pNode);
 	}
@@ -2209,6 +2232,14 @@ AstNode * parseFuncDefnStmtOrLiteralExpr(Parser * pParser, FUNCHEADERK funcheade
 		AstFuncLiteralExpr * pNode = Down(pNodeUnderConstruction, FuncLiteralExpr);
 		pNode->pBodyStmt = pBody;
 		pNode->scopeid = pScopeInner->id;
+
+		registerPendingFuncType(
+			&pParser->typeTable,
+			pScopeOuter,
+			aTypemodDummy,
+			aPendingTypidParam,
+			aPendingTypidReturn,
+			&UpExpr(pNode)->typidEval);
 
 		return Up(pNode);
 	}

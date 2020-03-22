@@ -190,7 +190,7 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 							pExpr->symbexprk = SYMBEXPRK_Var;
 							pExpr->varData.pDeclCached = symbInfo.varData.pVarDeclStmt;
 
-							typidResult = pExpr->varData.pDeclCached->typid;
+							typidResult = pExpr->varData.pDeclCached->typidDefn;
 						}
 						else
 						{
@@ -199,7 +199,7 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 							pExpr->symbexprk = SYMBEXPRK_Func;
 							pExpr->funcData.pDefnCached = symbInfo.funcData.pFuncDefnStmt;
 
-							typidResult = pExpr->funcData.pDefnCached->typid;
+							typidResult = pExpr->funcData.pDefnCached->typidDefn;
 						}
 					}
 					else if (pExpr->unresolvedData.aCandidates.cItem > 1)
@@ -278,7 +278,7 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 					// Resolve!
 
 					pExpr->memberData.pDeclCached = symbInfoMember.varData.pVarDeclStmt;
-					typidResult = symbInfoMember.varData.pVarDeclStmt->typid;
+					typidResult = symbInfoMember.varData.pVarDeclStmt->typidDefn;
 				} break;
 
 				case SYMBEXPRK_Func:
@@ -313,7 +313,7 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 							Assert(pCandidateDefnStmt->pParamsReturnsGrp->apParamVarDecls[iParam]->astk == ASTK_VarDeclStmt);
 							auto * pNode = Down(pCandidateDefnStmt->pParamsReturnsGrp->apParamVarDecls[iParam], VarDeclStmt);
 
-							TYPID typidCandidate = pNode->typid;
+							TYPID typidCandidate = pNode->typidDefn;
 							Assert(isTypeResolved(typidCandidate));
 
 							// NOTE (andrews) Don't want any type coercion here. The disambiguating types provided should
@@ -339,7 +339,7 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 						// Resolve!
 
 						pExpr->funcData.pDefnCached = pFuncDefnStmtMatch;
-						typidResult = pFuncDefnStmtMatch->typid;
+						typidResult = pFuncDefnStmtMatch->typidDefn;
 					}
 					else
 					{
@@ -557,6 +557,10 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 				{
 					pNodeDefnclMatch = Up(pFuncSymbolExpr->varData.pDeclCached);
 				}
+				else if (pFuncSymbolExpr->symbexprk == SYMBEXPRK_MemberVar)
+				{
+					pNodeDefnclMatch = Up(pFuncSymbolExpr->memberData.pDeclCached);
+				}
 				else
 				{
 					Assert(pFuncSymbolExpr->symbexprk == SYMBEXPRK_Unresolved);
@@ -582,12 +586,12 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 						TYPID typidCandidate = TYPID_Unresolved;
 						if (symbInfoFuncCandidate.symbolk == SYMBOLK_Var)
 						{
-							typidCandidate = symbInfoFuncCandidate.varData.pVarDeclStmt->typid;	
+							typidCandidate = symbInfoFuncCandidate.varData.pVarDeclStmt->typidDefn;	
 						}
 						else
 						{
 							Assert(symbInfoFuncCandidate.symbolk == SYMBOLK_Func);
-							typidCandidate = symbInfoFuncCandidate.funcData.pFuncDefnStmt->typid;
+							typidCandidate = symbInfoFuncCandidate.funcData.pFuncDefnStmt->typidDefn;
 						}
 
 						if (!isTypeResolved(typidCandidate))
@@ -666,12 +670,12 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 									TYPID typidArgCandidate = TYPID_Unresolved;
 									if (symbInfoArgCandidate.symbolk == SYMBOLK_Var)
 									{
-										typidArgCandidate = symbInfoArgCandidate.varData.pVarDeclStmt->typid;
+										typidArgCandidate = symbInfoArgCandidate.varData.pVarDeclStmt->typidDefn;
 									}
 									else
 									{
 										Assert(symbInfoArgCandidate.symbolk == SYMBOLK_Func);
-										typidArgCandidate = symbInfoArgCandidate.funcData.pFuncDefnStmt->typid;
+										typidArgCandidate = symbInfoArgCandidate.funcData.pFuncDefnStmt->typidDefn;
 									}
 
 									Assert(isTypeResolved(typidArgCandidate));		// HMM: Is this actually Assertable?
@@ -805,9 +809,9 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 				if (pNodeDefnclMatch->astk == ASTK_VarDeclStmt)
 				{
 					auto * pNodeVarDeclStmt = Down(pNodeDefnclMatch, VarDeclStmt);
-					Assert(isTypeResolved(pNodeVarDeclStmt->typid));
+					Assert(isTypeResolved(pNodeVarDeclStmt->typidDefn));
 
-					pType = lookupType(*pPass->pTypeTable, pNodeVarDeclStmt->typid);
+					pType = lookupType(*pPass->pTypeTable, pNodeVarDeclStmt->typidDefn);
 
 					pFuncSymbolExpr->symbexprk = SYMBEXPRK_Var;
 					pFuncSymbolExpr->varData.pDeclCached = pNodeVarDeclStmt;
@@ -817,9 +821,9 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 					Assert(pNodeDefnclMatch->astk == ASTK_FuncDefnStmt);
 
 					auto * pNodeFuncDefnStmt = Down(pNodeDefnclMatch, FuncDefnStmt);
-					Assert(isTypeResolved(pNodeFuncDefnStmt->typid));
+					Assert(isTypeResolved(pNodeFuncDefnStmt->typidDefn));
 
-					pType = lookupType(*pPass->pTypeTable, pNodeFuncDefnStmt->typid);
+					pType = lookupType(*pPass->pTypeTable, pNodeFuncDefnStmt->typidDefn);
 
 					pFuncSymbolExpr->symbexprk = SYMBEXPRK_Func;
 					pFuncSymbolExpr->funcData.pDefnCached = pNodeFuncDefnStmt;
@@ -848,8 +852,8 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 			// NOTE: Func literal expressions define a type that we should have already put into the type table when parsing,
 			//	so we just need to make sure we resolve the children here.
 
-			Assert(isTypeResolved(UpExpr(pExpr)->typid));
-			typidResult = UpExpr(pExpr)->typid;
+			Assert(isTypeResolved(UpExpr(pExpr)->typidEval));
+			typidResult = UpExpr(pExpr)->typidEval;
 
 			// Push scope and resolve children
 
@@ -874,7 +878,7 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 			// Push ctx
 
 			auto * pFnCtx = pushNew(&pPass->fnCtxStack);
-			initExtract(&pFnCtx->aTypidReturn, *papReturnVarDecls, offsetof(AstVarDeclStmt, typid));
+			initExtract(&pFnCtx->aTypidReturn, *papReturnVarDecls, offsetof(AstVarDeclStmt, typidDefn));
 			Defer(dispose(&pFnCtx->aTypidReturn));
 
 			// Resolve body
@@ -895,7 +899,7 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 LEndSetTypidAndReturn:
 
 	AstExpr * pExpr = DownExpr(pNode);
-	pExpr->typid = typidResult;
+	pExpr->typidEval = typidResult;
 	return typidResult;
 }
 
@@ -943,8 +947,8 @@ void resolveStmt(ResolvePass * pPass, AstNode * pNode)
 			auto * pStmt = Down(pNode, VarDeclStmt);
 
 
-			AssertInfo(isTypeResolved(pStmt->typid), "Inferred types are TODO");
-			const Type * pType = lookupType(*pPass->pTypeTable, pStmt->typid);
+			AssertInfo(isTypeResolved(pStmt->typidDefn), "Inferred types are TODO");
+			const Type * pType = lookupType(*pPass->pTypeTable, pStmt->typidDefn);
 
 			if (pStmt->ident.lexeme.strv.cCh > 0)
 			{
@@ -967,10 +971,10 @@ void resolveStmt(ResolvePass * pPass, AstNode * pNode)
 			{
 				TYPID typidInit = resolveExpr(pPass, pStmt->pInitExpr);
 
-				if (isTypeResolved(typidInit) && typidInit != pStmt->typid)
+				if (isTypeResolved(typidInit) && typidInit != pStmt->typidDefn)
 				{
 					// TODO: report better error
-					printfmt("Cannot initialize variable of type %d with expression of type %d\n", pStmt->typid, typidInit);
+					printfmt("Cannot initialize variable of type %d with expression of type %d\n", pStmt->typidDefn, typidInit);
 				}
 			}
 		} break;
@@ -1041,7 +1045,7 @@ void resolveStmt(ResolvePass * pPass, AstNode * pNode)
 			// Push ctx
 
 			auto * pFnCtx = pushNew(&pPass->fnCtxStack);
-			initExtract(&pFnCtx->aTypidReturn, *papReturnVarDecls, offsetof(AstVarDeclStmt, typid));
+			initExtract(&pFnCtx->aTypidReturn, *papReturnVarDecls, offsetof(AstVarDeclStmt, typidDefn));
 			Defer(dispose(&pFnCtx->aTypidReturn));
 
 			// Resolve body

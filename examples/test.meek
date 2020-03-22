@@ -64,7 +64,7 @@ fn main(int a)
 		
 	v2.fakeAddMethod(^v2, 7);
 
-	float a = 3.0;
+	float a2 = 3.0;
 	float b = 4.0;
 
 	// float c = add(a, b);		// This would be an error since the float add(..) function is scoped inside the vector add(..) function

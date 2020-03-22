@@ -91,8 +91,8 @@ bool isFuncTypeResolved(const FuncType & funcType)
 
 NULLABLE const FuncType * funcTypeFromDefnStmt(const TypeTable & typeTable, const AstFuncDefnStmt & defnStmt)
 {
-	Assert(isTypeResolved(defnStmt.typid));
-	const Type * pType = lookupType(typeTable, defnStmt.typid);
+	Assert(isTypeResolved(defnStmt.typidDefn));
+	const Type * pType = lookupType(typeTable, defnStmt.typidDefn);
 	Assert(pType);
 
 	if (pType->isFuncType)
@@ -360,7 +360,7 @@ bool areVarDeclListTypesFullyResolved(const DynamicArray<AstNode*>& apVarDecls)
 		Assert(apVarDecls[i]->astk == ASTK_VarDeclStmt);
 		auto * pStmt = Down(apVarDecls[i], VarDeclStmt);
 
-		if (!isTypeResolved(pStmt->typid))
+		if (!isTypeResolved(pStmt->typidDefn))
 		{
 			return false;
 		}
@@ -392,7 +392,7 @@ bool areVarDeclListTypesEq(const DynamicArray<AstNode *> & apVarDecls0, const Dy
 			pDecl1 = Down(pNode1, VarDeclStmt);
 		}
 
-		if (pDecl0->typid != pDecl1->typid) return false;
+		if (pDecl0->typidDefn != pDecl1->typidDefn) return false;
 	}
 
 	return true;
@@ -544,7 +544,6 @@ TYPID ensureInTypeTable(TypeTable * pTable, Type * pType, bool debugAssertIfAlre
 	AssertInfo(isTypeResolved(*pType), "Shouldn't be inserting an unresolved type into the type table...");
 
 	// SLOW: Could write a combined lookup + insertNew if not found query
-
 
 	const TYPID * pTypid = lookupByValue(pTable->table, pType);
 	if (pTypid)

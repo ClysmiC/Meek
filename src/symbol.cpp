@@ -162,6 +162,7 @@ bool auditDuplicateSymbols(Scope * pScope)
 
 						print("Duplicate variable ");
 						print(lexeme.strv);
+						println();
 
 						duplicateFound = true;
 
@@ -178,6 +179,7 @@ bool auditDuplicateSymbols(Scope * pScope)
 
 						print("Duplicate type ");
 						print(lexeme.strv);
+						println();
 
 						duplicateFound = true;
 
@@ -196,12 +198,13 @@ bool auditDuplicateSymbols(Scope * pScope)
 						if (symbInfoOther.symbolk != SYMBOLK_Func)
 							continue;
 
-						if (symbInfo.funcData.pFuncDefnStmt->typid == symbInfoOther.funcData.pFuncDefnStmt->typid)
+						if (symbInfo.funcData.pFuncDefnStmt->typidDefn == symbInfoOther.funcData.pFuncDefnStmt->typidDefn)
 						{
 							// TODO: better error story
 
 							print("Duplicate function with same signature ");
 							print(lexeme.strv);
+							println();
 
 							duplicateFound = true;
 
