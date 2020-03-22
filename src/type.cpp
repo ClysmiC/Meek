@@ -174,43 +174,6 @@ PENDINGTYPID registerPendingFuncType(
 	return result;
 }
 
-//PENDINGTYPID registerPendingFuncType(
-//	TypeTable * pTable,
-//	Scope * pScope,
-//	const DynamicArray<TypeModifier> & aTypemod,
-//	const DynamicArray<TYPID *> & apTypidParam,
-//	const DynamicArray<TYPID *> & apTypidReturn,
-//	NULLABLE TYPID * pTypidUpdateOnResolve = nullptr)
-//{
-//	PENDINGTYPID result = PENDINGTYPID(pTable->typesPendingResolution.cItem);
-//
-//	const bool isFuncType = true;
-//	TypeTable::TypePendingResolve * pTypePending = appendNew(&pTable->typesPendingResolution);
-//	init(&pTypePending->type, isFuncType);
-//	pTypePending->pScope = pScope;
-//	pTypePending->pTypidUpdateOnResolve = pTypidUpdateOnResolve;
-//
-//	// @Slow - move?
-//
-//	reinitCopy(&pTypePending->type.aTypemods, aTypemod);
-//
-//	for (int iParam = 0; iParam < apTypidParam.cItem; iParam++)
-//	{
-//		TYPID * pTypidParam = appendNew(&pTypePending->type.funcTypeData.funcType.paramTypids);
-//		*pTypidParam = TYPID_Unresolved;
-//		setPendingTypeUpdateOnResolvePtr(pTable, aPendingTypidParam[iParam], pTypidParam);
-//	}
-//
-//	for (int iReturn = 0; iReturn < aPendingTypidReturn.cItem; iReturn++)
-//	{
-//		TYPID * pTypidReturn = appendNew(&pTypePending->type.funcTypeData.funcType.returnTypids);
-//		*pTypidReturn = TYPID_Unresolved;
-//		setPendingTypeUpdateOnResolvePtr(pTable, aPendingTypidReturn[iReturn], pTypidReturn);
-//	}
-//
-//	return result;
-//}
-
 void setPendingTypeUpdateOnResolvePtr(TypeTable * pTable, PENDINGTYPID pendingTypid, TYPID * pTypidUpdateOnResolve)
 {
 	Assert(pendingTypid < PENDINGTYPID(pTable->typesPendingResolution.cItem));

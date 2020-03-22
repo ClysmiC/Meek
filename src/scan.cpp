@@ -721,7 +721,15 @@ StringView currentLexeme(const Scanner & scanner)
 {
 	StringView result;
 	result.pCh = scanner.pText + scanner.iTextTokenStart;
-	result.cCh = scanner.iText - scanner.iTextTokenStart;
+	if (scanner.isSpeculating)
+	{
+		result.cCh = scanner.iTextSpeculative - scanner.iTextTokenStart;
+	}
+	else
+	{
+		result.cCh = scanner.iText - scanner.iTextTokenStart;
+	}
+
 	return result;
 }
 
@@ -790,7 +798,10 @@ char consumeChar(Scanner * pScanner)
 bool tryConsumeChar(Scanner * pScanner, char expected)
 {
 	if (checkEndOfFile(pScanner)) return false;
-	if (pScanner->pText[pScanner->iText] != expected) return false;
+
+	int iText = pScanner->isSpeculating ? pScanner->iTextSpeculative : pScanner->iText;
+
+	if (pScanner->pText[iText] != expected) return false;
 
 	consumeChar(pScanner);
 
@@ -802,7 +813,9 @@ bool tryConsumeChar(Scanner * pScanner, char rangeMin, char rangeMax, char * poM
 	if (checkEndOfFile(pScanner)) return false;
 	if (rangeMin > rangeMax) return false;
 
-	char c = pScanner->pText[pScanner->iText];
+	int iText = pScanner->isSpeculating ? pScanner->iTextSpeculative : pScanner->iText;
+
+	char c = pScanner->pText[iText];
 	if (c < rangeMin || c > rangeMax) return false;
 
 	consumeChar(pScanner);
@@ -844,13 +857,19 @@ bool tryConsumeCharSequenceThenSpace(Scanner * pScanner, const char * sequence)
 char peekChar(Scanner * pScanner, int lookahead)
 {
 	if (checkEndOfFile(pScanner, lookahead)) return '\0';
-	return pScanner->pText[pScanner->iText + lookahead];
+
+	int iText = pScanner->isSpeculating ? pScanner->iTextSpeculative : pScanner->iText;
+
+	return pScanner->pText[iText + lookahead];
 }
 
 bool tryPeekChar(Scanner * pScanner, char expected, int lookahead)
 {
 	if (checkEndOfFile(pScanner, lookahead)) return false;
-	if (pScanner->pText[pScanner->iText + lookahead] != expected) return false;
+
+	int iText = pScanner->isSpeculating ? pScanner->iTextSpeculative : pScanner->iText;
+
+	if (pScanner->pText[iText + lookahead] != expected) return false;
 
 	return true;
 }
@@ -860,7 +879,9 @@ bool tryPeekChar(Scanner * pScanner, char rangeMin, char rangeMax, char * poMatc
 	if (checkEndOfFile(pScanner, lookahead)) return false;
 	if (rangeMin > rangeMax) return false;
 
-	char c = pScanner->pText[pScanner->iText + lookahead];
+	int iText = pScanner->isSpeculating ? pScanner->iTextSpeculative : pScanner->iText;
+
+	char c = pScanner->pText[iText + lookahead];
 	if (c < rangeMin || c > rangeMax) return false;
 
 	if (poMatch) *poMatch = c;
@@ -870,7 +891,9 @@ bool tryPeekChar(Scanner * pScanner, char rangeMin, char rangeMax, char * poMatc
 
 void onStartToken(Scanner * pScanner)
 {
-	pScanner->iTextTokenStart = pScanner->iText;
+	int iText = pScanner->isSpeculating ? pScanner->iTextSpeculative : pScanner->iText;
+
+	pScanner->iTextTokenStart = iText;
 	pScanner->madeToken = false;
 }
 
@@ -885,17 +908,24 @@ bool checkEndOfFile(Scanner * pScanner, int lookahead)
 	{
 		for (int i = 0; i <= lookahead; i++)
 		{
-			if (!(pScanner->pText + pScanner->iTextSpeculative + i))
+			char * pCh = pScanner->pText + pScanner->iTextSpeculative + i;
+			if (*pCh == '\0')
 			{
 				return true;
 			}
+		}
+
+		if (pScanner->iTextSpeculative + lookahead >= pScanner->textSize)
+		{
+			return true;
 		}
 	}
 	else
 	{
 		for (int i = 0; i <= lookahead; i++)
 		{
-			if (!(pScanner->pText + pScanner->iText + i))
+			char * pCh = pScanner->pText + pScanner->iText + i;
+			if (*pCh == '\0')
 			{
 				pScanner->scanexitk = SCANEXITK_ReadNullTerminator;
 				return true;

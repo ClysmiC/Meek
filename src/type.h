@@ -165,14 +165,6 @@ PENDINGTYPID registerPendingFuncType(
 	const DynamicArray<PENDINGTYPID> & aPendingTypidReturn,
 	NULLABLE TYPID * pTypidUpdateOnResolve=nullptr);
 
-//PENDINGTYPID registerPendingFuncType(
-//	TypeTable * pTable,
-//	Scope * pScope,
-//	const DynamicArray<TypeModifier> & aTypemod,
-//	const DynamicArray<TYPID *> & apTypidParam,
-//	const DynamicArray<TYPID *> & apTypidReturn,
-//	NULLABLE TYPID * pTypidUpdateOnResolve = nullptr);
-
 void setPendingTypeUpdateOnResolvePtr(TypeTable * pTable, PENDINGTYPID pendingTypid, TYPID * pTypidUpdateOnResolve);
 
 TYPID ensureInTypeTable(TypeTable * pTable, Type * pType, bool debugAssertIfAlreadyInTable=false);

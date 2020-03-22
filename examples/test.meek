@@ -39,7 +39,7 @@ struct //InlineComment Vector
 	float y;
 	float z;
 	
-	fn (^Vector, int) fakeAddMethod;	// This is really just a variable that holds a function type. This use case is idiotic but it is just for testing.
+	fn (^Vector, float) fakeAddMethod;	// This is really just a variable that holds a function type. This use case is idiotic but it is just for testing.
 }
 
 fn main(int a)
@@ -55,7 +55,7 @@ fn main(int a)
 	v2.z = 6.0;
 
 	v2.fakeAddMethod =
-		fn(^Vector v, int scalar)
+		fn(^Vector v, float scalar)
 		{
 			v.x = v.x + scalar;		// TODO: Make resolver smart enough to reach thru pointer
 			v.y = v.y + scalar;
@@ -89,19 +89,19 @@ fn main(int a)
 
 
 /*
-fn main()
+fn main2()
 {
 	// This is a function pointer variable named foo that is bound to a function literal
 
-	fn (int) foo = fn (int x) -> float { // A };
+	fn (int) foo = fn (int x) -> float { //A };
 
 	// This is a named function definition
 
-	fn foo (float64) { // B }
+	fn foo (float64) { //B }
 
 	// This is also a named function definition. It and B are overloaded.
 
-	fn foo (float) { // C }
+	fn foo (float) { //C }
 
 	// Calls A
 
