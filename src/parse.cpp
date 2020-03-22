@@ -558,7 +558,12 @@ AstNode * parseStructDefnStmt(Parser * pParser)
 	return Up(pNode);
 }
 
-AstNode * parseVarDeclStmt(Parser * pParser, EXPECTK expectkName, EXPECTK expectkInit, EXPECTK expectkSemicolon)
+AstNode * parseVarDeclStmt(
+	Parser * pParser,
+	EXPECTK expectkName,
+	EXPECTK expectkInit,
+	EXPECTK expectkSemicolon,
+	NULLABLE PENDINGTYPID * poTypidPending)
 {
 	AssertInfo(expectkName != EXPECTK_Forbidden, "Function does not support being called with expectkName forbidden. Variables usually require names, but are optional for return values");
 	AssertInfo(expectkSemicolon != EXPECTK_Optional, "Semicolon should either be required or forbidden");
@@ -582,6 +587,11 @@ AstNode * parseVarDeclStmt(Parser * pParser, EXPECTK expectkName, EXPECTK expect
 		}
 
 		pendingTypid = parseTypeResult.nonErrorData.pendingTypid;
+
+		if (poTypidPending)
+		{
+			*poTypidPending = pendingTypid;
+		}
 	}
 
 	// Parse name
@@ -1610,6 +1620,9 @@ ParseTypeResult tryParseType(Parser * pParser)
 
 NULLABLE AstErr * tryParseFuncHeader(Parser * pParser, const ParseFuncHeaderParam & param)
 {
+	// TODO: Can probably rip out all of this ParseParamListParam glue and just use ParseFuncHeaderParam directly
+	//	in the parse param list function.
+
 	struct ParseParamListParam
 	{
 		FUNCHEADERK funcheaderk;
@@ -1618,11 +1631,15 @@ NULLABLE AstErr * tryParseFuncHeader(Parser * pParser, const ParseFuncHeaderPara
 		struct UFuncHeaderDefn				// FUNCHEADERK_Defn
 		{
 			AstFuncDefnStmt * pioNode;
+			DynamicArray<PENDINGTYPID> * paPendingTypidParam;
+			DynamicArray<PENDINGTYPID> * paPendingTypidReturn;
 		} paramDefn;
 
 		struct UFuncHeaderLiteral			// FUNCHEADERK_Literal
 		{
 			AstFuncLiteralExpr * pioNode;
+			DynamicArray<PENDINGTYPID> * paPendingTypidParam;
+			DynamicArray<PENDINGTYPID> * paPendingTypidReturn;
 		} paramLiteral;
 
 		struct UFuncHeaderType				// FUNCHEADERK_Type
@@ -1647,11 +1664,15 @@ NULLABLE AstErr * tryParseFuncHeader(Parser * pParser, const ParseFuncHeaderPara
 			case FUNCHEADERK_Defn:
 			{
 				pPplParam->paramDefn.pioNode = pfhParam.paramDefn.pioNode;
+				pPplParam->paramDefn.paPendingTypidParam = pfhParam.paramDefn.paPendingTypidParam;
+				pPplParam->paramDefn.paPendingTypidReturn = pfhParam.paramDefn.paPendingTypidReturn;
 			} break;
 
 			case FUNCHEADERK_Literal:
 			{
 				pPplParam->paramLiteral.pioNode = pfhParam.paramLiteral.pioNode;
+				pPplParam->paramLiteral.paPendingTypidParam = pfhParam.paramLiteral.paPendingTypidParam;
+				pPplParam->paramLiteral.paPendingTypidReturn = pfhParam.paramLiteral.paPendingTypidReturn;
 			} break;
 
 			case FUNCHEADERK_Type:
@@ -1728,7 +1749,8 @@ NULLABLE AstErr * tryParseFuncHeader(Parser * pParser, const ParseFuncHeaderPara
 					expectkInit = EXPECTK_Forbidden;
 				}
 
-				AstNode * pNode = parseVarDeclStmt(pParser, s_expectkName, expectkInit, s_expectkSemicolon);
+				PENDINGTYPID pendingTypid;
+				AstNode * pNode = parseVarDeclStmt(pParser, s_expectkName, expectkInit, s_expectkSemicolon, &pendingTypid);
 				if (isErrorNode(*pNode))
 				{
 					return DownErr(pNode);
@@ -1739,11 +1761,13 @@ NULLABLE AstErr * tryParseFuncHeader(Parser * pParser, const ParseFuncHeaderPara
 					if (param.paramk == PARAMK_Param)
 					{
 						append(&param.paramDefn.pioNode->pParamsReturnsGrp->apParamVarDecls, pNode);
+						append(param.paramDefn.paPendingTypidParam, pendingTypid);
 					}
 					else
 					{
 						Assert(param.paramk == PARAMK_Return);
 						append(&param.paramDefn.pioNode->pParamsReturnsGrp->apReturnVarDecls, pNode);
+						append(param.paramDefn.paPendingTypidReturn, pendingTypid);
 					}
 				}
 				else
@@ -1753,11 +1777,13 @@ NULLABLE AstErr * tryParseFuncHeader(Parser * pParser, const ParseFuncHeaderPara
 					if (param.paramk == PARAMK_Param)
 					{
 						append(&param.paramLiteral.pioNode->pParamsReturnsGrp->apParamVarDecls, pNode);
+						append(param.paramLiteral.paPendingTypidParam, pendingTypid);
 					}
 					else
 					{
 						Assert(param.paramk == PARAMK_Return);
 						append(&param.paramLiteral.pioNode->pParamsReturnsGrp->apReturnVarDecls, pNode);
+						append(param.paramLiteral.paPendingTypidReturn, pendingTypid);
 					}
 				}
 			}
@@ -2128,6 +2154,10 @@ AstNode * parseFuncDefnStmtOrLiteralExpr(Parser * pParser, FUNCHEADERK funcheade
 
 	ParseFuncHeaderParam parseFuncHeaderParam;
 	parseFuncHeaderParam.funcheaderk = funcheaderk;
+
+	// TODO (andrew) Could probably do away with the concept of PENDINGTYPID and have the high bit
+	//	flag if it is currently pending. Then, instead of passing around a bunch of pendingtypid glue
+	//	for defns and literals, we could just inspect the vardecls!
 
 	DynamicArray<PENDINGTYPID> aPendingTypidParam;
 	init(&aPendingTypidParam);

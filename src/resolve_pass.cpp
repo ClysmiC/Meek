@@ -543,9 +543,6 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 			{
 				auto * pFuncSymbolExpr = Down(pExpr->pFunc, SymbolExpr);
 
-				// Defer(UpExpr(pFuncSymbolExpr)->typid = typidResult);		// This is pretty gross
-
-
 				// Do matching between func candidates and arg candidates
 
 				AstNode * pNodeDefnclMatch = nullptr;

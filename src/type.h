@@ -131,7 +131,9 @@ struct TypeTable
 
 		// Typid value to poke into corresponding AST node when we succeed resolving
 
-		TYPID * pTypidUpdateOnResolve;
+		static const int s_cTypidUpdateOnResolveMax = 4;
+		TYPID * apTypidUpdateOnResolve[s_cTypidUpdateOnResolveMax];
+		int cPTypidUpdateOnResolve = 0;
 	};
 
 	DynamicArray<TypePendingResolve> typesPendingResolution;
@@ -142,6 +144,9 @@ struct TypeTable
 };
 
 void init(TypeTable * pTable);
+void init(TypeTable::TypePendingResolve * pTypePending, Scope * pScope, bool isFuncType);
+void dispose(TypeTable::TypePendingResolve * pTypePending);
+
 NULLABLE const Type * lookupType(const TypeTable & table, TYPID typid);
 NULLABLE const FuncType * funcTypeFromDefnStmt(const TypeTable & typeTable, const AstFuncDefnStmt & defnStmt);
 
@@ -156,9 +161,17 @@ PENDINGTYPID registerPendingFuncType(
 	TypeTable * pTable,
 	Scope * pScope,
 	const DynamicArray<TypeModifier> & aTypemod,
-	const DynamicArray<PENDINGTYPID> & aPendingTypidParams,
-	const DynamicArray<PENDINGTYPID> & aPendingTypidReturns,
+	const DynamicArray<PENDINGTYPID> & aPendingTypidParam,
+	const DynamicArray<PENDINGTYPID> & aPendingTypidReturn,
 	NULLABLE TYPID * pTypidUpdateOnResolve=nullptr);
+
+//PENDINGTYPID registerPendingFuncType(
+//	TypeTable * pTable,
+//	Scope * pScope,
+//	const DynamicArray<TypeModifier> & aTypemod,
+//	const DynamicArray<TYPID *> & apTypidParam,
+//	const DynamicArray<TYPID *> & apTypidReturn,
+//	NULLABLE TYPID * pTypidUpdateOnResolve = nullptr);
 
 void setPendingTypeUpdateOnResolvePtr(TypeTable * pTable, PENDINGTYPID pendingTypid, TYPID * pTypidUpdateOnResolve);
 

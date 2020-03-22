@@ -131,7 +131,13 @@ enum PARSESTMTK
 AstNode * parseStmt(Parser * pParser, PARSESTMTK parsestmtk = PARSESTMTK_Stmt);
 AstNode * parseExprStmtOrAssignStmt(Parser * pParser);
 AstNode * parseStructDefnStmt(Parser * pParser);
-AstNode * parseVarDeclStmt(Parser * pParser, EXPECTK expectkName = EXPECTK_Required, EXPECTK expectkInit = EXPECTK_Optional, EXPECTK expectkSemicolon = EXPECTK_Required);
+AstNode * parseVarDeclStmt(
+	Parser * pParser,
+	EXPECTK expectkName = EXPECTK_Required,
+	EXPECTK expectkInit = EXPECTK_Optional,
+	EXPECTK expectkSemicolon = EXPECTK_Required,
+	NULLABLE PENDINGTYPID * poPendingTypid = nullptr);
+
 AstNode * parseIfStmt(Parser * pParser);
 AstNode * parseWhileStmt(Parser * pParser);
 AstNode * parseDoPseudoStmtOrBlockStmt(Parser * pParser, bool pushPopScopeBlock = true);
