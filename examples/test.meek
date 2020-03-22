@@ -88,7 +88,7 @@ fn main(int a)
 
 
 
-/*
+
 fn main2()
 {
 	// This is a function pointer variable named foo that is bound to a function literal
@@ -123,7 +123,7 @@ fn main2()
 
 	do fn (float64) foo(5.0);
 }
-*/
+
 
 
 

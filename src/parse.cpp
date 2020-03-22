@@ -1267,6 +1267,15 @@ AstNode * parsePrimary(Parser * pParser)
 							speculate = false;
 						}
 					} break;
+
+					case TOKENK_Identifier:
+					{
+						if (cParenCtx == 0)
+						{
+							isFnSymbolExpr = true;
+							speculate = false;
+						}
+					} break;
 				}
 			}
 
@@ -1284,7 +1293,7 @@ AstNode * parsePrimary(Parser * pParser)
 
 			// Success!
 
-			return pNode;
+			return finishParsePrimary(pParser, pNode);
 		}
 		else
 		{
@@ -1409,7 +1418,7 @@ AstNode * parseFuncSymbolExpr(Parser * pParser)
 
 		auto startEndPrev = prevTokenStartEnd(pParser->pScanner);
 
-		auto * pNode = AstNew(pParser, SymbolExpr, makeStartEnd(iStart + startEndPrev.iEnd));
+		auto * pNode = AstNew(pParser, SymbolExpr, makeStartEnd(iStart, startEndPrev.iEnd));
 		pNode->symbexprk = SYMBEXPRK_Func;
 		pNode->funcData.pDefnCached = nullptr;		// Not yet resolved
 		init(&pNode->funcData.aTypidDisambig);
@@ -1869,6 +1878,16 @@ NULLABLE AstErr * tryParseFuncHeader(Parser * pParser, const ParseFuncHeaderPara
 
 		param.paramDefn.pioNode->ident.lexeme = pParser->pPendingToken->lexeme;
 		param.paramDefn.pioNode->ident.scopeid = SCOPEID_Nil;		// NOTE (andrew) This gets set by caller
+	}
+	else if (param.funcheaderk == FUNCHEADERK_SymbolExpr)
+	{
+		if (tryConsumeToken(pParser->pScanner, TOKENK_Identifier, ensurePendingToken(pParser)))
+		{
+			// Success! (short-circuited)
+
+			*param.paramSymbolExpr.poIdent = pParser->pPendingToken->lexeme;
+			return nullptr;
+		}
 	}
 	else
 	{
