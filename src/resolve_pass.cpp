@@ -11,7 +11,7 @@
 
 void init(ResolvePass * pPass, Parser * pParser)
 {
-	pPass->lastSymbseqid = SYMBSEQID_Unset;
+	pPass->varseqidSeen = VARSEQID_Zero;
 	init(&pPass->unresolvedIdents);
 	init(&pPass->fnCtxStack);
 
@@ -125,7 +125,7 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 					typemodPtr.typemodk = TYPEMODK_Pointer;
 
 					prepend(&typePtr.aTypemods, typemodPtr);
-					typidResult = ensureInTypeTable(pPass->pTypeTable, typePtr);
+					typidResult = ensureInTypeTable(pPass->pTypeTable, &typePtr);
 				} break;
 
 				default:
@@ -384,7 +384,7 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 
 			remove(&typeDereferenced.aTypemods, 0);
 
-			typidResult = ensureInTypeTable(pPass->pTypeTable, typeDereferenced);
+			typidResult = ensureInTypeTable(pPass->pTypeTable, &typeDereferenced);
 		} break;
 
 		case ASTK_ArrayAccessExpr:
@@ -431,7 +431,7 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 
 			remove(&typeElement.aTypemods, 0);
 
-			typidResult = ensureInTypeTable(pPass->pTypeTable, typeElement);
+			typidResult = ensureInTypeTable(pPass->pTypeTable, &typeElement);
 		} break;
 
 		case ASTK_FuncCallExpr:
@@ -783,6 +783,7 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 
 						print("Ambiguous function call ");
 						print(pFuncSymbolExpr->pTokenIdent->lexeme.strv);
+						println();
 						typidResult = TYPID_TypeError;
 						goto LEndSetTypidAndReturn;
 					}
@@ -793,6 +794,7 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 						print("No func named ");
 						print(pFuncSymbolExpr->pTokenIdent->lexeme.strv);
 						print(" matches the provided parameters");
+						println();
 						typidResult = TYPID_TypeError;
 						goto LEndSetTypidAndReturn;
 					}
@@ -953,7 +955,7 @@ void resolveStmt(ResolvePass * pPass, AstNode * pNode)
 #endif
 				// Record symbseqid for variable
 
-				pPass->lastSymbseqid = pStmt->symbseqid;
+				pPass->varseqidSeen = pStmt->varseqid;
 			}
 
 			// Resolve init expr
@@ -983,11 +985,6 @@ void resolveStmt(ResolvePass * pPass, AstNode * pNode)
 			Assert(symbInfo.symbolk == SYMBOLK_Struct);
 #endif
 
-			// Record sequence id
-
-			Assert(pStmt->symbseqid != SYMBSEQID_Unset);
-			pPass->lastSymbseqid = pStmt->symbseqid;
-
 			// Record scope id
 
 			SCOPEID scopeidRestore = pPass->scopeidCur;
@@ -1016,11 +1013,6 @@ void resolveStmt(ResolvePass * pPass, AstNode * pNode)
 			lookupFuncSymbol(*pScopeCur, pStmt->ident.lexeme, &aSymbInfo);
 			AssertInfo(aSymbInfo.cItem > 0, "We should have put this func decl in the symbol table when we parsed it...");
 #endif
-
-			// Record sequence id
-
-			Assert(pStmt->symbseqid != SYMBSEQID_Unset);
-			pPass->lastSymbseqid = pStmt->symbseqid;
 
 			// Record scope id
 

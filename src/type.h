@@ -135,7 +135,8 @@ struct TypeTable
 	};
 
 	DynamicArray<TypePendingResolve> typesPendingResolution;
-	BiHashMap<TYPID, Type> table;
+	DynamicPoolAllocator<Type> typeAlloc;
+	BiHashMap<TYPID, Type *> table;
 
 	TYPID typidNext = TYPID_ActualTypesStart;
 };
@@ -161,7 +162,7 @@ PENDINGTYPID registerPendingFuncType(
 
 void setPendingTypeUpdateOnResolvePtr(TypeTable * pTable, PENDINGTYPID pendingTypid, TYPID * pTypidUpdateOnResolve);
 
-TYPID ensureInTypeTable(TypeTable * pTable, const Type & type, bool debugAssertIfAlreadyInTable=false);
+TYPID ensureInTypeTable(TypeTable * pTable, Type * pType, bool debugAssertIfAlreadyInTable=false);
 
 bool tryResolveAllTypes(Parser * pParser);
 

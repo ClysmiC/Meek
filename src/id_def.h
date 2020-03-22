@@ -6,11 +6,12 @@ enum ASTID : u32
 {
 };
 
-enum SYMBSEQID : u32
+enum VARSEQID : u32
 {
-	SYMBSEQID_Unset,
+	VARSEQID_Zero,
+	VARSEQID_Start,
 
-	SYMBSEQID_SetStart
+	VARSEQID_Nil = static_cast<u32>(0xFF'FF'FF'FF),
 };
 
 enum SCOPEID : u32

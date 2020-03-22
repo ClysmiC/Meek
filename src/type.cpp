@@ -168,7 +168,7 @@ PENDINGTYPID registerPendingFuncType(
 
 void setPendingTypeUpdateOnResolvePtr(TypeTable * pTable, PENDINGTYPID pendingTypid, TYPID * pTypidUpdateOnResolve)
 {
-	Assert(pendingTypid < pTable->typesPendingResolution.cItem);
+	Assert(pendingTypid < PENDINGTYPID(pTable->typesPendingResolution.cItem));
 
 	TypeTable::TypePendingResolve * pTypePending = &pTable->typesPendingResolution[pendingTypid];
 	Assert(pTypePending->pTypidUpdateOnResolve == nullptr);
@@ -262,7 +262,7 @@ uint typeHash(const Type & t)
 	}
 	else
 	{
-		return scopedIdentHash(t.nonFuncTypeData.ident);
+		return combineHash(hash, scopedIdentHash(t.nonFuncTypeData.ident));
 	}
 }
 
@@ -449,10 +449,11 @@ void init(TypeTable * pTable)
 	init(&pTable->table,
 		typidHash,
 		typidEq,
-		typeHash,
-		typeEq);
+		typeHashPtr,
+		typeEqPtr);
 
 	init(&pTable->typesPendingResolution);
+	init(&pTable->typeAlloc);
 
 	// Insert built in types
 
@@ -469,7 +470,7 @@ void init(TypeTable * pTable)
 		voidType.nonFuncTypeData.ident = voidIdent;
 
 		Verify(isTypeResolved(voidType));
-		Verify(ensureInTypeTable(pTable, voidType) == TYPID_Void);
+		Verify(ensureInTypeTable(pTable, &voidType) == TYPID_Void);
 	}
 
 	// int
@@ -484,7 +485,7 @@ void init(TypeTable * pTable)
 		intType.nonFuncTypeData.ident = intIdent;
 
 		Verify(isTypeResolved(intType));
-		Verify(ensureInTypeTable(pTable, intType) == TYPID_Int);
+		Verify(ensureInTypeTable(pTable, &intType) == TYPID_Int);
 	}
 
 	// float
@@ -499,7 +500,7 @@ void init(TypeTable * pTable)
 		floatType.nonFuncTypeData.ident = floatIdent;
 
 		Verify(isTypeResolved(floatType));
-		Verify(ensureInTypeTable(pTable, floatType) == TYPID_Float);
+		Verify(ensureInTypeTable(pTable, &floatType) == TYPID_Float);
 	}
 
 	// bool
@@ -514,7 +515,7 @@ void init(TypeTable * pTable)
 		boolType.nonFuncTypeData.ident = boolIdent;
 
 		Verify(isTypeResolved(boolType));
-		Verify(ensureInTypeTable(pTable, boolType) == TYPID_Bool);
+		Verify(ensureInTypeTable(pTable, &boolType) == TYPID_Bool);
 	}
 
 	// string
@@ -529,32 +530,36 @@ void init(TypeTable * pTable)
 		stringType.nonFuncTypeData.ident = stringIdent;
 
 		Verify(isTypeResolved(stringType));
-		Verify(ensureInTypeTable(pTable, stringType) == TYPID_String);
+		Verify(ensureInTypeTable(pTable, &stringType) == TYPID_String);
 	}
 }
 
 NULLABLE const Type * lookupType(const TypeTable & table, TYPID typid)
 {
-	return lookupByKey(table.table, typid);
+	return *lookupByKey(table.table, typid);
 }
 
-TYPID ensureInTypeTable(TypeTable * pTable, const Type & type, bool debugAssertIfAlreadyInTable)
+TYPID ensureInTypeTable(TypeTable * pTable, Type * pType, bool debugAssertIfAlreadyInTable)
 {
-	AssertInfo(isTypeResolved(type), "Shouldn't be inserting an unresolved type into the type table...");
+	AssertInfo(isTypeResolved(*pType), "Shouldn't be inserting an unresolved type into the type table...");
 
 	// SLOW: Could write a combined lookup + insertNew if not found query
 
-	const TYPID * pTypid = lookupByValue(pTable->table, type);
+
+	const TYPID * pTypid = lookupByValue(pTable->table, pType);
 	if (pTypid)
 	{
 		Assert(!debugAssertIfAlreadyInTable);
 		return *pTypid;
 	}
 
+	Type * pTypeCopy = allocate(&pTable->typeAlloc);
+	initCopy(pTypeCopy, *pType);
+
 	TYPID typidInsert = pTable->typidNext;
 	pTable->typidNext = static_cast<TYPID>(pTable->typidNext + 1);
 
-	Verify(insert(&pTable->table, typidInsert, type));
+	Verify(insert(&pTable->table, typidInsert, pTypeCopy));
 	return typidInsert;
 }
 
@@ -603,7 +608,7 @@ bool tryResolveAllTypes(Parser * pParser)
 		TypeTable::TypePendingResolve * pTypePending = &pParser->typeTable.typesPendingResolution[i];
 		if (tryResolvePendingType(pTypePending))
 		{
-			TYPID typid = ensureInTypeTable(&pParser->typeTable, pTypePending->type);
+			TYPID typid = ensureInTypeTable(&pParser->typeTable, &pTypePending->type);
 			if (pTypePending->pTypidUpdateOnResolve)
 			{
 				*(pTypePending->pTypidUpdateOnResolve) = typid;
@@ -711,7 +716,7 @@ void debugPrintTypeTable(const TypeTable& typeTable)
 
 	for (auto it = iter(typeTable.table); it.pValue; iterNext(&it))
 	{
-		const Type * pType = it.pValue;
+		const Type * pType = *(it.pValue);
 		debugPrintType(*pType);
 
 		println();

@@ -690,7 +690,7 @@ const V * lookupByKey(const BiHashMap<K, V> & bimap, const K & key)
 }
 
 template <typename K, typename V>
-const K * lookupByValue(BiHashMap<K, V> & bimap, const V & value)
+const K * lookupByValue(const BiHashMap<K, V> & bimap, const V & value)
 {
     K ** ppResult = lookup(bimap.mapVK, value);
 

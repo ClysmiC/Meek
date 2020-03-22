@@ -365,7 +365,7 @@ struct AstVarDeclStmt
 
 	NULLABLE AstNode * pInitExpr;
 
-	SYMBSEQID symbseqid;
+	VARSEQID varseqid;
 	TYPID typid;
 };
 
@@ -374,9 +374,7 @@ struct AstStructDefnStmt
 	ScopedIdentifier ident;
 	DynamicArray<AstNode *> apVarDeclStmt;
 	SCOPEID scopeid;        // Scope introduced by this struct defn
-	SYMBSEQID symbseqid;
 	TYPID typidSelf;
-
 };
 #if 0
 	static constexpr uint s_nodeSizeDebug = sizeof(AstStructDefnStmt);
@@ -390,10 +388,9 @@ struct AstFuncDefnStmt
 
 	AstNode * pBodyStmt;
 	SCOPEID scopeid;        // Scope introduced by this func defn
-	SYMBSEQID symbseqid;
 	TYPID typid;			// typid corresponding to this func type (not the typid of the return value(s))
 };
-#if 1
+#if 0
 	static constexpr uint s_nodeSizeDebug = sizeof(AstFuncDefnStmt);
 #endif
 

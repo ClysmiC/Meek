@@ -9,8 +9,7 @@ struct TypeTable;
 
 struct ResolvePass
 {
-
-	SYMBSEQID lastSymbseqid = SYMBSEQID_Unset;      // TODO: USE THIS
+	VARSEQID varseqidSeen = VARSEQID_Nil;
 
 	SCOPEID scopeidCur = SCOPEID_Global;
 	TypeTable * pTypeTable;

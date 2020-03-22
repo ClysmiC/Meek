@@ -55,6 +55,8 @@ void init(Parser * pParser, Scanner * pScanner)
 
 	append(&pParser->mpScopeidScope, pScopeBuiltIn);
 	append(&pParser->mpScopeidScope, pScopeGlobal);
+
+	pParser->varseqidNext = VARSEQID_Start;
 }
 
 AstNode * parseProgram(Parser * pParser, bool * poSuccess)
@@ -551,7 +553,7 @@ AstNode * parseStructDefnStmt(Parser * pParser)
 
 	type.nonFuncTypeData.ident.lexeme = pNode->ident.lexeme;
 	type.nonFuncTypeData.ident.scopeid = pNode->ident.scopeid;
-	pNode->typidSelf = ensureInTypeTable(&pParser->typeTable, type, true /* debugAssertIfAlreadyInTable */ );
+	pNode->typidSelf = ensureInTypeTable(&pParser->typeTable, &type, true /* debugAssertIfAlreadyInTable */ );
 
 	return Up(pNode);
 }
@@ -693,6 +695,9 @@ AstNode * parseVarDeclStmt(Parser * pParser, EXPECTK expectkName, EXPECTK expect
 		varDeclInfo.varData.pVarDeclStmt = pNode;
 		defineSymbol(pParser->pScopeCurrent, pTokenIdent->lexeme, varDeclInfo);
 	}
+
+	pNode->varseqid = pParser->varseqidNext;
+	pParser->varseqidNext = VARSEQID(pParser->varseqidNext + 1);
 
 	return Up(pNode);
 

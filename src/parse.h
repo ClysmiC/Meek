@@ -37,12 +37,7 @@ struct Parser
 	Scope * pScopeCurrent = nullptr;
 
 	DynamicArray<Scope *> mpScopeidScope;
-
-	// TODO: Move all of these tables out to some god-struct and make these just pointers. No reason for the parser to own this stuff.
-
-	// Symbol Table
-
-	// SymbolTable symbTable;
+	VARSEQID varseqidNext = VARSEQID_Nil;
 
 	// Type Table
 
