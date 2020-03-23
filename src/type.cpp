@@ -195,6 +195,29 @@ bool isPointerType(const Type & type)
 	return type.aTypemods.cItem > 0 && type.aTypemods[0].typemodk == TYPEMODK_Pointer;
 }
 
+Lexeme getDealiasedTypeLexeme(const Lexeme & lexeme)
+{
+	Lexeme result;
+	if (lexeme.strv == "int")
+	{
+		setLexeme(&result, "s32");
+	}
+	else if (lexeme.strv == "uint")
+	{
+		setLexeme(&result, "u32");
+	}
+	else if (lexeme.strv == "float")
+	{
+		setLexeme(&result, "f32");
+	}
+	else
+	{
+		result = lexeme;
+	}
+
+	return result;
+}
+
 bool typeEq(const Type & t0, const Type & t1)
 {
 	if (t0.isFuncType != t1.isFuncType) return false;
@@ -240,7 +263,13 @@ bool typeEq(const Type & t0, const Type & t1)
 	}
 	else
 	{
-		return scopedIdentEq(t0.nonFuncTypeData.ident, t1.nonFuncTypeData.ident);
+		ScopedIdentifier identDealiased0 = t0.nonFuncTypeData.ident;
+		identDealiased0.lexeme = getDealiasedTypeLexeme(identDealiased0.lexeme);
+
+		ScopedIdentifier identDealiased1 = t1.nonFuncTypeData.ident;
+		identDealiased1.lexeme = getDealiasedTypeLexeme(identDealiased1.lexeme);
+
+		return scopedIdentEq(identDealiased0, identDealiased1);
 	}
 }
 
@@ -271,7 +300,10 @@ uint typeHash(const Type & t)
 	}
 	else
 	{
-		return combineHash(hash, scopedIdentHash(t.nonFuncTypeData.ident));
+		ScopedIdentifier identDealiased = t.nonFuncTypeData.ident;
+		identDealiased.lexeme = getDealiasedTypeLexeme(identDealiased.lexeme);
+
+		return combineHash(hash, scopedIdentHash(identDealiased));
 	}
 }
 
@@ -464,83 +496,38 @@ void init(TypeTable * pTable)
 	init(&pTable->typesPendingResolution);
 	init(&pTable->typeAlloc);
 
-	// Insert built in types
-
-	// void
-
+	auto insertBuiltInType = [](TypeTable * pTable, const char * strIdent, TYPID typidExpected)
 	{
+		ScopedIdentifier ident;
+		setLexeme(&ident.lexeme, strIdent);
+		ident.scopeid = SCOPEID_BuiltIn;
 
-		ScopedIdentifier voidIdent;
-		setLexeme(&voidIdent.lexeme, "void");
-		voidIdent.scopeid = SCOPEID_BuiltIn;
+		Type type;
+		init(&type, false /* isFuncType */);
+		type.nonFuncTypeData.ident = ident;
 
-		Type voidType;
-		init(&voidType, false /* isFuncType */);
-		voidType.nonFuncTypeData.ident = voidIdent;
+		Verify(isTypeResolved(type));
+		Verify(ensureInTypeTable(pTable, &type) == typidExpected);
+	};
 
-		Verify(isTypeResolved(voidType));
-		Verify(ensureInTypeTable(pTable, &voidType) == TYPID_Void);
-	}
+	insertBuiltInType(pTable, "void", TYPID_Void);
 
-	// int
+	insertBuiltInType(pTable, "s8", TYPID_S8);
+	insertBuiltInType(pTable, "s16", TYPID_S16);
+	insertBuiltInType(pTable, "s32", TYPID_S32);
+	insertBuiltInType(pTable, "s64", TYPID_S64);
 
-	{
-		ScopedIdentifier intIdent;
-		setLexeme(&intIdent.lexeme, "int");
-		intIdent.scopeid = SCOPEID_BuiltIn;
+	insertBuiltInType(pTable, "u8", TYPID_U8);
+	insertBuiltInType(pTable, "u16", TYPID_U16);
+	insertBuiltInType(pTable, "u32", TYPID_U32);
+	insertBuiltInType(pTable, "u64", TYPID_U64);
 
-		Type intType;
-		init(&intType, false /* isFuncType */);
-		intType.nonFuncTypeData.ident = intIdent;
+	insertBuiltInType(pTable, "f32", TYPID_F32);
+	insertBuiltInType(pTable, "f64", TYPID_F64);
 
-		Verify(isTypeResolved(intType));
-		Verify(ensureInTypeTable(pTable, &intType) == TYPID_Int);
-	}
+	insertBuiltInType(pTable, "bool", TYPID_Bool);
 
-	// float
-
-	{
-		ScopedIdentifier floatIdent;
-		setLexeme(&floatIdent.lexeme, "float");
-		floatIdent.scopeid = SCOPEID_BuiltIn;
-
-		Type floatType;
-		init(&floatType, false /* isFuncType */);
-		floatType.nonFuncTypeData.ident = floatIdent;
-
-		Verify(isTypeResolved(floatType));
-		Verify(ensureInTypeTable(pTable, &floatType) == TYPID_Float);
-	}
-
-	// bool
-
-	{
-		ScopedIdentifier boolIdent;
-		setLexeme(&boolIdent.lexeme, "bool");
-		boolIdent.scopeid = SCOPEID_BuiltIn;
-
-		Type boolType;
-		init(&boolType, false /* isFuncType */);
-		boolType.nonFuncTypeData.ident = boolIdent;
-
-		Verify(isTypeResolved(boolType));
-		Verify(ensureInTypeTable(pTable, &boolType) == TYPID_Bool);
-	}
-
-	// string
-
-	{
-		ScopedIdentifier stringIdent;
-		setLexeme(&stringIdent.lexeme, "string");
-		stringIdent.scopeid = SCOPEID_BuiltIn;
-
-		Type stringType;
-		init(&stringType, false /* isFuncType */);
-		stringType.nonFuncTypeData.ident = stringIdent;
-
-		Verify(isTypeResolved(stringType));
-		Verify(ensureInTypeTable(pTable, &stringType) == TYPID_String);
-	}
+	insertBuiltInType(pTable, "string", TYPID_String);
 }
 
 void init(TypeTable::TypePendingResolve * pTypePending, Scope * pScope, bool isFuncType)
@@ -656,10 +643,13 @@ TYPID typidFromLiteralk(LITERALK literalk)
 		reportIceAndExit("Unexpected literalk value: %d", literalk);
 	}
 
+	// TODO: "untyped" numeric literals that shapeshift into whatever context
+	//	they are used, like in Go.
+
 	const static TYPID s_mpLiteralkTypid[] =
 	{
-		TYPID_Int,
-		TYPID_Float,
+		TYPID_S32,
+		TYPID_F32,
 		TYPID_Bool,
 		TYPID_String
 	};

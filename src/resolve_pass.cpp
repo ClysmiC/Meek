@@ -150,13 +150,13 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 					Scope * pScopeCur = (*pPass->pMpScopeidPScope)[pPass->scopeidCur];
 
 					{
-						lookupFuncSymbol(*pScopeCur, pExpr->pTokenIdent->lexeme, &pExpr->unresolvedData.aCandidates);
+						lookupFuncSymbol(*pScopeCur, pExpr->ident, &pExpr->unresolvedData.aCandidates);
 					}
 
 					// Lookup var matching this identifier, and slot it in where it fits
 
 					{
-						SymbolInfo symbInfoVar = lookupVarSymbol(*pScopeCur, pExpr->pTokenIdent->lexeme);
+						SymbolInfo symbInfoVar = lookupVarSymbol(*pScopeCur, pExpr->ident);
 
 						if (symbInfoVar.symbolk != SYMBOLK_Nil)
 						{
@@ -209,7 +209,7 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 					else
 					{
 						print("Unresolved variable ");
-						print(pExpr->pTokenIdent->lexeme.strv);
+						print(pExpr->ident.strv);
 						println();
 
 						// HMM: Is this the right result value? Should we have a specific TYPID_UnresolvedIdentifier?
@@ -257,7 +257,7 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 						Assert(symbInfoOwner.symbolk == SYMBOLK_Struct);
 
 						Scope * pScopeOwnerInner = (*pPass->pMpScopeidPScope)[symbInfoOwner.structData.pStructDefnStmt->scopeid];
-						symbInfoMember = lookupVarSymbol(*pScopeOwnerInner, pExpr->pTokenIdent->lexeme, FSYMBQ_IgnoreParent);
+						symbInfoMember = lookupVarSymbol(*pScopeOwnerInner, pExpr->ident, FSYMBQ_IgnoreParent);
 					}
 
 					if (symbInfoMember.symbolk == SYMBOLK_Nil)
@@ -266,7 +266,7 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 						// TODO: Add this to a resolve error list... don't print inline right here!
 
 						print("Unresolved member variable ");
-						print(pExpr->pTokenIdent->lexeme.strv);
+						print(pExpr->ident.strv);
 						println();
 
 						typidResult = TYPID_Unresolved;
@@ -291,7 +291,7 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 					init(&aSymbInfoFuncCandidates);
 					Defer(dispose(&aSymbInfoFuncCandidates));
 
-					lookupFuncSymbol(*pScopeCur, pExpr->pTokenIdent->lexeme, &aSymbInfoFuncCandidates);
+					lookupFuncSymbol(*pScopeCur, pExpr->ident, &aSymbInfoFuncCandidates);
 
 					AstFuncDefnStmt * pFuncDefnStmtMatch = nullptr;
 					for (int iCandidate = 0; iCandidate < aSymbInfoFuncCandidates.cItem; iCandidate++)
@@ -347,7 +347,7 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 						// TODO: Add this to a resolve error list... don't print inline right here!
 
 						print("Unresolved func identifier ");
-						print(pExpr->pTokenIdent->lexeme.strv);
+						print(pExpr->ident.strv);
 						println();
 
 						typidResult = TYPID_Unresolved;
@@ -400,9 +400,9 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 			}
 
 			TYPID typidSubscript = resolveExpr(pPass, pExpr->pSubscriptExpr);
-			if (typidSubscript != TYPID_Int)
+			if (typidSubscript != TYPID_S32)
 			{
-				// TODO: support uint, etc.
+				// TODO: support s8, s16, s64, u8, etc...
 				// TODO: catch negative compile time constants
 
 				// TODO: report error here, but keep on chugging with the resolve... despite the incorrect subscript, we still
@@ -724,7 +724,7 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 									//	discard this func candidate from consideration anyways.
 
 									print("Ambiguous function call ");
-									print(pFuncSymbolExpr->pTokenIdent->lexeme.strv);
+									print(pFuncSymbolExpr->ident.strv);
 									typidResult = TYPID_TypeError;
 									goto LEndSetTypidAndReturn;
 								}
@@ -783,7 +783,7 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 						// TODO: better reporting
 
 						print("Ambiguous function call ");
-						print(pFuncSymbolExpr->pTokenIdent->lexeme.strv);
+						print(pFuncSymbolExpr->ident.strv);
 						println();
 						typidResult = TYPID_TypeError;
 						goto LEndSetTypidAndReturn;
@@ -793,7 +793,7 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 						// TODO: better reporting
 
 						print("No func named ");
-						print(pFuncSymbolExpr->pTokenIdent->lexeme.strv);
+						print(pFuncSymbolExpr->ident.strv);
 						print(" matches the provided parameters");
 						println();
 						typidResult = TYPID_TypeError;

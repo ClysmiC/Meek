@@ -43,8 +43,16 @@ enum TYPID : u32
 	// Built-ins
 
 	TYPID_Void,
-	TYPID_Int,
-	TYPID_Float,
+	TYPID_S8,
+	TYPID_S16,
+	TYPID_S32,
+	TYPID_S64,
+	TYPID_U8,
+	TYPID_U16,
+	TYPID_U32,
+	TYPID_U64,
+	TYPID_F32,
+	TYPID_F64,
 	TYPID_Bool,
 	TYPID_String,
 

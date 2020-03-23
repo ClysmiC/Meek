@@ -504,14 +504,14 @@ void debugPrintSubAst(DebugPrintCtx * pCtx, const AstNode & node, int level, boo
 				case SYMBEXPRK_Var:
 				{
 					print("(var symbol): ");
-					print(pExpr->pTokenIdent->lexeme.strv);
+					print(pExpr->ident.strv);
 				}
 				break;
 
 				case SYMBEXPRK_MemberVar:
 				{
 					print("(member var symbol): ");
-					print(pExpr->pTokenIdent->lexeme.strv);
+					print(pExpr->ident.strv);
 					println();
 
 					printTabs(pCtx, levelNext, false, false);
@@ -526,7 +526,7 @@ void debugPrintSubAst(DebugPrintCtx * pCtx, const AstNode & node, int level, boo
 				case SYMBEXPRK_Func:
 				{
 					print("(func symbol): ");
-					print(pExpr->pTokenIdent->lexeme.strv);
+					print(pExpr->ident.strv);
 
 					// TODO: maybe print type disambig ??
 				}
@@ -535,7 +535,7 @@ void debugPrintSubAst(DebugPrintCtx * pCtx, const AstNode & node, int level, boo
 				case SYMBEXPRK_Unresolved:
 				{
 					print("(unresolved symbol): ");
-					print(pExpr->pTokenIdent->lexeme.strv);
+					print(pExpr->ident.strv);
 				}
 				break;
 

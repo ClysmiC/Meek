@@ -1389,7 +1389,7 @@ AstNode * parseFuncSymbolExpr(Parser * pParser)
 		//	don't necessarily know exactly which one
 
 		auto * pNode = AstNew(pParser, SymbolExpr, makeStartEnd(iStart, pTokenIdent->startEnd.iEnd));
-		pNode->pTokenIdent = pTokenIdent;
+		pNode->ident = pTokenIdent->lexeme;
 		pNode->symbexprk = SYMBEXPRK_Unresolved;
 		pNode->unresolvedData.ignoreVars = true;
 		init(&pNode->unresolvedData.aCandidates);
@@ -1419,6 +1419,7 @@ AstNode * parseFuncSymbolExpr(Parser * pParser)
 		auto startEndPrev = prevTokenStartEnd(pParser->pScanner);
 
 		auto * pNode = AstNew(pParser, SymbolExpr, makeStartEnd(iStart, startEndPrev.iEnd));
+		pNode->ident = ident;
 		pNode->symbexprk = SYMBEXPRK_Func;
 		pNode->funcData.pDefnCached = nullptr;		// Not yet resolved
 		init(&pNode->funcData.aTypidDisambig);
@@ -1481,7 +1482,7 @@ AstNode * parseVarOrMemberVarSymbolExpr(Parser * pParser, NULLABLE AstNode * pMe
 
 	auto * pNode = AstNew(pParser, SymbolExpr, makeStartEnd(iStart, pIdent->startEnd.iEnd));
 
-	pNode->pTokenIdent = pIdent;
+	pNode->ident = pIdent->lexeme;
 	if (pMemberOwnerExpr)
 	{
 		pNode->symbexprk = SYMBEXPRK_MemberVar;

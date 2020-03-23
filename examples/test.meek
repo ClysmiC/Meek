@@ -93,11 +93,13 @@ fn main2()
 {
 	// This is a function pointer variable named foo that is bound to a function literal
 
-	fn (int) foo = fn (int x) -> float { //A };
+	fn (int) -> float
+		foo =
+			fn (int x) -> float { //A };
 
 	// This is a named function definition
 
-	fn foo (float64) { //B }
+	fn foo (f64) { //B }
 
 	// This is also a named function definition. It and B are overloaded.
 
@@ -117,11 +119,11 @@ fn main2()
 
 	// Calls C
 
-	do fn (float) foo(5.0);
+	do fn (float) foo(5.1);
 
 	// Calls B
 
-	do fn (float64) foo(5.0);
+	do fn (f64) foo(5.2);
 }
 
 

@@ -259,7 +259,7 @@ struct AstSymbolExpr
 {
 	SYMBEXPRK symbexprk;
 
-	Token * pTokenIdent;
+	Lexeme ident;
 
 	union
 	{

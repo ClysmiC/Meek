@@ -38,50 +38,43 @@ void init(Scope * pScope, SCOPEID scopeid, SCOPEK scopek, Scope * pScopeParent)
 
 	if (scopek == SCOPEK_BuiltIn)
 	{
-		// int
-
+		auto insertBuiltInTypeSymbol = [](Scope * pScope, const char * strIdent, TYPID typid)
 		{
 			Lexeme lexeme;
-			setLexeme(&lexeme, "int");
+			setLexeme(&lexeme, strIdent);
 
 			SymbolInfo symbInfo;
 			symbInfo.symbolk = SYMBOLK_BuiltInType;
-			symbInfo.builtInData.typid = TYPID_Int;
+			symbInfo.builtInData.typid = typid;
+
+			Assert(!lookup(pScope->symbolsDefined, lexeme));
 
 			DynamicArray<SymbolInfo> * paSymbInfo = insertNew(&pScope->symbolsDefined, lexeme);
 			init(paSymbInfo);
 			append(paSymbInfo, symbInfo);
-		}
+		};
 
-		// float
+		// TODO: make void a symbol?
 
-		{
-			Lexeme lexeme;
-			setLexeme(&lexeme, "float");
+		insertBuiltInTypeSymbol(pScope, "int", TYPID_S32);
+		insertBuiltInTypeSymbol(pScope, "s8", TYPID_S8);
+		insertBuiltInTypeSymbol(pScope, "s16", TYPID_S16);
+		insertBuiltInTypeSymbol(pScope, "s32", TYPID_S32);
+		insertBuiltInTypeSymbol(pScope, "s64", TYPID_S64);
 
-			SymbolInfo symbInfo;
-			symbInfo.symbolk = SYMBOLK_BuiltInType;
-			symbInfo.builtInData.typid = TYPID_Float;
+		insertBuiltInTypeSymbol(pScope, "uint", TYPID_U32);
+		insertBuiltInTypeSymbol(pScope, "u8", TYPID_U8);
+		insertBuiltInTypeSymbol(pScope, "u16", TYPID_U16);
+		insertBuiltInTypeSymbol(pScope, "u32", TYPID_U32);
+		insertBuiltInTypeSymbol(pScope, "u64", TYPID_U64);
 
-			DynamicArray<SymbolInfo> * paSymbInfo = insertNew(&pScope->symbolsDefined, lexeme);
-			init(paSymbInfo);
-			append(paSymbInfo, symbInfo);
-		}
+		insertBuiltInTypeSymbol(pScope, "float", TYPID_F32);
+		insertBuiltInTypeSymbol(pScope, "f32", TYPID_F32);
+		insertBuiltInTypeSymbol(pScope, "f64", TYPID_F64);
 
-		// bool
+		insertBuiltInTypeSymbol(pScope, "bool", TYPID_Bool);
 
-		{
-			Lexeme lexeme;
-			setLexeme(&lexeme, "bool");
-
-			SymbolInfo symbInfo;
-			symbInfo.symbolk = SYMBOLK_BuiltInType;
-			symbInfo.builtInData.typid = TYPID_Bool;
-
-			DynamicArray<SymbolInfo> * paSymbInfo = insertNew(&pScope->symbolsDefined, lexeme);
-			init(paSymbInfo);
-			append(paSymbInfo, symbInfo);
-		}
+		insertBuiltInTypeSymbol(pScope, "string", TYPID_String);
 	}
 }
 

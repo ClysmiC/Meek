@@ -78,6 +78,8 @@ inline bool isTypeResolved(TYPID typid)
 	return typid >= TYPID_ActualTypesStart;
 }
 
+Lexeme getDealiasedTypeLexeme(const Lexeme & lexeme);
+
 bool typeEq(const Type & t0, const Type & t1);
 uint typeHash(const Type & t);
 
