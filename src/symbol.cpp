@@ -187,7 +187,7 @@ bool auditDuplicateSymbols(Scope * pScope)
 
 					for (int iSymbInfoOther = iSymbInfo + 1; iSymbInfoOther < paSymbInfo->cItem; iSymbInfoOther++)
 					{
-						SymbolInfo symbInfoOther = (*paSymbInfo)[iSymbInfo];
+						SymbolInfo symbInfoOther = (*paSymbInfo)[iSymbInfoOther];
 						if (symbInfoOther.symbolk != SYMBOLK_Func)
 							continue;
 

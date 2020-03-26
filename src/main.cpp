@@ -99,7 +99,7 @@ int main()
 	println();
 	debugPrintTypeTable(parser.typeTable);
 
-#if DEBUG && 1
+#if DEBUG && 0
 	DebugPrintCtx debugPrintCtx;
 	init(&debugPrintCtx.mpLevelSkip);
 	debugPrintCtx.pTypeTable = &parser.typeTable;
