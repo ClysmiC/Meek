@@ -107,7 +107,7 @@ fn main2()
 
 	// Calls A
 
-	foo();
+	foo(5);
 
 	// Ambiguous??
 

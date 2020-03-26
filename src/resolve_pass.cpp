@@ -155,6 +155,7 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 
 					// Lookup var matching this identifier, and slot it in where it fits
 
+					if (!pExpr->unresolvedData.ignoreVars)
 					{
 						SymbolInfo symbInfoVar = lookupVarSymbol(*pScopeCur, pExpr->ident);
 
