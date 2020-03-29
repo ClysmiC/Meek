@@ -8,6 +8,8 @@ void init(Type * pType, bool isFuncType)
 {
 	pType->isFuncType = isFuncType;
 	pType->isInferred = false;
+	pType->info.size = Type::TypeInfo::s_unset;
+	pType->info.alignment = Type::TypeInfo::s_unset;
 
 	init(&pType->aTypemods);
 
@@ -33,9 +35,12 @@ void init(Type * pType, bool isFuncType)
 //	}
 //}
 //
+
 void initCopy(Type * pType, const Type & typeSrc)
 {
 	pType->isFuncType = typeSrc.isFuncType;
+	pType->isInferred = typeSrc.isInferred;
+	pType->info = typeSrc.info;
 	initCopy(&pType->aTypemods, typeSrc.aTypemods);
 
 	if (pType->isFuncType)
@@ -496,7 +501,7 @@ void init(TypeTable * pTable)
 	init(&pTable->typesPendingResolution);
 	init(&pTable->typeAlloc);
 
-	auto insertBuiltInType = [](TypeTable * pTable, const char * strIdent, TYPID typidExpected)
+	auto insertBuiltInType = [](TypeTable * pTable, const char * strIdent, TYPID typidExpected, int size)
 	{
 		ScopedIdentifier ident;
 		setLexeme(&ident.lexeme, strIdent);
@@ -505,29 +510,31 @@ void init(TypeTable * pTable)
 		Type type;
 		init(&type, false /* isFuncType */);
 		type.nonFuncTypeData.ident = ident;
+		type.info.size = size;
+		type.info.alignment = size;
 
 		Verify(isTypeResolved(type));
 		Verify(ensureInTypeTable(pTable, &type) == typidExpected);
 	};
 
-	insertBuiltInType(pTable, "void", TYPID_Void);
+	insertBuiltInType(pTable, "void", TYPID_Void, 0);
 
-	insertBuiltInType(pTable, "s8", TYPID_S8);
-	insertBuiltInType(pTable, "s16", TYPID_S16);
-	insertBuiltInType(pTable, "s32", TYPID_S32);
-	insertBuiltInType(pTable, "s64", TYPID_S64);
+	insertBuiltInType(pTable, "s8", TYPID_S8, 1);
+	insertBuiltInType(pTable, "s16", TYPID_S16, 2);
+	insertBuiltInType(pTable, "s32", TYPID_S32, 4);
+	insertBuiltInType(pTable, "s64", TYPID_S64, 8);
 
-	insertBuiltInType(pTable, "u8", TYPID_U8);
-	insertBuiltInType(pTable, "u16", TYPID_U16);
-	insertBuiltInType(pTable, "u32", TYPID_U32);
-	insertBuiltInType(pTable, "u64", TYPID_U64);
+	insertBuiltInType(pTable, "u8", TYPID_U8, 1);
+	insertBuiltInType(pTable, "u16", TYPID_U16, 2);
+	insertBuiltInType(pTable, "u32", TYPID_U32, 4);
+	insertBuiltInType(pTable, "u64", TYPID_U64, 8);
 
-	insertBuiltInType(pTable, "f32", TYPID_F32);
-	insertBuiltInType(pTable, "f64", TYPID_F64);
+	insertBuiltInType(pTable, "f32", TYPID_F32, 4);
+	insertBuiltInType(pTable, "f64", TYPID_F64, 8);
 
-	insertBuiltInType(pTable, "bool", TYPID_Bool);
+	insertBuiltInType(pTable, "bool", TYPID_Bool, 1);
 
-	insertBuiltInType(pTable, "string", TYPID_String);
+	insertBuiltInType(pTable, "string", TYPID_String, -1);	// TODO: Pass actual size once I figure out the in-memory representation.
 }
 
 void init(TypeTable::TypePendingResolve * pTypePending, Scope * pScope, bool isFuncType)
@@ -544,7 +551,22 @@ void dispose(TypeTable::TypePendingResolve * pTypePending)
 
 NULLABLE const Type * lookupType(const TypeTable & table, TYPID typid)
 {
-	return *lookupByKey(table.table, typid);
+	auto ppType = lookupByKey(table.table, typid);
+	if (!ppType)
+		return nullptr;
+
+	return *ppType;
+}
+
+void setTypeInfo(const TypeTable & table, TYPID typid, const Type::TypeInfo & typeInfo)
+{
+	Assert(isTypeResolved(typid));
+	
+	auto ppType = lookupByKeyRaw(table.table, typid);
+	Assert(ppType);
+	Assert(*ppType);
+
+	(*ppType)->info = typeInfo;
 }
 
 TYPID ensureInTypeTable(TypeTable * pTable, Type * pType, bool debugAssertIfAlreadyInTable)
@@ -609,31 +631,217 @@ bool tryResolveAllTypes(Parser * pParser)
 		}
 	};
 
-	int cUnresolved = 0;
-	for (int i = 0; i < pParser->typeTable.typesPendingResolution.cItem; i++)
+	auto tryResolvePendingTypeInfo = [](const TypeTable & typeTable, const DynamicArray<Scope *> & mpScopeidPScope, TYPID typid)
 	{
-		TypeTable::TypePendingResolve * pTypePending = &pParser->typeTable.typesPendingResolution[i];
-		if (tryResolvePendingType(pTypePending))
+		static const int s_targetWordSize = 64;		// TODO: configurable target
+		static const int s_cBytePtr = (s_targetWordSize + 7) / 8;
+
+		const Type * pType = lookupType(typeTable, typid);
+
+		Type::TypeInfo typeInfoResult;
+		typeInfoResult.size = Type::TypeInfo::s_unset;
+		typeInfoResult.alignment = Type::TypeInfo::s_unset;
+
+		Assert(pType);
+		AssertInfo(pType->info.size == Type::TypeInfo::s_unset, "Trying to resolve pending type info that has already been resolved?");
+
+		if (pType->aTypemods.cItem > 0)
 		{
-			TYPID typid = ensureInTypeTable(&pParser->typeTable, &pTypePending->type);
-			for (int iTypidUpdate = 0; iTypidUpdate < pTypePending->cPTypidUpdateOnResolve; iTypidUpdate++)
+			TypeModifier typeMod = pType->aTypemods[0];
+			switch (typeMod.typemodk)
 			{
-				TYPID * pTypidUpdate = pTypePending->apTypidUpdateOnResolve[iTypidUpdate];
-				*pTypidUpdate = typid;
+				case TYPEMODK_Array:
+				{
+					AssertTodo;
+				} break;
+
+				case TYPEMODK_Pointer:
+				{
+					typeInfoResult.size = s_cBytePtr;
+					typeInfoResult.alignment = s_cBytePtr;
+				} break;
+
+				default:
+				{
+					AssertNotReached;
+				} break;
 			}
 		}
 		else
 		{
-			// TODO: print error
+			if (pType->isFuncType)
+			{
+				typeInfoResult.size = s_cBytePtr;
+				typeInfoResult.alignment = s_cBytePtr;
+			}
+			else
+			{
+				SymbolInfo symbInfo =
+					lookupTypeSymbol(
+						*mpScopeidPScope[pType->nonFuncTypeData.ident.scopeid],
+						pType->nonFuncTypeData.ident.lexeme);
+				
+				Assert(symbInfo.symbolk == SYMBOLK_Struct);
 
-			cUnresolved++;
+				auto * pStructDefn = symbInfo.structData.pStructDefnStmt;
+				Assert(pStructDefn);
+
+				if (pStructDefn->apVarDeclStmt.cItem == 0)
+				{
+					// Empty struct
+
+					typeInfoResult.size = 1;
+					typeInfoResult.alignment = 1;
+				}
+				else
+				{
+					bool allMembersCounted = true;
+					u32 sizeWithPadding = 0;
+					u32 alignmentMax = 1;
+
+					for (int iVarDeclStmt = 0; iVarDeclStmt < pStructDefn->apVarDeclStmt.cItem; iVarDeclStmt++)
+					{
+						auto * pVarDeclStmt = Down(pStructDefn->apVarDeclStmt[iVarDeclStmt], VarDeclStmt);
+						if (!isTypeResolved(pVarDeclStmt->typidDefn))
+						{
+							allMembersCounted = false;
+							break;
+						}
+
+						const Type * pTypeVarDecl = lookupType(typeTable, pVarDeclStmt->typidDefn);
+						Assert(pTypeVarDecl);
+
+						u32 sizeMember = pTypeVarDecl->info.size;
+						u32 alignmentMember = pTypeVarDecl->info.alignment;
+
+						Assert(Iff(sizeMember == Type::TypeInfo::s_unset, alignmentMember == Type::TypeInfo::s_unset));
+						if (sizeMember == Type::TypeInfo::s_unset)
+						{
+							allMembersCounted = false;
+							break;
+						}
+
+						// Using C-like struct packing for now.
+						// http://www.catb.org/esr/structure-packing/
+
+						if (iVarDeclStmt > 0)
+						{
+							int bytesPastAlignment = sizeWithPadding % alignmentMember;
+							int padding = (bytesPastAlignment == 0) ? 0 : alignmentMember - bytesPastAlignment;
+							sizeWithPadding += padding;
+						}
+
+						sizeWithPadding += sizeMember;
+						alignmentMax = Max(alignmentMax, alignmentMember);
+					}
+
+					if (allMembersCounted)
+					{
+						typeInfoResult.alignment = alignmentMax;
+
+						int bytesPastAlignment = sizeWithPadding % typeInfoResult.alignment;
+						int endPadding = (bytesPastAlignment == 0) ? 0 : typeInfoResult.alignment - bytesPastAlignment;
+						sizeWithPadding += endPadding;
+
+						typeInfoResult.size = sizeWithPadding;
+					}
+				}
+			}
 		}
 
-		dispose(pTypePending);
+		Assert(typeInfoResult.alignment <= typeInfoResult.size);
+		Assert(typeInfoResult.size % typeInfoResult.alignment == 0);
+		Assert(Iff(typeInfoResult.size == Type::TypeInfo::s_unset, typeInfoResult.alignment == Type::TypeInfo::s_unset));
+		if (typeInfoResult.size == Type::TypeInfo::s_unset)
+			return false;
+
+		setTypeInfo(typeTable, typid, typeInfoResult);
+		return true;
+	};
+
+	// Resolve named types (and eagerly resolve type infos where we can)
+
+	DynamicArray<TYPID> aTypidInfoPending;
+	init(&aTypidInfoPending);
+	Defer(dispose(&aTypidInfoPending));
+
+	int cTypeUnresolved = 0;
+	{
+		for (int i = 0; i < pParser->typeTable.typesPendingResolution.cItem; i++)
+		{
+			TypeTable::TypePendingResolve * pTypePending = &pParser->typeTable.typesPendingResolution[i];
+			if (tryResolvePendingType(pTypePending))
+			{
+				TYPID typid = ensureInTypeTable(&pParser->typeTable, &pTypePending->type);
+				for (int iTypidUpdate = 0; iTypidUpdate < pTypePending->cPTypidUpdateOnResolve; iTypidUpdate++)
+				{
+					TYPID * pTypidUpdate = pTypePending->apTypidUpdateOnResolve[iTypidUpdate];
+					*pTypidUpdate = typid;
+				}
+
+				const Type * pType = lookupType(pParser->typeTable, typid);
+				if (pType->info.size == Type::TypeInfo::s_unset)
+				{
+					if (tryResolvePendingTypeInfo(pParser->typeTable, pParser->mpScopeidPScope, typid))
+					{
+						Assert(pType->info.size != Type::TypeInfo::s_unset);
+					}
+					else
+					{
+						append(&aTypidInfoPending, typid);
+					}
+				}
+			}
+			else
+			{
+				// TODO: print specific error
+
+				cTypeUnresolved++;
+			}
+
+			dispose(pTypePending);
+		}
+
+		dispose(&pParser->typeTable.typesPendingResolution);
 	}
 
-	dispose(&pParser->typeTable.typesPendingResolution);
-	return cUnresolved == 0;
+	// Resolve type infos we weren't able to resolve eagerly
+
+	bool madeProgress = true;
+	while (madeProgress)
+	{
+		madeProgress = false;
+
+		for (int i = aTypidInfoPending.cItem - 1; i >= 0; i--)
+		{
+			TYPID typidInfoPending = aTypidInfoPending[i];
+			Assert(isTypeResolved(typidInfoPending));
+
+			const Type * pType = lookupType(pParser->typeTable, typidInfoPending);
+			if (pType->info.size != Type::TypeInfo::s_unset)
+			{
+				// NOTE (andrew) This can happen when multiple copies of the same typid are added to
+				//	this list. This makes it kind of @Slow, we should probably use a HashSet instead
+				//	of a DynamicArray for the pending typeinfo typid's...
+
+				unorderedRemove(&aTypidInfoPending, i);
+			}
+			else if (tryResolvePendingTypeInfo(pParser->typeTable, pParser->mpScopeidPScope, typidInfoPending))
+			{
+				madeProgress = true;
+				unorderedRemove(&aTypidInfoPending, i);
+			}
+			else
+			{
+				// Still not enough info to resolve. Keep around for next iteration.
+			}
+		}
+	}
+
+	// TODO: Better distinction between type resolve failing and type *info* resolve failing.
+	// TODO: Better terminology...
+
+	return cTypeUnresolved == 0 && aTypidInfoPending.cItem == 0;
 }
 
 TYPID typidFromLiteralk(LITERALK literalk)
@@ -646,7 +854,7 @@ TYPID typidFromLiteralk(LITERALK literalk)
 	// TODO: "untyped" numeric literals that shapeshift into whatever context
 	//	they are used, like in Go.
 
-	const static TYPID s_mpLiteralkTypid[] =
+	static const TYPID s_mpLiteralkTypid[] =
 	{
 		TYPID_S32,
 		TYPID_F32,

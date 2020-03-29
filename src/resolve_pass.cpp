@@ -20,7 +20,7 @@ void init(ResolvePass * pPass, Parser * pParser)
 
 	pPass->scopeidCur = SCOPEID_Global;
 
-	pPass->pMpScopeidPScope = &pParser->mpScopeidScope;
+	pPass->pMpScopeidPScope = &pParser->mpScopeidPScope;
 	pPass->pTypeTable = &pParser->typeTable;
 }
 

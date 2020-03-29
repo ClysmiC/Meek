@@ -36,7 +36,7 @@ struct Parser
 	SCOPEID scopeidNext = SCOPEID_Nil;
 	Scope * pScopeCurrent = nullptr;
 
-	DynamicArray<Scope *> mpScopeidScope;
+	DynamicArray<Scope *> mpScopeidPScope;
 	VARSEQID varseqidNext = VARSEQID_Nil;
 
 	// Type Table

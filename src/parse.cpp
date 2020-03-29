@@ -42,7 +42,7 @@ void init(Parser * pParser, Scanner * pScanner)
 	init(&pParser->astDecs);
 	init(&pParser->apErrorNodes);
 
-	init(&pParser->mpScopeidScope);
+	init(&pParser->mpScopeidPScope);
 
 	Scope * pScopeBuiltIn = allocate(&pParser->scopeAlloc);
 	init(pScopeBuiltIn, SCOPEID_BuiltIn, SCOPEK_BuiltIn, nullptr);
@@ -53,8 +53,8 @@ void init(Parser * pParser, Scanner * pScanner)
 	pParser->pScopeCurrent = pScopeGlobal;
 	pParser->scopeidNext = SCOPEID_UserDefinedStart;
 
-	append(&pParser->mpScopeidScope, pScopeBuiltIn);
-	append(&pParser->mpScopeidScope, pScopeGlobal);
+	append(&pParser->mpScopeidPScope, pScopeBuiltIn);
+	append(&pParser->mpScopeidPScope, pScopeGlobal);
 
 	pParser->varseqidNext = VARSEQID_Start;
 }
@@ -363,7 +363,7 @@ AstNode * parseExprStmtOrAssignStmt(Parser * pParser)
 	bool isAssignment = false;
 	AstNode * pRhsExpr = nullptr;
 
-	const static TOKENK s_aTokenkAssign[] = {
+	static const TOKENK s_aTokenkAssign[] = {
 		TOKENK_Equal,
 		TOKENK_PlusEqual,
 		TOKENK_MinusEqual,
@@ -371,7 +371,7 @@ AstNode * parseExprStmtOrAssignStmt(Parser * pParser)
 		TOKENK_SlashEqual,
 		TOKENK_PercentEqual
 	};
-	const static int s_cTokenkAssign = ArrayLen(s_aTokenkAssign);
+	static const int s_cTokenkAssign = ArrayLen(s_aTokenkAssign);
 
 	Token * pAssignToken = nullptr;
 	if (tryConsumeToken(pParser->pScanner, s_aTokenkAssign, s_cTokenkAssign, ensurePendingToken(pParser)))
@@ -1199,7 +1199,7 @@ AstNode * parsePrimary(Parser * pParser)
 	{
 		// Literal
 
-		const static bool s_mustBeIntLiteral = false;
+		static const bool s_mustBeIntLiteral = false;
 		return parseLiteralExpr(pParser, s_mustBeIntLiteral);
 	}
 	else if (peekToken(pParser->pScanner) == TOKENK_Identifier)
@@ -1338,7 +1338,7 @@ AstNode * parsePrimary(Parser * pParser)
 
 AstNode * parseLiteralExpr(Parser * pParser, bool mustBeIntLiteralk)
 {
-	const static TOKENK s_tokenkIntLit = TOKENK_IntLiteral;
+	static const TOKENK s_tokenkIntLit = TOKENK_IntLiteral;
 
 	const TOKENK * aTokenkValid = (mustBeIntLiteralk) ? &s_tokenkIntLit : g_aTokenkLiteral;
 	const int cTokenkValid = (mustBeIntLiteralk) ? 1 : g_cTokenkLiteral;
@@ -2356,8 +2356,8 @@ Scope * pushScope(Parser * pParser, SCOPEK scopek)
 
 	init(pScope, pParser->scopeidNext, scopek, pParser->pScopeCurrent);
 
-	Assert(pParser->mpScopeidScope.cItem == pScope->id);
-	append(&pParser->mpScopeidScope, pScope);
+	Assert(pParser->mpScopeidPScope.cItem == pScope->id);
+	append(&pParser->mpScopeidPScope, pScope);
 
 	pParser->pScopeCurrent = pScope;
 	pParser->scopeidNext = SCOPEID(pParser->scopeidNext + 1);

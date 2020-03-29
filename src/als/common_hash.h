@@ -42,20 +42,20 @@
 
 namespace AlsHash
 {
-	const static int s_neighborhoodSize = 32;		// 'H' in the paper!
+	static const int s_neighborhoodSize = 32;		// 'H' in the paper!
 
 	// Offset of the entry in a bucket from it's "ideal" bucket
 
-	const static uint8_t s_infoOffsetMask		= 0b00011111;
+	static const uint8_t s_infoOffsetMask		= 0b00011111;
 
 	// 2 Most significant bits of the hash of the entry in this bucket. If these don't match a candidate key's hash,
 	//	no need to test the keys for equality (eliminates 75% of unnecessary equality checks)
 
-	const static uint8_t s_infoHashMsbs			= 0b11000000;
+	static const uint8_t s_infoHashMsbs			= 0b11000000;
 
 	// 1 bit indicates whether the bucket is full or empty
 
-	const static uint8_t s_infoOccupiedMask		= 0b00100000;
+	static const uint8_t s_infoOccupiedMask		= 0b00100000;
 
 	ALS_COMMON_HASH_StaticAssert(s_infoOffsetMask + 1 >= s_neighborhoodSize);
 }
@@ -65,7 +65,7 @@ namespace AlsHash
 inline unsigned int buildHash(const void * pBytes, int cBytes, unsigned int runningHash)
 {
 	unsigned int result = runningHash;
-	const static unsigned int s_fnvPrime = 16777619;
+	static const unsigned int s_fnvPrime = 16777619;
 
 	for (int i = 0; i < cBytes; i++)
 	{
@@ -79,7 +79,7 @@ inline unsigned int buildHash(const void * pBytes, int cBytes, unsigned int runn
 inline unsigned int buildHashCString(const char * cString, unsigned int runningHash)
 {
 	unsigned int result = runningHash;
-	const static unsigned int s_fnvPrime = 16777619;
+	static const unsigned int s_fnvPrime = 16777619;
 
 	while (*cString)
 	{
@@ -93,13 +93,13 @@ inline unsigned int buildHashCString(const char * cString, unsigned int runningH
 
 inline unsigned int startHash(const void * pBytes=nullptr, int cBytes=0)
 {
-	const static unsigned int s_fnvOffsetBasis = 2166136261;
+	static const unsigned int s_fnvOffsetBasis = 2166136261;
 	return buildHash(pBytes, cBytes, s_fnvOffsetBasis);
 }
 
 inline unsigned int startHashCString(const char * cString)
 {
-	const static unsigned int s_fnvOffsetBasis = 2166136261;
+	static const unsigned int s_fnvOffsetBasis = 2166136261;
 	return buildHashCString(cString, s_fnvOffsetBasis);
 }
 
@@ -186,7 +186,7 @@ V * insertNew(
 
 	// H is the neighborhood size
 
-	const static uint32_t H = AlsHash::s_neighborhoodSize;
+	static const uint32_t H = AlsHash::s_neighborhoodSize;
 
 	uint32_t hash = pHashmap->hashFn(key);
 	uint32_t hashMsbs = (hash >> 24) & AlsHash::s_infoHashMsbs;
@@ -348,7 +348,7 @@ inline bool _alsHashHelper(
 
 	// H is the neighborhood size
 
-	const static uint32_t H = AlsHash::s_neighborhoodSize;
+	static const uint32_t H = AlsHash::s_neighborhoodSize;
 
 	uint32_t hash = pHashmap->hashFn(key);
 	uint32_t hashMsbs = (hash >> 24) & AlsHash::s_infoHashMsbs;
@@ -680,23 +680,35 @@ BiHashMapIter<K, V> iter(const BiHashMap<K, V> & bimap)
 }
 
 template <typename K, typename V>
-const V * lookupByKey(const BiHashMap<K, V> & bimap, const K & key)
+V * lookupByKeyRaw(const BiHashMap<K, V> & bimap, const K & key)
 {
 	V ** ppResult = lookup(bimap.mapKV, key);
 
-    if (ppResult) return *ppResult;
+	if (ppResult) return *ppResult;
 
-    return nullptr;
+	return nullptr;
+}
+
+template <typename K, typename V>
+const V * lookupByKey(const BiHashMap<K, V> & bimap, const K & key)
+{
+	return lookupByKeyRaw(bimap, key);
+}
+
+template <typename K, typename V>
+K * lookupByValueRaw(const BiHashMap<K, V> & bimap, const V & value)
+{
+	K ** ppResult = lookup(bimap.mapVK, value);
+
+	if (ppResult) return *ppResult;
+
+	return nullptr;
 }
 
 template <typename K, typename V>
 const K * lookupByValue(const BiHashMap<K, V> & bimap, const V & value)
 {
-    K ** ppResult = lookup(bimap.mapVK, value);
-
-    if (ppResult) return *ppResult;
-
-    return nullptr;
+    return lookupByValueRaw(bimap, value);
 }
 
 template <typename K, typename V>

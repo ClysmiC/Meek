@@ -38,8 +38,10 @@ struct //InlineComment Vector
 	float x;
 	float y;
 	float z;
+	u8 b0;		// Struct padding test
 	
 	fn (^Vector, float) fakeAddMethod;	// This is really just a variable that holds a function type. This use case is idiotic but it is just for testing.
+	u8 b1;
 }
 
 fn main(int a)

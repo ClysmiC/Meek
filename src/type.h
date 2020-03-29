@@ -40,6 +40,10 @@ struct FuncType
 	DynamicArray<TYPID> returnTypids;		// A.k.a. output params
 };
 
+// TODO: Split this out into TypeIdentInfo and TypeMetadata?
+//	Then we can use the former while resolving names without
+//	having to lug around this unset type info struct.
+
 struct Type
 {
 	Type() {}
@@ -60,6 +64,16 @@ struct Type
 	DynamicArray<TypeModifier> aTypemods;
 	bool isFuncType = false;
 	bool isInferred = false;
+
+	// Non-identifying info
+
+	struct TypeInfo
+	{
+		static const u32 s_unset = -1;
+
+		u32 size;			// Bytes
+		u32 alignment;		// Bytes
+	} info;
 };
 
 void init(Type * pType, bool isFuncType);
@@ -150,6 +164,8 @@ void init(TypeTable::TypePendingResolve * pTypePending, Scope * pScope, bool isF
 void dispose(TypeTable::TypePendingResolve * pTypePending);
 
 NULLABLE const Type * lookupType(const TypeTable & table, TYPID typid);
+void setTypeInfo(const TypeTable & table, TYPID typid, const Type::TypeInfo & typeInfo);
+
 NULLABLE const FuncType * funcTypeFromDefnStmt(const TypeTable & typeTable, const AstFuncDefnStmt & defnStmt);
 
 PENDINGTYPID registerPendingNonFuncType(

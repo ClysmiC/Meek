@@ -9,6 +9,9 @@
 
 #define AssertInfo(x, helpMsg) Assert(x)
 
+#define AssertTodo Assert(false)
+#define AssertNotReached Assert(false)
+
 #else
 
 #define Assert(x)
