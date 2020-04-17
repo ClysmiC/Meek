@@ -2,6 +2,180 @@
 
 #include "error.h"
 
+void walkAstPostorder(AstNode * pNodeSubtreeRoot, AstVisitFn visitFn, void * pContext)
+{
+	Assert(pNodeSubtreeRoot);
+
+	if (category(pNodeSubtreeRoot->astk) == ASTCATK_Error)
+	{
+		AstErr * pErr = DownErr(pNodeSubtreeRoot);
+		for (int iChild = 0; iChild < pErr->apChildren.cItem; iChild++)
+		{
+			walkAstPostorder(pErr->apChildren[iChild], visitFn, pContext);
+		}
+	}
+
+	switch (pNodeSubtreeRoot->astk)
+	{
+		case ASTK_UnopExpr:
+		{
+			auto * pNode = Down(pNodeSubtreeRoot, UnopExpr);
+			walkAstPostorder(pNode->pExpr, visitFn, pContext);
+		} break;
+
+		case ASTK_BinopExpr:
+		{
+			auto * pNode = Down(pNodeSubtreeRoot, BinopExpr);
+			walkAstPostorder(pNode->pLhsExpr, visitFn, pContext);
+			walkAstPostorder(pNode->pRhsExpr, visitFn, pContext);
+		} break;
+
+		case ASTK_LiteralExpr:
+			break;
+
+		case ASTK_GroupExpr:
+		{
+			auto * pNode = Down(pNodeSubtreeRoot, GroupExpr);
+			walkAstPostorder(pNode->pExpr, visitFn, pContext);
+		} break;
+
+		case ASTK_SymbolExpr:
+			break;
+
+		case ASTK_PointerDereferenceExpr:
+		{
+			auto * pNode = Down(pNodeSubtreeRoot, PointerDereferenceExpr);
+			walkAstPostorder(pNode->pPointerExpr, visitFn, pContext);
+		} break;
+
+		case ASTK_ArrayAccessExpr:
+		{
+			// NOTE (andrew) in foo[bar], this evaluates foo, then bar
+
+			auto * pNode = Down(pNodeSubtreeRoot, ArrayAccessExpr);
+			walkAstPostorder(pNode->pArrayExpr, visitFn, pContext);
+			walkAstPostorder(pNode->pSubscriptExpr, visitFn, pContext);
+		} break;
+
+		case ASTK_FuncCallExpr:
+		{
+			// NOTE (andrew) in foo(bar, baz), this evaluates foo, then bar, then baz.
+
+			auto * pNode = Down(pNodeSubtreeRoot, FuncCallExpr);
+			walkAstPostorder(pNode->pFunc, visitFn, pContext);
+
+			for (int iArg = 0; iArg < pNode->apArgs.cItem; iArg++)
+			{
+				walkAstPostorder(pNode->apArgs[iArg], visitFn, pContext);
+			}
+		} break;
+
+		case ASTK_FuncLiteralExpr:
+		{
+			auto * pNode = Down(pNodeSubtreeRoot, FuncLiteralExpr);
+			walkAstPostorder(Up(pNode->pParamsReturnsGrp), visitFn, pContext);
+			walkAstPostorder(pNode->pBodyStmt, visitFn, pContext);
+		} break;
+
+		case ASTK_ExprStmt:
+		{
+			auto * pNode = Down(pNodeSubtreeRoot, ExprStmt);
+			walkAstPostorder(pNode->pExpr, visitFn, pContext);
+		} break;
+
+		case ASTK_AssignStmt:
+		{
+			// NOTE (andrew) in foo = bar, this evaluates bar, then foo.
+
+			auto * pNode = Down(pNodeSubtreeRoot, AssignStmt);
+			walkAstPostorder(pNode->pRhsExpr, visitFn, pContext);
+			walkAstPostorder(pNode->pLhsExpr, visitFn, pContext);
+		} break;
+
+		case ASTK_VarDeclStmt:
+		{
+			auto * pNode = Down(pNodeSubtreeRoot, VarDeclStmt);
+			if (pNode->pInitExpr)
+			{
+				walkAstPostorder(pNode->pInitExpr, visitFn, pContext);
+			}
+		} break;
+
+		case ASTK_FuncDefnStmt:
+		{
+			auto * pNode = Down(pNodeSubtreeRoot, FuncDefnStmt);
+			walkAstPostorder(Up(pNode->pParamsReturnsGrp), visitFn, pContext);
+			walkAstPostorder(pNode->pBodyStmt, visitFn, pContext);
+		} break;
+
+		case ASTK_StructDefnStmt:
+		{
+			auto * pNode = Down(pNodeSubtreeRoot, StructDefnStmt);
+			for (int iVarDecl = 0; iVarDecl < pNode->apVarDeclStmt.cItem; iVarDecl++)
+			{
+				walkAstPostorder(pNode->apVarDeclStmt[iVarDecl], visitFn, pContext);
+			}
+		} break;
+
+		case ASTK_IfStmt:
+		{
+			auto * pNode = Down(pNodeSubtreeRoot, IfStmt);
+			walkAstPostorder(pNode->pCondExpr, visitFn, pContext);
+			walkAstPostorder(pNode->pThenStmt, visitFn, pContext);
+
+			if (pNode->pElseStmt)
+			{
+				walkAstPostorder(pNode->pElseStmt, visitFn, pContext);
+			}
+		} break;
+
+		case ASTK_WhileStmt:
+		{
+			AssertTodo;
+		} break;
+
+		case ASTK_BlockStmt:
+		{
+			auto * pNode = Down(pNodeSubtreeRoot, BlockStmt);
+			for (int iStmt = 0; iStmt < pNode->apStmts.cItem; iStmt++)
+			{
+				walkAstPostorder(pNode->apStmts[iStmt], visitFn, pContext);
+			}
+		} break;
+
+		case ASTK_ReturnStmt:
+		{
+			auto * pNode = Down(pNodeSubtreeRoot, ReturnStmt);
+			if (pNode->pExpr)
+			{
+				walkAstPostorder(pNode->pExpr, visitFn, pContext);
+			}
+		} break;
+
+		case ASTK_BreakStmt:
+			break;
+
+		case ASTK_ContinueStmt:
+			break;
+
+		case ASTK_ParamsReturnsGrp:
+		{
+			auto * pNode = Down(pNodeSubtreeRoot, ParamsReturnsGrp);
+			for (int iParam = 0; iParam < pNode->apParamVarDecls.cItem; iParam++)
+			{
+				walkAstPostorder(pNode->apParamVarDecls[iParam], visitFn, pContext);
+			}
+
+			for (int iParam = 0; iParam < pNode->apReturnVarDecls.cItem; iParam++)
+			{
+				walkAstPostorder(pNode->apReturnVarDecls[iParam], visitFn, pContext);
+			}
+		} break;
+	}
+
+	visitFn(pNodeSubtreeRoot, pContext);
+}
+
 int intValue(AstLiteralExpr * pLiteralExpr)
 {
 	Assert(pLiteralExpr->literalk == LITERALK_Int);

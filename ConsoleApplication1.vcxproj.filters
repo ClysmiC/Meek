@@ -74,9 +74,6 @@
     <ClInclude Include="src\symbol.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\resolve_pass.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="src\error.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -96,6 +93,12 @@
       <Filter>Header Files\als</Filter>
     </ClInclude>
     <ClInclude Include="src\print.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\resolve.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\bytecode.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
@@ -121,9 +124,6 @@
     <ClCompile Include="src\symbol.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="src\resolve_pass.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="src\ast_print.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -134,6 +134,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="src\print.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\resolve.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

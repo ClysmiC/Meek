@@ -35,12 +35,14 @@
     <ClInclude Include="src\ast.h" />
     <ClInclude Include="src\ast_decorate.h" />
     <ClInclude Include="src\ast_print.h" />
+    <ClInclude Include="src\bytecode.h" />
     <ClInclude Include="src\error.h" />
     <ClInclude Include="src\id_def.h" />
+    <ClInclude Include="src\interp.h" />
     <ClInclude Include="src\literal.h" />
     <ClInclude Include="src\parse.h" />
     <ClInclude Include="src\print.h" />
-    <ClInclude Include="src\resolve_pass.h" />
+    <ClInclude Include="src\resolve.h" />
     <ClInclude Include="src\scan.h" />
     <ClInclude Include="src\symbol.h" />
     <ClInclude Include="src\token.h" />
@@ -49,12 +51,14 @@
   <ItemGroup>
     <ClCompile Include="src\ast.cpp" />
     <ClCompile Include="src\ast_print.cpp" />
+    <ClCompile Include="src\bytecode.cpp" />
     <ClCompile Include="src\error.cpp" />
+    <ClCompile Include="src\interp.cpp" />
     <ClCompile Include="src\literal.cpp" />
     <ClCompile Include="src\main.cpp" />
     <ClCompile Include="src\parse.cpp" />
     <ClCompile Include="src\print.cpp" />
-    <ClCompile Include="src\resolve_pass.cpp" />
+    <ClCompile Include="src\resolve.cpp" />
     <ClCompile Include="src\scan.cpp" />
     <ClCompile Include="src\symbol.cpp" />
     <ClCompile Include="src\token.cpp" />

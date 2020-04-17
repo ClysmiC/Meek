@@ -415,7 +415,7 @@ struct AstWhileStmt
 
 struct AstReturnStmt
 {
-	AstNode * pExpr;
+	NULLABLE AstNode * pExpr;
 };
 
 struct AstBreakStmt {};
@@ -509,21 +509,12 @@ struct AstNode
 static constexpr uint s_nodeSizeDebug = sizeof(AstNode);
 #endif
 
+typedef void (* AstVisitFn)(AstNode *, void *);
 
-
-// Convenient accessors that handle casting/reaching through GRP nodes
-
-//DynamicArray<AstNode *> * paramVarDecls(const AstFuncDefnStmt & stmt);
-//DynamicArray<AstNode *> * paramVarDecls(const AstFuncLiteralExpr & expr);
-//
-//DynamicArray<AstNode *> * returnVarDecls(const AstFuncDefnStmt & stmt);
-//DynamicArray<AstNode *> * returnVarDecls(const AstFuncLiteralExpr & expr);
-//
-//ScopedIdentifier * ident(const AstFuncDefnStmt & stmt);
-//SYMBSEQID * symbseqid(const AstFuncDefnStmt & stmt);
+void walkAstPostorder(AstNode * pNode, AstVisitFn visitFn, void * pContext);
 
 // TODO: other "value" functions
-// TODO: move to literal.h / literal.cpp
+// TODO: move to literal.h / literal.cpp ?
 
 int intValue(AstLiteralExpr * pLiteralExpr);
 

@@ -129,7 +129,7 @@ struct DynamicArray
 	int cItem;
 	int capacity;
 
-	constexpr static float gc_growthFactor = 1.5f;
+	static constexpr float gc_growthFactor = 1.5f;
 
 	const T& operator[] (unsigned int i) const
 	{
@@ -554,6 +554,12 @@ template<typename T>
 int count(const Stack<T> & stack)
 {
 	return stack.a.cItem;
+}
+
+template<typename T>
+void ensureCapacity(Stack<T> * pStack, int requestedCapacity)
+{
+	ensureCapacity(pStack->a, requestedCapacity);
 }
 
 #undef ALS_COMMON_ARRAY_StaticAssert

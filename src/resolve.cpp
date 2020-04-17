@@ -1,4 +1,4 @@
-#include "resolve_pass.h"
+#include "resolve.h"
 
 #include "ast.h"
 #include "error.h"

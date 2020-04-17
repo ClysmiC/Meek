@@ -39,8 +39,8 @@
 
 struct String
 {
-	const static char gc_zeroString = '\0';
-	constexpr static float gc_growthFactor = 1.5f;
+	static const char gc_zeroString = '\0';
+	static constexpr float gc_growthFactor = 1.5f;
 
 	int cChar;
 	int capacity;		// NOTE: Actual buffer is at least this + 1 to make sure we can always null terminate
