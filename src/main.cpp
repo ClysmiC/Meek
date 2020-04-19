@@ -3,6 +3,7 @@
 #include "ast.h"
 #include "ast_print.h"
 #include "error.h"
+#include "global_context.h"
 #include "parse.h"
 #include "print.h"
 #include "resolve.h"
@@ -51,27 +52,24 @@ int main()
 		return 1;
 	}
 
-	Scanner scanner;
-	init(&scanner, buffer, bytesRead);
-
-	Parser parser;
-	init(&parser, &scanner);
+	MeekCtx ctx;
+	init(&ctx, buffer, bytesRead);
 
 	AstNode * pAstRoot = nullptr;
 	{
 		bool success;
-		pAstRoot = parseProgram(&parser, &success);
+		pAstRoot = parseProgram(ctx.pParser, &success);
 
 		if (!success)
 		{
 			// TODO: Still try to do semantic analysis on non-erroneous parts of the program so that we can report better errors?
 
-			reportScanAndParseErrors(parser);
+			reportScanAndParseErrors(*ctx.pParser);
 			return 1;
 		}
 	}
 
-	if (!tryResolveAllTypes(&parser))
+	if (!tryResolveAllTypes(ctx.pTypeTable))
 	{
 		print("Unable to resolve some types\n");
 		return 1;
@@ -86,8 +84,8 @@ int main()
 	//	return 1;
 	//}
 
-	ResolvePassCtx resolvePass;
-	init(&resolvePass, &parser);
+	ResolvePass resolvePass;
+	init(&resolvePass, &ctx);
 	doResolvePass(&resolvePass, pAstRoot);
 
 	print("Resolve pass all done\n");
@@ -97,7 +95,7 @@ int main()
 	/*debugPrintSymbolTable(parser.symbTable);*/
 
 	println();
-	debugPrintTypeTable(parser.typeTable);
+	debugPrintTypeTable(*ctx.pTypeTable);
 
 #if DEBUG && 0
 	DebugPrintCtx debugPrintCtx;

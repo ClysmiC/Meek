@@ -1,5 +1,6 @@
 #include "error.h"
 
+#include "global_context.h"
 #include "parse.h"
 #include "print.h"
 #include "scan.h"
@@ -24,9 +25,11 @@ void reportScanError(const Scanner & scanner, const Token & tokenErr, const char
 
 void reportParseError(const Parser & parser, const AstNode & node, const char * errFormat, ...)
 {
-	auto startEnd = getStartEnd(parser.astDecs, node.astid);
+	MeekCtx * pCtx = parser.pCtx;
 
-	printfmt("[Error: test.meek, line %d]\n", lineFromI(*parser.pScanner, startEnd.iStart));
+	auto startEnd = getStartEnd(*pCtx->pAstDecs, node.astid);
+
+	printfmt("[Error: test.meek, line %d]\n", lineFromI(*pCtx->pScanner, startEnd.iStart));
 
 	va_list arglist;
 	va_start(arglist, errFormat);

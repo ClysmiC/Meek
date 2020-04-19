@@ -1,6 +1,7 @@
 #include "parse.h"
 
 #include "error.h"
+#include "global_context.h"
 #include "scan.h"
 
 // Absolutely sucks that I need to use 0, 1, 2 suffixes. I tried this approach to simulate default parameters in a macro but MSVC has a bug
@@ -32,37 +33,31 @@ static const BinopInfo s_aParseOp[] = {
 };
 static constexpr int s_iParseOpMax = ArrayLen(s_aParseOp);
 
-void init(Parser * pParser, Scanner * pScanner)
+void init(Parser * pParser, MeekCtx * pCtx)
 {
-	pParser->pScanner = pScanner;
+	pParser->pCtx = pCtx;
+
 	init(&pParser->astAlloc);
 	init(&pParser->tokenAlloc);
-	init(&pParser->typeTable);
 	init(&pParser->scopeAlloc);
-	init(&pParser->astDecs);
 	init(&pParser->apErrorNodes);
 
-	init(&pParser->mpScopeidPScope);
+	pParser->pScopeBuiltin = allocate(&pParser->scopeAlloc);
+	init(pParser->pScopeBuiltin, SCOPEID_BuiltIn, SCOPEK_BuiltIn, nullptr);
 
-	Scope * pScopeBuiltIn = allocate(&pParser->scopeAlloc);
-	init(pScopeBuiltIn, SCOPEID_BuiltIn, SCOPEK_BuiltIn, nullptr);
+	pParser->pScopeGlobal = allocate(&pParser->scopeAlloc);
+	init(pParser->pScopeGlobal, SCOPEID_Global, SCOPEK_Global, pParser->pScopeBuiltin);
 
-	Scope * pScopeGlobal = allocate(&pParser->scopeAlloc);
-	init(pScopeGlobal, SCOPEID_Global, SCOPEK_Global, pScopeBuiltIn);
-
-	pParser->pScopeCurrent = pScopeGlobal;
+	pParser->pScopeCurrent = pParser->pScopeGlobal;
 	pParser->scopeidNext = SCOPEID_UserDefinedStart;
-
-	append(&pParser->mpScopeidPScope, pScopeBuiltIn);
-	append(&pParser->mpScopeidPScope, pScopeGlobal);
 
 	pParser->varseqidNext = VARSEQID_Start;
 }
 
 AstNode * parseProgram(Parser * pParser, bool * poSuccess)
 {
-	// NOTE: Empty program is valid to parse, but I may still decide that
-	//	that is a semantic error...
+	Scanner * pScanner = pParser->pCtx->pScanner;
+	AstDecorations * pAstDecs = pParser->pCtx->pAstDecs;
 
 	DynamicArray<AstNode *> apNodes;
 	init(&apNodes);
@@ -70,29 +65,29 @@ AstNode * parseProgram(Parser * pParser, bool * poSuccess)
 
 	StartEndIndices startEnd;
 
-	while (!isFinished(pParser->pScanner) && peekToken(pParser->pScanner) != TOKENK_Eof)
+	while (!isFinished(*pScanner) && peekToken(pScanner) != TOKENK_Eof)
 	{
 		AstNode * pNode = parseStmt(pParser, PARSESTMTK_TopLevelStmt);
 
 		if (isErrorNode(*pNode))
 		{
-			TOKENK tokenkPrev = prevToken(pParser->pScanner);
+			TOKENK tokenkPrev = prevToken(pScanner);
 			if (tokenkPrev != TOKENK_Semicolon)
 			{
 				bool recovered = tryRecoverFromPanic(pParser, TOKENK_Semicolon);
-				Assert(Implies(!recovered, isFinished(pParser->pScanner)));
+				Assert(Implies(!recovered, isFinished(*pScanner)));
 			}
 		}
 
 		if (apNodes.cItem == 0)
 		{
-			auto startEndNode = getStartEnd(pParser->astDecs, pNode->astid);
+			auto startEndNode = getStartEnd(*pAstDecs, pNode->astid);
 			startEnd.iStart = startEndNode.iStart;
 			startEnd.iEnd = startEndNode.iEnd;
 		}
 		else
 		{
-			auto startEndNode = getStartEnd(pParser->astDecs, pNode->astid);
+			auto startEndNode = getStartEnd(*pAstDecs, pNode->astid);
 			startEnd.iEnd = startEndNode.iEnd;
 		}
 
@@ -117,11 +112,13 @@ AstNode * parseStmt(Parser * pParser, PARSESTMTK parsestmtk)
 	//	-runtime immutable
 	//	-runtime mutable
 
+	Scanner * pScanner = pParser->pCtx->pScanner;
+	AstDecorations * pAstDecs = pParser->pCtx->pAstDecs;
 
 	// Peek around a bit to figure out what kind of statement it is!
 
-	TOKENK tokenkNext = peekToken(pParser->pScanner, nullptr, 0);
-	TOKENK tokenkNextNext = peekToken(pParser->pScanner, nullptr, 1);
+	TOKENK tokenkNext = peekToken(pScanner, nullptr, 0);
+	TOKENK tokenkNextNext = peekToken(pScanner, nullptr, 1);
 
 	if (tokenkNext == TOKENK_Struct)
 	{
@@ -135,7 +132,7 @@ AstNode * parseStmt(Parser * pParser, PARSESTMTK parsestmtk)
 
 		if (parsestmtk == PARSESTMTK_DoPseudoStmt)
 		{
-			auto * pErr = AstNewErr1Child(pParser, IllegalDoPseudoStmtErr, getStartEnd(pParser->astDecs, pNode->astid), pNode);
+			auto * pErr = AstNewErr1Child(pParser, IllegalDoPseudoStmtErr, getStartEnd(*pAstDecs, pNode->astid), pNode);
 			pErr->astkStmt = pNode->astk;
 			return Up(pErr);
 		}
@@ -178,7 +175,7 @@ AstNode * parseStmt(Parser * pParser, PARSESTMTK parsestmtk)
 
 		if (parsestmtk == PARSESTMTK_TopLevelStmt)
 		{
-			auto * pErr = AstNewErr1Child(pParser, IllegalTopLevelStmtErr, getStartEnd(pParser->astDecs, pNode->astid), pNode);
+			auto * pErr = AstNewErr1Child(pParser, IllegalTopLevelStmtErr, getStartEnd(*pAstDecs, pNode->astid), pNode);
 			pErr->astkStmt = pNode->astk;
 			return Up(pErr);
 		}
@@ -195,7 +192,7 @@ AstNode * parseStmt(Parser * pParser, PARSESTMTK parsestmtk)
 
 		if (parsestmtk == PARSESTMTK_TopLevelStmt)
 		{
-			auto * pErr = AstNewErr1Child(pParser, IllegalTopLevelStmtErr, getStartEnd(pParser->astDecs, pNode->astid), pNode);
+			auto * pErr = AstNewErr1Child(pParser, IllegalTopLevelStmtErr, getStartEnd(*pAstDecs, pNode->astid), pNode);
 			pErr->astkStmt = pNode->astk;
 			return Up(pErr);
 		}
@@ -214,14 +211,14 @@ AstNode * parseStmt(Parser * pParser, PARSESTMTK parsestmtk)
 
 		if (parsestmtk == PARSESTMTK_DoPseudoStmt)
 		{
-			auto * pErr = AstNewErr1Child(pParser, IllegalDoPseudoStmtErr, getStartEnd(pParser->astDecs, pNode->astid), pNode);
+			auto * pErr = AstNewErr1Child(pParser, IllegalDoPseudoStmtErr, getStartEnd(*pAstDecs, pNode->astid), pNode);
 			pErr->astkStmt = pNode->astk;
 			return Up(pErr);
 		}
 
 		if (parsestmtk == PARSESTMTK_TopLevelStmt)
 		{
-			auto * pErr = AstNewErr1Child(pParser, IllegalTopLevelStmtErr, getStartEnd(pParser->astDecs, pNode->astid), pNode);
+			auto * pErr = AstNewErr1Child(pParser, IllegalTopLevelStmtErr, getStartEnd(*pAstDecs, pNode->astid), pNode);
 			pErr->astkStmt = pNode->astk;
 			return Up(pErr);
 		}
@@ -249,7 +246,7 @@ AstNode * parseStmt(Parser * pParser, PARSESTMTK parsestmtk)
 
 		if (parsestmtk == PARSESTMTK_DoPseudoStmt)
 		{
-			auto * pErr = AstNewErr1Child(pParser, IllegalDoPseudoStmtErr, getStartEnd(pParser->astDecs, pNode->astid), pNode);
+			auto * pErr = AstNewErr1Child(pParser, IllegalDoPseudoStmtErr, getStartEnd(*pAstDecs, pNode->astid), pNode);
 			pErr->astkStmt = pNode->astk;
 			return Up(pErr);
 		}
@@ -268,7 +265,7 @@ AstNode * parseStmt(Parser * pParser, PARSESTMTK parsestmtk)
 
 		if (parsestmtk == PARSESTMTK_TopLevelStmt)
 		{
-			auto * pErr = AstNewErr1Child(pParser, IllegalTopLevelStmtErr, getStartEnd(pParser->astDecs, pNode->astid), pNode);
+			auto * pErr = AstNewErr1Child(pParser, IllegalTopLevelStmtErr, getStartEnd(*pAstDecs, pNode->astid), pNode);
 			pErr->astkStmt = pNode->astk;
 			return Up(pErr);
 		}
@@ -287,7 +284,7 @@ AstNode * parseStmt(Parser * pParser, PARSESTMTK parsestmtk)
 
 		if (parsestmtk == PARSESTMTK_TopLevelStmt)
 		{
-			auto * pErr = AstNewErr1Child(pParser, IllegalTopLevelStmtErr, getStartEnd(pParser->astDecs, pNode->astid), pNode);
+			auto * pErr = AstNewErr1Child(pParser, IllegalTopLevelStmtErr, getStartEnd(*pAstDecs, pNode->astid), pNode);
 			pErr->astkStmt = pNode->astk;
 			return Up(pErr);
 		}
@@ -306,7 +303,7 @@ AstNode * parseStmt(Parser * pParser, PARSESTMTK parsestmtk)
 
 		if (parsestmtk == PARSESTMTK_TopLevelStmt)
 		{
-			auto * pErr = AstNewErr1Child(pParser, IllegalTopLevelStmtErr, getStartEnd(pParser->astDecs, pNode->astid), pNode);
+			auto * pErr = AstNewErr1Child(pParser, IllegalTopLevelStmtErr, getStartEnd(*pAstDecs, pNode->astid), pNode);
 			pErr->astkStmt = pNode->astk;
 			return Up(pErr);
 		}
@@ -337,7 +334,7 @@ AstNode * parseStmt(Parser * pParser, PARSESTMTK parsestmtk)
 
 		if (parsestmtk == PARSESTMTK_TopLevelStmt)
 		{
-			auto * pErr = AstNewErr1Child(pParser, IllegalTopLevelStmtErr, getStartEnd(pParser->astDecs, pNode->astid), pNode);
+			auto * pErr = AstNewErr1Child(pParser, IllegalTopLevelStmtErr, getStartEnd(*pAstDecs, pNode->astid), pNode);
 			pErr->astkStmt = pNode->astk;
 			return Up(pErr);
 		}
@@ -348,9 +345,11 @@ AstNode * parseStmt(Parser * pParser, PARSESTMTK parsestmtk)
 
 AstNode * parseExprStmtOrAssignStmt(Parser * pParser)
 {
+	Scanner * pScanner = pParser->pCtx->pScanner;
+
 	// Parse lhs expression
 
-	int iStart = peekTokenStartEnd(pParser->pScanner).iStart;
+	int iStart = peekTokenStartEnd(pScanner).iStart;
 
 	AstNode * pLhsExpr = parseExpr(pParser);
 	if (isErrorNode(*pLhsExpr))
@@ -374,7 +373,7 @@ AstNode * parseExprStmtOrAssignStmt(Parser * pParser)
 	static const int s_cTokenkAssign = ArrayLen(s_aTokenkAssign);
 
 	Token * pAssignToken = nullptr;
-	if (tryConsumeToken(pParser->pScanner, s_aTokenkAssign, s_cTokenkAssign, ensurePendingToken(pParser)))
+	if (tryConsumeToken(pScanner, s_aTokenkAssign, s_cTokenkAssign, ensurePendingToken(pParser)))
 	{
 		isAssignment = true;
 		pAssignToken = claimPendingToken(pParser);
@@ -388,14 +387,14 @@ AstNode * parseExprStmtOrAssignStmt(Parser * pParser)
 			return Up(pErr);
 		}
 
-		if (tryConsumeToken(pParser->pScanner, s_aTokenkAssign, s_cTokenkAssign))
+		if (tryConsumeToken(pScanner, s_aTokenkAssign, s_cTokenkAssign))
 		{
 			// NOTE: This check isn't necessary for correctness, but it gives a better error message for a common case.
 
 			auto * pErr = AstNewErr2Child(
 							pParser,
 							ChainedAssignErr,
-							makeStartEnd(iStart, prevTokenStartEnd(pParser->pScanner).iEnd),
+							makeStartEnd(iStart, prevTokenStartEnd(pScanner).iEnd),
 							pLhsExpr,
 							pRhsExpr);
 
@@ -405,9 +404,9 @@ AstNode * parseExprStmtOrAssignStmt(Parser * pParser)
 
 	// Parse semicolon
 
-	if (!tryConsumeToken(pParser->pScanner, TOKENK_Semicolon))
+	if (!tryConsumeToken(pScanner, TOKENK_Semicolon))
 	{
-		auto startEndPrev = prevTokenStartEnd(pParser->pScanner);
+		auto startEndPrev = prevTokenStartEnd(pScanner);
 
 		if (isAssignment)
 		{
@@ -423,7 +422,7 @@ AstNode * parseExprStmtOrAssignStmt(Parser * pParser)
 		}
 	}
 
-	int iEnd = prevTokenStartEnd(pParser->pScanner).iEnd;
+	int iEnd = prevTokenStartEnd(pScanner).iEnd;
 	auto startEnd = makeStartEnd(iStart, iEnd);
 
 	// Success!
@@ -450,14 +449,17 @@ AstNode * parseExprStmtOrAssignStmt(Parser * pParser)
 
 AstNode * parseStructDefnStmt(Parser * pParser)
 {
+	Scanner * pScanner = pParser->pCtx->pScanner;
+	TypeTable * pTypeTable = pParser->pCtx->pTypeTable;
+
 	Scope * pScopeDefn = pParser->pScopeCurrent;
-	int iStart = peekTokenStartEnd(pParser->pScanner).iStart;
+	int iStart = peekTokenStartEnd(pScanner).iStart;
 
 	// Parse 'struct'
 
-	if (!tryConsumeToken(pParser->pScanner, TOKENK_Struct))
+	if (!tryConsumeToken(pScanner, TOKENK_Struct))
 	{
-		auto startEndPrev = prevTokenStartEnd(pParser->pScanner);
+		auto startEndPrev = prevTokenStartEnd(pScanner);
 
 		auto * pErr = AstNewErr0Child(pParser, ExpectedTokenkErr, makeStartEnd(startEndPrev.iEnd + 1));
 		append(&pErr->aTokenkValid, TOKENK_Struct);
@@ -467,9 +469,9 @@ AstNode * parseStructDefnStmt(Parser * pParser)
 
 	// Parse identifier
 
-	if (!tryConsumeToken(pParser->pScanner, TOKENK_Identifier, ensurePendingToken(pParser)))
+	if (!tryConsumeToken(pScanner, TOKENK_Identifier, ensurePendingToken(pParser)))
 	{
-		auto startEndPrev = prevTokenStartEnd(pParser->pScanner);
+		auto startEndPrev = prevTokenStartEnd(pScanner);
 
 		auto * pErr = AstNewErr0Child(pParser, ExpectedTokenkErr, makeStartEnd(startEndPrev.iEnd + 1));
 		append(&pErr->aTokenkValid, TOKENK_Identifier);
@@ -481,9 +483,9 @@ AstNode * parseStructDefnStmt(Parser * pParser)
 
 	// Parse '{'
 
-	if (!tryConsumeToken(pParser->pScanner, TOKENK_OpenBrace))
+	if (!tryConsumeToken(pScanner, TOKENK_OpenBrace))
 	{
-		auto startEndPrev = prevTokenStartEnd(pParser->pScanner);
+		auto startEndPrev = prevTokenStartEnd(pScanner);
 
 		auto * pErr = AstNewErr0Child(pParser, ExpectedTokenkErr, makeStartEnd(startEndPrev.iEnd + 1));
 		append(&pErr->aTokenkValid, TOKENK_OpenBrace);
@@ -501,7 +503,7 @@ AstNode * parseStructDefnStmt(Parser * pParser)
 	init(&apVarDeclStmt);
 	Defer(Assert(!apVarDeclStmt.pBuffer));
 
-	while (!tryConsumeToken(pParser->pScanner, TOKENK_CloseBrace))
+	while (!tryConsumeToken(pScanner, TOKENK_CloseBrace))
 	{
 		// Parse member var decls
 
@@ -530,7 +532,7 @@ AstNode * parseStructDefnStmt(Parser * pParser)
 		}
 	}
 
-	int iEnd = prevTokenStartEnd(pParser->pScanner).iEnd;
+	int iEnd = prevTokenStartEnd(pScanner).iEnd;
 
 	auto * pNode = AstNew(pParser, StructDefnStmt, makeStartEnd(iStart, iEnd));
 	pNode->ident.lexeme = pTokenIdent->lexeme;
@@ -553,7 +555,7 @@ AstNode * parseStructDefnStmt(Parser * pParser)
 
 	type.nonFuncTypeData.ident.lexeme = pNode->ident.lexeme;
 	type.nonFuncTypeData.ident.scopeid = pNode->ident.scopeid;
-	pNode->typidDefn = ensureInTypeTable(&pParser->typeTable, &type, true /* debugAssertIfAlreadyInTable */ );
+	pNode->typidDefn = ensureInTypeTable(pTypeTable, &type, true /* debugAssertIfAlreadyInTable */ );
 
 	return Up(pNode);
 }
@@ -568,10 +570,13 @@ AstNode * parseVarDeclStmt(
 	AssertInfo(expectkName != EXPECTK_Forbidden, "Function does not support being called with expectkName forbidden. Variables usually require names, but are optional for return values");
 	AssertInfo(expectkSemicolon != EXPECTK_Optional, "Semicolon should either be required or forbidden");
 
+	Scanner * pScanner = pParser->pCtx->pScanner;
+	TypeTable * pTypeTable = pParser->pCtx->pTypeTable;
+
 	AstErr * pErr = nullptr;
 	Token * pTokenIdent = nullptr;
 
-	int iStart = peekTokenStartEnd(pParser->pScanner).iStart;
+	int iStart = peekTokenStartEnd(pScanner).iStart;
 
 	// Parse type
 
@@ -598,14 +603,14 @@ AstNode * parseVarDeclStmt(
 
 	if (expectkName == EXPECTK_Optional || expectkName == EXPECTK_Required)
 	{
-		if (tryConsumeToken(pParser->pScanner, TOKENK_Identifier, ensurePendingToken(pParser)))
+		if (tryConsumeToken(pScanner, TOKENK_Identifier, ensurePendingToken(pParser)))
 		{
 			pTokenIdent = claimPendingToken(pParser);
 			Assert(pTokenIdent->tokenk == TOKENK_Identifier);
 		}
 		else if (expectkName == EXPECTK_Required)
 		{
-			auto startEndPrev = prevTokenStartEnd(pParser->pScanner);
+			auto startEndPrev = prevTokenStartEnd(pScanner);
 
 			auto * pExpectedTokenErr = AstNewErr0Child(pParser, ExpectedTokenkErr, makeStartEnd(startEndPrev.iEnd + 1));
 			append(&pExpectedTokenErr->aTokenkValid, TOKENK_Identifier);
@@ -624,9 +629,9 @@ AstNode * parseVarDeclStmt(
 	AstNode * pInitExpr = nullptr;
 
 	int iEqualStart = -1;
-	if (tryConsumeToken(pParser->pScanner, TOKENK_Equal))
+	if (tryConsumeToken(pScanner, TOKENK_Equal))
 	{
-		iEqualStart = prevTokenStartEnd(pParser->pScanner).iStart;
+		iEqualStart = prevTokenStartEnd(pScanner).iStart;
 
 		pInitExpr = parseExpr(pParser);
 
@@ -636,14 +641,14 @@ AstNode * parseVarDeclStmt(
 			goto LFailCleanup;
 		}
 
-		if (tryConsumeToken(pParser->pScanner, TOKENK_Equal))
+		if (tryConsumeToken(pScanner, TOKENK_Equal))
 		{
 			// NOTE: This check isn't necessary for correctness, but it gives a better error message for a common case.
 
 			pErr = UpErr(AstNewErr1Child(
 							pParser,
 							ChainedAssignErr,
-							makeStartEnd(iStart, prevTokenStartEnd(pParser->pScanner).iEnd),
+							makeStartEnd(iStart, prevTokenStartEnd(pScanner).iEnd),
 							pInitExpr));
 
 			goto LFailCleanup;
@@ -655,7 +660,7 @@ AstNode * parseVarDeclStmt(
 	if (!pTokenIdent && pInitExpr)
 	{
 		Assert(iEqualStart != -1);
-		auto startEndPrev = prevTokenStartEnd(pParser->pScanner);
+		auto startEndPrev = prevTokenStartEnd(pScanner);
 
 		pErr = UpErr(AstNewErr1Child(pParser, InitUnnamedVarErr, makeStartEnd(iEqualStart, startEndPrev.iEnd), pInitExpr));
 		goto LFailCleanup;
@@ -665,9 +670,9 @@ AstNode * parseVarDeclStmt(
 
 	if (expectkSemicolon == EXPECTK_Required)
 	{
-		if (!tryConsumeToken(pParser->pScanner, TOKENK_Semicolon, ensurePendingToken(pParser)))
+		if (!tryConsumeToken(pScanner, TOKENK_Semicolon, ensurePendingToken(pParser)))
 		{
-			auto startEndPrev = prevTokenStartEnd(pParser->pScanner);
+			auto startEndPrev = prevTokenStartEnd(pScanner);
 
 			auto * pErrExpectedTokenk = AstNewErr1Child(pParser, ExpectedTokenkErr, makeStartEnd(startEndPrev.iEnd + 1), pInitExpr);
 			append(&pErrExpectedTokenk->aTokenkValid, TOKENK_Semicolon);
@@ -679,7 +684,7 @@ AstNode * parseVarDeclStmt(
 
 	// Success!
 
-	int iEnd = prevTokenStartEnd(pParser->pScanner).iEnd;
+	int iEnd = prevTokenStartEnd(pScanner).iEnd;
 
 	auto * pNode = AstNew(pParser, VarDeclStmt, makeStartEnd(iStart, iEnd));
 	if (pTokenIdent)
@@ -696,7 +701,7 @@ AstNode * parseVarDeclStmt(
 
 	// Remember to poke in the typid once this type is resolved
 
-	setPendingTypeUpdateOnResolvePtr(&pParser->typeTable, pendingTypid, &pNode->typidDefn);
+	setPendingTypeUpdateOnResolvePtr(pTypeTable, pendingTypid, &pNode->typidDefn);
 
 	if (pTokenIdent)
 	{
@@ -724,13 +729,15 @@ LFailCleanup:
 
 AstNode * parseIfStmt(Parser * pParser)
 {
-	int iStart = peekTokenStartEnd(pParser->pScanner).iStart;
+	Scanner * pScanner = pParser->pCtx->pScanner;
+
+	int iStart = peekTokenStartEnd(pScanner).iStart;
 
 	// Parse 'if'
 
-	if (!tryConsumeToken(pParser->pScanner, TOKENK_If))
+	if (!tryConsumeToken(pScanner, TOKENK_If))
 	{
-		auto startEndPrev = prevTokenStartEnd(pParser->pScanner);
+		auto startEndPrev = prevTokenStartEnd(pScanner);
 
 		auto * pErr = AstNewErr0Child(pParser, ExpectedTokenkErr, makeStartEnd(startEndPrev.iEnd + 1));
 		append(&pErr->aTokenkValid, TOKENK_If);
@@ -757,9 +764,9 @@ AstNode * parseIfStmt(Parser * pParser)
 	// Try parse 'else' statement
 
 	AstNode * pElseStmt = nullptr;
-	if (tryConsumeToken(pParser->pScanner, TOKENK_Else))
+	if (tryConsumeToken(pScanner, TOKENK_Else))
 	{
-		if (peekToken(pParser->pScanner) == TOKENK_If)
+		if (peekToken(pScanner) == TOKENK_If)
 		{
 			pElseStmt = parseIfStmt(pParser);
 		}
@@ -777,7 +784,7 @@ AstNode * parseIfStmt(Parser * pParser)
 
 	// Success!
 
-	int iEnd = prevTokenStartEnd(pParser->pScanner).iEnd;
+	int iEnd = prevTokenStartEnd(pScanner).iEnd;
 
 	auto * pNode = AstNew(pParser, IfStmt, makeStartEnd(iStart, iEnd));
 	pNode->pCondExpr = pCondExpr;
@@ -788,13 +795,15 @@ AstNode * parseIfStmt(Parser * pParser)
 
 AstNode * parseWhileStmt(Parser * pParser)
 {
-	int iStart = peekTokenStartEnd(pParser->pScanner).iStart;
+	Scanner * pScanner = pParser->pCtx->pScanner;
+
+	int iStart = peekTokenStartEnd(pScanner).iStart;
 
 	// Parse 'while'
 
-	if (!tryConsumeToken(pParser->pScanner, TOKENK_While))
+	if (!tryConsumeToken(pScanner, TOKENK_While))
 	{
-		auto startEndPrev = prevTokenStartEnd(pParser->pScanner);
+		auto startEndPrev = prevTokenStartEnd(pScanner);
 
 		auto * pErr = AstNewErr0Child(pParser, ExpectedTokenkErr, makeStartEnd(startEndPrev.iEnd));
 		append(&pErr->aTokenkValid, TOKENK_While);
@@ -820,7 +829,7 @@ AstNode * parseWhileStmt(Parser * pParser)
 
 	// Success!
 
-	int iEnd = prevTokenStartEnd(pParser->pScanner).iEnd;
+	int iEnd = prevTokenStartEnd(pScanner).iEnd;
 
 	auto * pNode = AstNew(pParser, WhileStmt, makeStartEnd(iStart, iEnd));
 	pNode->pCondExpr = pCondExpr;
@@ -830,11 +839,13 @@ AstNode * parseWhileStmt(Parser * pParser)
 
 AstNode * parseDoPseudoStmtOrBlockStmt(Parser * pParser, bool pushPopScopeBlock)
 {
-	TOKENK tokenk = peekToken(pParser->pScanner);
+	Scanner * pScanner = pParser->pCtx->pScanner;
+
+	TOKENK tokenk = peekToken(pScanner);
 	if (tokenk != TOKENK_OpenBrace &&
 		tokenk != TOKENK_Do)
 	{
-		auto startEndPrev = prevTokenStartEnd(pParser->pScanner);
+		auto startEndPrev = prevTokenStartEnd(pScanner);
 
 		auto * pErr = AstNewErr0Child(pParser, ExpectedTokenkErr, makeStartEnd(startEndPrev.iEnd + 1));
 		append(&pErr->aTokenkValid, TOKENK_OpenBrace);
@@ -873,11 +884,13 @@ AstNode * parseDoPseudoStmt(Parser * pParser)
 	//	it can also be used to disambiguate a fn identifier, or define a fn literal. If you start a statement
 	//	with such an expression, you need to use "do" to tell the parser that the "fn" isn't starting a defn/decl!
 
+	Scanner * pScanner = pParser->pCtx->pScanner;
+
 	// Parse 'do'
 
-	if (!tryConsumeToken(pParser->pScanner, TOKENK_Do))
+	if (!tryConsumeToken(pScanner, TOKENK_Do))
 	{
-		auto startEndPrev = prevTokenStartEnd(pParser->pScanner);
+		auto startEndPrev = prevTokenStartEnd(pScanner);
 
 		auto * pErr = AstNewErr0Child(pParser, ExpectedTokenkErr, makeStartEnd(startEndPrev.iEnd + 1));
 		append(&pErr->aTokenkValid, TOKENK_Do);
@@ -898,13 +911,15 @@ AstNode * parseDoPseudoStmt(Parser * pParser)
 
 AstNode * parseBlockStmt(Parser * pParser, bool pushPopScope)
 {
-	int iStart = peekTokenStartEnd(pParser->pScanner).iStart;
+	Scanner * pScanner = pParser->pCtx->pScanner;
+
+	int iStart = peekTokenStartEnd(pScanner).iStart;
 
 	// Parse {
 
-	if (!tryConsumeToken(pParser->pScanner, TOKENK_OpenBrace))
+	if (!tryConsumeToken(pScanner, TOKENK_OpenBrace))
 	{
-		auto startEndPrev = prevTokenStartEnd(pParser->pScanner);
+		auto startEndPrev = prevTokenStartEnd(pScanner);
 
 		auto * pErr = AstNewErr0Child(pParser, ExpectedTokenkErr, makeStartEnd(startEndPrev.iEnd + 1));
 		append(&pErr->aTokenkValid, TOKENK_OpenBrace);
@@ -920,7 +935,7 @@ AstNode * parseBlockStmt(Parser * pParser, bool pushPopScope)
 	init(&apStmts);
 	Defer(Assert(!apStmts.pBuffer));		// buffer should get "moved" into AST
 
-	while (!tryConsumeToken(pParser->pScanner, TOKENK_CloseBrace))
+	while (!tryConsumeToken(pScanner, TOKENK_CloseBrace))
 	{
 		AstNode * pStmt = parseStmt(pParser);
 		append(&apStmts, pStmt);
@@ -949,7 +964,7 @@ AstNode * parseBlockStmt(Parser * pParser, bool pushPopScope)
 
 	// Success!
 
-	int iEnd = prevTokenStartEnd(pParser->pScanner).iEnd;
+	int iEnd = prevTokenStartEnd(pScanner).iEnd;
 
 	auto * pNode = AstNew(pParser, BlockStmt, makeStartEnd(iStart, iEnd));
 	initMove(&pNode->apStmts, &apStmts);
@@ -961,13 +976,15 @@ AstNode * parseBlockStmt(Parser * pParser, bool pushPopScope)
 
 AstNode * parseReturnStmt(Parser * pParser)
 {
-	int iStart = peekTokenStartEnd(pParser->pScanner).iStart;
+	Scanner * pScanner = pParser->pCtx->pScanner;
+
+	int iStart = peekTokenStartEnd(pScanner).iStart;
 
 	// Parse 'return'
 
-	if (!tryConsumeToken(pParser->pScanner, TOKENK_Return))
+	if (!tryConsumeToken(pScanner, TOKENK_Return))
 	{
-		auto startEndPrev = prevTokenStartEnd(pParser->pScanner);
+		auto startEndPrev = prevTokenStartEnd(pScanner);
 
 		auto * pErr = AstNewErr0Child(pParser, ExpectedTokenkErr, makeStartEnd(startEndPrev.iEnd + 1));
 		append(&pErr->aTokenkValid, TOKENK_Return);
@@ -977,7 +994,7 @@ AstNode * parseReturnStmt(Parser * pParser)
 	// Optionally parse expr
 
 	AstNode * pExpr = nullptr;
-	if (peekToken(pParser->pScanner) != TOKENK_Semicolon)
+	if (peekToken(pScanner) != TOKENK_Semicolon)
 	{
 		pExpr = parseExpr(pParser);
 
@@ -989,9 +1006,9 @@ AstNode * parseReturnStmt(Parser * pParser)
 
 	// Parse ';'
 
-	if (!tryConsumeToken(pParser->pScanner, TOKENK_Semicolon))
+	if (!tryConsumeToken(pScanner, TOKENK_Semicolon))
 	{
-		auto startEndPrev = prevTokenStartEnd(pParser->pScanner);
+		auto startEndPrev = prevTokenStartEnd(pScanner);
 
 		AstExpectedTokenkErr * pErr;
 
@@ -1008,7 +1025,7 @@ AstNode * parseReturnStmt(Parser * pParser)
 		return Up(pErr);
 	}
 
-	int iEnd = prevTokenStartEnd(pParser->pScanner).iEnd;
+	int iEnd = prevTokenStartEnd(pScanner).iEnd;
 
 	auto * pNode = AstNew(pParser, ReturnStmt, makeStartEnd(iStart, iEnd));
 	pNode->pExpr = pExpr;
@@ -1017,20 +1034,22 @@ AstNode * parseReturnStmt(Parser * pParser)
 
 AstNode * parseBreakStmt(Parser * pParser)
 {
-	int iStart = peekTokenStartEnd(pParser->pScanner).iStart;
+	Scanner * pScanner = pParser->pCtx->pScanner;
 
-	if (!tryConsumeToken(pParser->pScanner, TOKENK_Break))
+	int iStart = peekTokenStartEnd(pScanner).iStart;
+
+	if (!tryConsumeToken(pScanner, TOKENK_Break))
 	{
-		auto startEndPrev = prevTokenStartEnd(pParser->pScanner);
+		auto startEndPrev = prevTokenStartEnd(pScanner);
 
 		auto * pErr = AstNewErr0Child(pParser, ExpectedTokenkErr, makeStartEnd(startEndPrev.iEnd + 1));
 		append(&pErr->aTokenkValid, TOKENK_Break);
 		return Up(pErr);
 	}
 
-	if (!tryConsumeToken(pParser->pScanner, TOKENK_Semicolon))
+	if (!tryConsumeToken(pScanner, TOKENK_Semicolon))
 	{
-		auto startEndPrev = prevTokenStartEnd(pParser->pScanner);
+		auto startEndPrev = prevTokenStartEnd(pScanner);
 
 		auto * pErr = AstNewErr0Child(pParser, ExpectedTokenkErr, makeStartEnd(startEndPrev.iEnd + 1));
 		append(&pErr->aTokenkValid, TOKENK_Semicolon);
@@ -1039,7 +1058,7 @@ AstNode * parseBreakStmt(Parser * pParser)
 
 	// Success!
 
-	int iEnd = prevTokenStartEnd(pParser->pScanner).iEnd;
+	int iEnd = prevTokenStartEnd(pScanner).iEnd;
 
 	auto * pNode = AstNew(pParser, BreakStmt, makeStartEnd(iStart, iEnd));
 	return Up(pNode);
@@ -1047,20 +1066,22 @@ AstNode * parseBreakStmt(Parser * pParser)
 
 AstNode * parseContinueStmt(Parser * pParser)
 {
-	int iStart = peekTokenStartEnd(pParser->pScanner).iStart;
+	Scanner * pScanner = pParser->pCtx->pScanner;
 
-	if (!tryConsumeToken(pParser->pScanner, TOKENK_Continue))
+	int iStart = peekTokenStartEnd(pScanner).iStart;
+
+	if (!tryConsumeToken(pScanner, TOKENK_Continue))
 	{
-		auto startEndPrev = prevTokenStartEnd(pParser->pScanner);
+		auto startEndPrev = prevTokenStartEnd(pScanner);
 
 		auto * pErr = AstNewErr0Child(pParser, ExpectedTokenkErr, makeStartEnd(startEndPrev.iEnd + 1));
 		append(&pErr->aTokenkValid, TOKENK_Continue);
 		return Up(pErr);
 	}
 
-	if (!tryConsumeToken(pParser->pScanner, TOKENK_Semicolon))
+	if (!tryConsumeToken(pScanner, TOKENK_Semicolon))
 	{
-		auto startEndPrev = prevTokenStartEnd(pParser->pScanner);
+		auto startEndPrev = prevTokenStartEnd(pScanner);
 
 		auto * pErr = AstNewErr0Child(pParser, ExpectedTokenkErr, makeStartEnd(startEndPrev.iEnd + 1));
 		append(&pErr->aTokenkValid, TOKENK_Semicolon);
@@ -1069,7 +1090,7 @@ AstNode * parseContinueStmt(Parser * pParser)
 
 	// Success!
 
-	int iEnd = prevTokenStartEnd(pParser->pScanner).iEnd;
+	int iEnd = prevTokenStartEnd(pScanner).iEnd;
 
 	auto * pNode = AstNew(pParser, ContinueStmt, makeStartEnd(iStart, iEnd));
 	return Up(pNode);
@@ -1102,7 +1123,9 @@ AstNode * parseBinop(Parser * pParser, const BinopInfo & op)
 		}
 	};
 
-	int iStart = peekTokenStartEnd(pParser->pScanner).iStart;
+	Scanner * pScanner = pParser->pCtx->pScanner;
+
+	int iStart = peekTokenStartEnd(pScanner).iStart;
 
 	AstNode * pExpr = oneStepLower(pParser, op.precedence);
 	Assert(pExpr);
@@ -1110,7 +1133,7 @@ AstNode * parseBinop(Parser * pParser, const BinopInfo & op)
 	// NOTE: Error check is done after we get a chance to parse rhs so that we can catch errors in both expressions. If we don't
 	//	match a binop then we just want to return pExpr as is anyway, whether it is an error or not.
 
-	while (tryConsumeToken(pParser->pScanner, op.aTokenkMatch, op.cTokenMatch, ensurePendingToken(pParser)))
+	while (tryConsumeToken(pScanner, op.aTokenkMatch, op.cTokenMatch, ensurePendingToken(pParser)))
 	{
 		Token * pOp = claimPendingToken(pParser);
 
@@ -1123,7 +1146,7 @@ AstNode * parseBinop(Parser * pParser, const BinopInfo & op)
 			return Up(pErr);
 		}
 
-		int iEnd = prevTokenStartEnd(pParser->pScanner).iEnd;
+		int iEnd = prevTokenStartEnd(pScanner).iEnd;
 
 		auto * pNode = AstNew(pParser, BinopExpr, makeStartEnd(iStart, iEnd));
 		pNode->pOp = pOp;
@@ -1138,9 +1161,11 @@ AstNode * parseBinop(Parser * pParser, const BinopInfo & op)
 
 AstNode * parseUnopPre(Parser * pParser)
 {
-	if (tryConsumeToken(pParser->pScanner, g_aTokenkUnopPre, g_cTokenkUnopPre, ensurePendingToken(pParser)))
+	Scanner * pScanner = pParser->pCtx->pScanner;
+
+	if (tryConsumeToken(pScanner, g_aTokenkUnopPre, g_cTokenkUnopPre, ensurePendingToken(pParser)))
 	{
-		int iStart = prevTokenStartEnd(pParser->pScanner).iStart;
+		int iStart = prevTokenStartEnd(pScanner).iStart;
 
 		Token * pOp = claimPendingToken(pParser);
 
@@ -1150,7 +1175,7 @@ AstNode * parseUnopPre(Parser * pParser)
 			return pExpr;
 		}
 
-		int iEnd = prevTokenStartEnd(pParser->pScanner).iEnd;
+		int iEnd = prevTokenStartEnd(pScanner).iEnd;
 
 		auto * pNode = AstNew(pParser, UnopExpr, makeStartEnd(iStart, iEnd));
 		pNode->pOp = pOp;
@@ -1166,9 +1191,11 @@ AstNode * parseUnopPre(Parser * pParser)
 
 AstNode * parsePrimary(Parser * pParser)
 {
-	int iStart = peekTokenStartEnd(pParser->pScanner).iStart;
+	Scanner * pScanner = pParser->pCtx->pScanner;
 
-	if (tryConsumeToken(pParser->pScanner, TOKENK_OpenParen, ensurePendingToken(pParser)))
+	int iStart = peekTokenStartEnd(pScanner).iStart;
+
+	if (tryConsumeToken(pScanner, TOKENK_OpenParen, ensurePendingToken(pParser)))
 	{
 		// Group ( )
 
@@ -1180,37 +1207,37 @@ AstNode * parsePrimary(Parser * pParser)
 			return pExpr;
 		}
 
-		if (!tryConsumeToken(pParser->pScanner, TOKENK_CloseParen, ensurePendingToken(pParser)))
+		if (!tryConsumeToken(pScanner, TOKENK_CloseParen, ensurePendingToken(pParser)))
 		{
-			auto startEndPrev = prevTokenStartEnd(pParser->pScanner);
+			auto startEndPrev = prevTokenStartEnd(pScanner);
 
 			auto * pErr = AstNewErr1Child(pParser, ExpectedTokenkErr, makeStartEnd(startEndPrev.iEnd + 1), pExpr);
 			append(&pErr->aTokenkValid, TOKENK_CloseParen);
 			return Up(pErr);
 		}
 
-		int iEnd = prevTokenStartEnd(pParser->pScanner).iEnd;
+		int iEnd = prevTokenStartEnd(pScanner).iEnd;
 
 		auto * pNode = AstNew(pParser, GroupExpr, makeStartEnd(iStart, iEnd));
 		pNode->pExpr = pExpr;
 
 		return finishParsePrimary(pParser, Up(pNode));
 	}
-	else if (tryPeekToken(pParser->pScanner, g_aTokenkLiteral, g_cTokenkLiteral))
+	else if (tryPeekToken(pScanner, g_aTokenkLiteral, g_cTokenkLiteral))
 	{
 		// Literal
 
 		static const bool s_mustBeIntLiteral = false;
 		return parseLiteralExpr(pParser, s_mustBeIntLiteral);
 	}
-	else if (peekToken(pParser->pScanner) == TOKENK_Identifier)
+	else if (peekToken(pScanner) == TOKENK_Identifier)
 	{
 		// Identifier
 
 		AstNode * pVarOwner = nullptr;
 		return parseVarOrMemberVarSymbolExpr(pParser, pVarOwner);
 	}
-	else if (peekToken(pParser->pScanner) == TOKENK_Fn)
+	else if (peekToken(pScanner) == TOKENK_Fn)
 	{
 		// The way the grammar currently exists, we require arbitrary lookahead to determine if this is a function symbolexpr
 		//	or a function literal. It's not great, but we need to speculatively look ahead until we find a symbol that only
@@ -1222,7 +1249,7 @@ AstNode * parsePrimary(Parser * pParser)
 			bool speculate = true;
 			while (speculate)
 			{
-				TOKENK tokenkSpeculate = nextTokenkSpeculative(pParser->pScanner);
+				TOKENK tokenkSpeculate = nextTokenkSpeculative(pScanner);
 
 				switch (tokenkSpeculate)
 				{
@@ -1246,7 +1273,7 @@ AstNode * parsePrimary(Parser * pParser)
 						{
 							speculate = false;
 
-							if (nextTokenkSpeculative(pParser->pScanner) == TOKENK_Identifier)
+							if (nextTokenkSpeculative(pScanner) == TOKENK_Identifier)
 							{
 								isFnSymbolExpr = true;
 							}
@@ -1280,7 +1307,7 @@ AstNode * parsePrimary(Parser * pParser)
 				}
 			}
 
-			backtrackAfterSpeculation(pParser->pScanner);
+			backtrackAfterSpeculation(pScanner);
 		}
 
 		if (isFnSymbolExpr)
@@ -1307,7 +1334,7 @@ AstNode * parsePrimary(Parser * pParser)
 				return pNode;
 			}
 
-			if (peekToken(pParser->pScanner) == TOKENK_OpenParen)
+			if (peekToken(pScanner) == TOKENK_OpenParen)
 			{
 				// HMM: I am torn about whether I want to call finishParsePrimaryHere,
 				//	which would let you invoke a function literal at the spot that it is
@@ -1320,7 +1347,7 @@ AstNode * parsePrimary(Parser * pParser)
 				//	for open parens...
 				//	fn() -> () { doSomething(); }(;
 
-				int iOpenParenStart = peekTokenStartEnd(pParser->pScanner).iStart;
+				int iOpenParenStart = peekTokenStartEnd(pScanner).iStart;
 
 				auto * pErr = AstNewErr1Child(pParser, InvokeFuncLiteralErr, makeStartEnd(iOpenParenStart), pNode);
 				return Up(pErr);
@@ -1339,14 +1366,16 @@ AstNode * parsePrimary(Parser * pParser)
 
 AstNode * parseLiteralExpr(Parser * pParser, bool mustBeIntLiteralk)
 {
+	Scanner * pScanner = pParser->pCtx->pScanner;
+
 	static const TOKENK s_tokenkIntLit = TOKENK_IntLiteral;
 
 	const TOKENK * aTokenkValid = (mustBeIntLiteralk) ? &s_tokenkIntLit : g_aTokenkLiteral;
 	const int cTokenkValid = (mustBeIntLiteralk) ? 1 : g_cTokenkLiteral;
 
-	if (!tryConsumeToken(pParser->pScanner, aTokenkValid, cTokenkValid, ensurePendingToken(pParser)))
+	if (!tryConsumeToken(pScanner, aTokenkValid, cTokenkValid, ensurePendingToken(pParser)))
 	{
-		auto startEndPrev = prevTokenStartEnd(pParser->pScanner);
+		auto startEndPrev = prevTokenStartEnd(pScanner);
 
 		AstExpectedTokenkErr * pErr = AstNewErr0Child(pParser, ExpectedTokenkErr, makeStartEnd(startEndPrev.iEnd + 1));
 		appendMultiple(&pErr->aTokenkValid, aTokenkValid, cTokenkValid);
@@ -1372,17 +1401,20 @@ AstNode * parseFuncLiteralExpr(Parser * pParser)
 
 AstNode * parseFuncSymbolExpr(Parser * pParser)
 {
-	int iStart = peekTokenStartEnd(pParser->pScanner).iStart;
+	Scanner * pScanner = pParser->pCtx->pScanner;
+	TypeTable * pTypeTable = pParser->pCtx->pTypeTable;
 
-	TOKENK tokenkNext = peekToken(pParser->pScanner);
-	TOKENK tokenkNextNext = peekToken(pParser->pScanner, nullptr, 1);
+	int iStart = peekTokenStartEnd(pScanner).iStart;
+
+	TOKENK tokenkNext = peekToken(pScanner);
+	TOKENK tokenkNextNext = peekToken(pScanner, nullptr, 1);
 
 	Assert(tokenkNext == TOKENK_Fn);
 
 	if (tokenkNextNext == TOKENK_Identifier)
 	{
-		Verify(tryConsumeToken(pParser->pScanner, TOKENK_Fn));
-		Verify(tryConsumeToken(pParser->pScanner, TOKENK_Identifier, ensurePendingToken(pParser)));
+		Verify(tryConsumeToken(pScanner, TOKENK_Fn));
+		Verify(tryConsumeToken(pScanner, TOKENK_Identifier, ensurePendingToken(pParser)));
 
 		Token * pTokenIdent = claimPendingToken(pParser);
 
@@ -1417,7 +1449,7 @@ AstNode * parseFuncSymbolExpr(Parser * pParser)
 
 		// Success!
 
-		auto startEndPrev = prevTokenStartEnd(pParser->pScanner);
+		auto startEndPrev = prevTokenStartEnd(pScanner);
 
 		auto * pNode = AstNew(pParser, SymbolExpr, makeStartEnd(iStart, startEndPrev.iEnd));
 		pNode->ident = ident;
@@ -1431,7 +1463,7 @@ AstNode * parseFuncSymbolExpr(Parser * pParser)
 			*pTypid = TYPID_Unresolved;
 
 			setPendingTypeUpdateOnResolvePtr(
-				&pParser->typeTable,
+				pTypeTable,
 				(*parseFuncHeaderParam.paramSymbolExpr.paPendingTypidParam)[iTypeDisambig],
 				pTypid);
 		}
@@ -1440,7 +1472,7 @@ AstNode * parseFuncSymbolExpr(Parser * pParser)
 	}
 	else
 	{
-		auto startEndPrev = prevTokenStartEnd(pParser->pScanner);
+		auto startEndPrev = prevTokenStartEnd(pScanner);
 
 		auto * pErr = AstNewErr0Child(pParser, ExpectedTokenkErr, makeStartEnd(startEndPrev.iEnd + 1));
 		append(&pErr->aTokenkValid, TOKENK_Identifier);
@@ -1452,9 +1484,12 @@ AstNode * parseFuncSymbolExpr(Parser * pParser)
 
 AstNode * parseVarOrMemberVarSymbolExpr(Parser * pParser, NULLABLE AstNode * pMemberOwnerExpr)
 {
-	if (!tryConsumeToken(pParser->pScanner, TOKENK_Identifier, ensurePendingToken(pParser)))
+	Scanner * pScanner = pParser->pCtx->pScanner;
+	AstDecorations * pAstDecs = pParser->pCtx->pAstDecs;
+
+	if (!tryConsumeToken(pScanner, TOKENK_Identifier, ensurePendingToken(pParser)))
 	{
-		auto startEndPrev = prevTokenStartEnd(pParser->pScanner);
+		auto startEndPrev = prevTokenStartEnd(pScanner);
 
 		AstExpectedTokenkErr * pErr;
 		if (pMemberOwnerExpr)
@@ -1478,7 +1513,7 @@ AstNode * parseVarOrMemberVarSymbolExpr(Parser * pParser, NULLABLE AstNode * pMe
 	int iStart = pIdent->startEnd.iStart;
 	if (pMemberOwnerExpr)
 	{
-		iStart = getStartEnd(pParser->astDecs, pMemberOwnerExpr->astid).iStart;
+		iStart = getStartEnd(*pAstDecs, pMemberOwnerExpr->astid).iStart;
 	}
 
 	auto * pNode = AstNew(pParser, SymbolExpr, makeStartEnd(iStart, pIdent->startEnd.iEnd));
@@ -1504,16 +1539,19 @@ AstNode * parseVarOrMemberVarSymbolExpr(Parser * pParser, NULLABLE AstNode * pMe
 
 ParseTypeResult tryParseType(Parser * pParser)
 {
+	Scanner * pScanner = pParser->pCtx->pScanner;
+	TypeTable * pTypeTable = pParser->pCtx->pTypeTable;
+
 	DynamicArray<TypeModifier> aTypemods;
 	init(&aTypemods);
 	Defer(dispose(&aTypemods););
 
 	ParseTypeResult result;
 
-	while (peekToken(pParser->pScanner) != TOKENK_Identifier &&
-		   peekToken(pParser->pScanner) != TOKENK_Fn)
+	while (peekToken(pScanner) != TOKENK_Identifier &&
+		   peekToken(pScanner) != TOKENK_Fn)
 	{
-		if (tryConsumeToken(pParser->pScanner, TOKENK_OpenBracket))
+		if (tryConsumeToken(pScanner, TOKENK_OpenBracket))
 		{
 			// [
 
@@ -1526,9 +1564,9 @@ ParseTypeResult tryParseType(Parser * pParser)
 				return result;
 			}
 
-			if (!tryConsumeToken(pParser->pScanner, TOKENK_CloseBracket))
+			if (!tryConsumeToken(pScanner, TOKENK_CloseBracket))
 			{
-				auto startEndPrev = prevTokenStartEnd(pParser->pScanner);
+				auto startEndPrev = prevTokenStartEnd(pScanner);
 
 				auto * pErr = AstNewErr1Child(pParser, ExpectedTokenkErr, makeStartEnd(startEndPrev.iEnd + 1), pSubscriptExpr);
 				append(&pErr->aTokenkValid, TOKENK_CloseBracket);
@@ -1543,7 +1581,7 @@ ParseTypeResult tryParseType(Parser * pParser)
 			mod.pSubscriptExpr = pSubscriptExpr;
 			append(&aTypemods, mod);
 		}
-		else if (tryConsumeToken(pParser->pScanner, TOKENK_Carat))
+		else if (tryConsumeToken(pScanner, TOKENK_Carat))
 		{
 			// ^
 
@@ -1561,7 +1599,7 @@ ParseTypeResult tryParseType(Parser * pParser)
 		}
 	}
 
-	TOKENK tokenkPeek = peekToken(pParser->pScanner);
+	TOKENK tokenkPeek = peekToken(pScanner);
 	if (tokenkPeek == TOKENK_Identifier)
 	{
 		// Non-func type
@@ -1569,12 +1607,12 @@ ParseTypeResult tryParseType(Parser * pParser)
 		// Success!
 
 		Token * pTokenIdent = ensureAndClaimPendingToken(pParser);
-		consumeToken(pParser->pScanner, pTokenIdent);
+		consumeToken(pScanner, pTokenIdent);
 
 		result.ptrk = PTRK_NonFuncType;
 		result.nonErrorData.pendingTypid =
 			registerPendingNonFuncType(
-				&pParser->typeTable,
+				pTypeTable,
 				pParser->pScopeCurrent,
 				pTokenIdent->lexeme,
 				aTypemods);
@@ -1611,7 +1649,7 @@ ParseTypeResult tryParseType(Parser * pParser)
 		result.ptrk = PTRK_FuncType;
 		result.nonErrorData.pendingTypid =
 			registerPendingFuncType(
-				&pParser->typeTable,
+				pTypeTable,
 				pParser->pScopeCurrent,
 				aTypemods,
 				aPendingTypidParam,
@@ -1706,16 +1744,18 @@ NULLABLE AstErr * tryParseFuncHeader(Parser * pParser, const ParseFuncHeaderPara
 
 	auto tryParseParamList = [](Parser * pParser, const ParseParamListParam & param) -> NULLABLE AstErr *
 	{
+		Scanner * pScanner = pParser->pCtx->pScanner;
+
 		Assert(Implies(param.funcheaderk == FUNCHEADERK_SymbolExpr, param.paramk == PARAMK_Param));
 
 		// Parse (
 
 		bool isNakedSingleReturn = false;
-		if (!tryConsumeToken(pParser->pScanner, TOKENK_OpenParen))
+		if (!tryConsumeToken(pScanner, TOKENK_OpenParen))
 		{
 			if (param.paramk != PARAMK_Return)
 			{
-				auto startEndPrev = prevTokenStartEnd(pParser->pScanner);
+				auto startEndPrev = prevTokenStartEnd(pScanner);
 
 				auto * pErr = AstNewErr0Child(pParser, ExpectedTokenkErr, makeStartEnd(startEndPrev.iEnd + 1));
 				append(&pErr->aTokenkValid, TOKENK_OpenParen);
@@ -1730,7 +1770,7 @@ NULLABLE AstErr * tryParseFuncHeader(Parser * pParser, const ParseFuncHeaderPara
 		int cParam = 0;
 		while (true)
 		{
-			if (!isNakedSingleReturn && tryConsumeToken(pParser->pScanner, TOKENK_CloseParen))
+			if (!isNakedSingleReturn && tryConsumeToken(pScanner, TOKENK_CloseParen))
 				break;
 
 			if (isNakedSingleReturn && cParam > 0)
@@ -1738,9 +1778,9 @@ NULLABLE AstErr * tryParseFuncHeader(Parser * pParser, const ParseFuncHeaderPara
 
 			// ,
 
-			if (cParam > 0 && !tryConsumeToken(pParser->pScanner, TOKENK_Comma))
+			if (cParam > 0 && !tryConsumeToken(pScanner, TOKENK_Comma))
 			{
-				auto startEndPrev = prevTokenStartEnd(pParser->pScanner);
+				auto startEndPrev = prevTokenStartEnd(pScanner);
 
 				auto * pErr = AstNewErr0Child(pParser, ExpectedTokenkErr, makeStartEnd(startEndPrev.iEnd + 1));
 				append(&pErr->aTokenkValid, TOKENK_Comma);
@@ -1819,7 +1859,7 @@ NULLABLE AstErr * tryParseFuncHeader(Parser * pParser, const ParseFuncHeaderPara
 
 					if (!isNakedSingleReturn)
 					{
-						tryConsumeToken(pParser->pScanner, TOKENK_Identifier);
+						tryConsumeToken(pScanner, TOKENK_Identifier);
 					}
 
 					if (param.paramk == PARAMK_Param)
@@ -1852,13 +1892,15 @@ NULLABLE AstErr * tryParseFuncHeader(Parser * pParser, const ParseFuncHeaderPara
 		return nullptr;
 	};
 
-	int iStart = peekTokenStartEnd(pParser->pScanner).iStart;
+	Scanner * pScanner = pParser->pCtx->pScanner;
+
+	int iStart = peekTokenStartEnd(pScanner).iStart;
 
 	// Parse "fn"
 
-	if (!tryConsumeToken(pParser->pScanner, TOKENK_Fn))
+	if (!tryConsumeToken(pScanner, TOKENK_Fn))
 	{
-		auto startEndPrev = prevTokenStartEnd(pParser->pScanner);
+		auto startEndPrev = prevTokenStartEnd(pScanner);
 
 		auto * pErr = AstNewErr0Child(pParser, ExpectedTokenkErr, makeStartEnd(startEndPrev.iEnd + 1));
 		append(&pErr->aTokenkValid, TOKENK_Fn);
@@ -1869,9 +1911,9 @@ NULLABLE AstErr * tryParseFuncHeader(Parser * pParser, const ParseFuncHeaderPara
 
 	if (param.funcheaderk == FUNCHEADERK_Defn)
 	{
-		if (!tryConsumeToken(pParser->pScanner, TOKENK_Identifier, ensurePendingToken(pParser)))
+		if (!tryConsumeToken(pScanner, TOKENK_Identifier, ensurePendingToken(pParser)))
 		{
-			auto startEndPrev = prevTokenStartEnd(pParser->pScanner);
+			auto startEndPrev = prevTokenStartEnd(pScanner);
 
 			auto * pErr = AstNewErr0Child(pParser, ExpectedTokenkErr, makeStartEnd(startEndPrev.iEnd + 1));
 			append(&pErr->aTokenkValid, TOKENK_Identifier);
@@ -1883,7 +1925,7 @@ NULLABLE AstErr * tryParseFuncHeader(Parser * pParser, const ParseFuncHeaderPara
 	}
 	else if (param.funcheaderk == FUNCHEADERK_SymbolExpr)
 	{
-		if (tryConsumeToken(pParser->pScanner, TOKENK_Identifier, ensurePendingToken(pParser)))
+		if (tryConsumeToken(pScanner, TOKENK_Identifier, ensurePendingToken(pParser)))
 		{
 			// Success! (short-circuited)
 
@@ -1893,7 +1935,7 @@ NULLABLE AstErr * tryParseFuncHeader(Parser * pParser, const ParseFuncHeaderPara
 	}
 	else
 	{
-		if (tryConsumeToken(pParser->pScanner, TOKENK_Identifier, ensurePendingToken(pParser)))
+		if (tryConsumeToken(pScanner, TOKENK_Identifier, ensurePendingToken(pParser)))
 		{
 			// TODO: Maybe this should be a more specific/informative error, since we basically
 			//	understand what they are trying to do. Something like NamedFuncNonDefnErr...?
@@ -1923,7 +1965,7 @@ NULLABLE AstErr * tryParseFuncHeader(Parser * pParser, const ParseFuncHeaderPara
 		// Parse ->
 
 		bool arrowPresent = false;
-		if (tryConsumeToken(pParser->pScanner, TOKENK_MinusGreater, ensurePendingToken(pParser)))
+		if (tryConsumeToken(pScanner, TOKENK_MinusGreater, ensurePendingToken(pParser)))
 		{
 			arrowPresent = true;
 		}
@@ -1947,9 +1989,9 @@ NULLABLE AstErr * tryParseFuncHeader(Parser * pParser, const ParseFuncHeaderPara
 	{
 		// Parse trailing definition name
 
-		if (!tryConsumeToken(pParser->pScanner, TOKENK_Identifier, ensurePendingToken(pParser)))
+		if (!tryConsumeToken(pScanner, TOKENK_Identifier, ensurePendingToken(pParser)))
 		{
-			auto startEndPrev = prevTokenStartEnd(pParser->pScanner);
+			auto startEndPrev = prevTokenStartEnd(pScanner);
 
 			auto * pErr = AstNewErr0Child(pParser, ExpectedTokenkErr, makeStartEnd(startEndPrev.iEnd + 1));
 			append(&pErr->aTokenkValid, TOKENK_Identifier);
@@ -1970,26 +2012,29 @@ AstNode * finishParsePrimary(Parser * pParser, AstNode * pExpr)
 {
 	// Parse post-fix operations and allow them to chain
 
-	int iStart = getStartEnd(pParser->astDecs, pExpr->astid).iStart;
+	Scanner * pScanner = pParser->pCtx->pScanner;
+	AstDecorations * pAstDecs = pParser->pCtx->pAstDecs;
 
-	if (tryConsumeToken(pParser->pScanner, TOKENK_Dot, ensurePendingToken(pParser)))
+	int iStart = getStartEnd(*pAstDecs, pExpr->astid).iStart;
+
+	if (tryConsumeToken(pScanner, TOKENK_Dot, ensurePendingToken(pParser)))
 	{
 		// Member access
 
 		return parseVarOrMemberVarSymbolExpr(pParser, pExpr);
 	}
-	else if (tryConsumeToken(pParser->pScanner, TOKENK_Carat, ensurePendingToken(pParser)))
+	else if (tryConsumeToken(pScanner, TOKENK_Carat, ensurePendingToken(pParser)))
 	{
 		// Pointer dereference
 
-		int iEnd = prevTokenStartEnd(pParser->pScanner).iEnd;
+		int iEnd = prevTokenStartEnd(pScanner).iEnd;
 
 		auto * pNode = AstNew(pParser, PointerDereferenceExpr, makeStartEnd(iStart, iEnd));
 		pNode->pPointerExpr = pExpr;
 
 		return finishParsePrimary(pParser, Up(pNode));
 	}
-	else if (tryConsumeToken(pParser->pScanner, TOKENK_OpenBracket, ensurePendingToken(pParser)))
+	else if (tryConsumeToken(pScanner, TOKENK_OpenBracket, ensurePendingToken(pParser)))
 	{
 		// Array access
 
@@ -2011,11 +2056,11 @@ AstNode * finishParsePrimary(Parser * pParser, AstNode * pExpr)
 				return Up(pErr);
 			}
 		}
-		else if (!tryConsumeToken(pParser->pScanner, TOKENK_CloseBracket, ensurePendingToken(pParser)))
+		else if (!tryConsumeToken(pScanner, TOKENK_CloseBracket, ensurePendingToken(pParser)))
 		{
 			// Missing ]
 
-			auto startEndPrev = prevTokenStartEnd(pParser->pScanner);
+			auto startEndPrev = prevTokenStartEnd(pScanner);
 
 			auto * pErr = AstNewErr2Child(pParser, ExpectedTokenkErr, makeStartEnd(startEndPrev.iEnd + 1), pExpr, pSubscriptExpr);
 			append(&pErr->aTokenkValid, TOKENK_CloseBracket);
@@ -2037,7 +2082,7 @@ AstNode * finishParsePrimary(Parser * pParser, AstNode * pExpr)
 		}
 
 	arrayEnd:
-		int iEnd = prevTokenStartEnd(pParser->pScanner).iEnd;
+		int iEnd = prevTokenStartEnd(pScanner).iEnd;
 
 		auto * pNode = AstNew(pParser, ArrayAccessExpr, makeStartEnd(iStart, iEnd));
 		pNode->pArrayExpr = pExpr;
@@ -2045,7 +2090,7 @@ AstNode * finishParsePrimary(Parser * pParser, AstNode * pExpr)
 
 		return finishParsePrimary(pParser, Up(pNode));
 	}
-	else if (tryConsumeToken(pParser->pScanner, TOKENK_OpenParen, ensurePendingToken(pParser)))
+	else if (tryConsumeToken(pScanner, TOKENK_OpenParen, ensurePendingToken(pParser)))
 	{
 		// Func call
 
@@ -2058,13 +2103,13 @@ AstNode * finishParsePrimary(Parser * pParser, AstNode * pExpr)
 
 		static const TOKENK s_aTokenkRecover[] = { TOKENK_Comma, TOKENK_CloseParen };
 
-		while (!tryConsumeToken(pParser->pScanner, TOKENK_CloseParen, ensurePendingToken(pParser)))
+		while (!tryConsumeToken(pScanner, TOKENK_CloseParen, ensurePendingToken(pParser)))
 		{
-			if (!isFirstArg && !isCommaAlreadyAccountedFor && !tryConsumeToken(pParser->pScanner, TOKENK_Comma))
+			if (!isFirstArg && !isCommaAlreadyAccountedFor && !tryConsumeToken(pScanner, TOKENK_Comma))
 			{
 				// Missing ,
 
-				auto startEndPrev = prevTokenStartEnd(pParser->pScanner);
+				auto startEndPrev = prevTokenStartEnd(pScanner);
 
 				auto * pErr = AstNewErr0Child(pParser, ExpectedTokenkErr, makeStartEnd(startEndPrev.iEnd + 1));
 				append(&pErr->aTokenkValid, TOKENK_Comma);
@@ -2141,7 +2186,7 @@ AstNode * finishParsePrimary(Parser * pParser, AstNode * pExpr)
 			isFirstArg = false;
 		}
 
-		int iEnd = prevTokenStartEnd(pParser->pScanner).iEnd;
+		int iEnd = prevTokenStartEnd(pScanner).iEnd;
 
 		auto * pNode = AstNew(pParser, FuncCallExpr, makeStartEnd(iStart, iEnd));
 		pNode->pFunc = pExpr;
@@ -2159,9 +2204,13 @@ AstNode * parseFuncDefnStmtOrLiteralExpr(Parser * pParser, FUNCHEADERK funcheade
 {
 	Assert(funcheaderk == FUNCHEADERK_Defn || funcheaderk == FUNCHEADERK_Literal);
 
+	Scanner * pScanner = pParser->pCtx->pScanner;
+	TypeTable * pTypeTable = pParser->pCtx->pTypeTable;
+	AstDecorations * pAstDecs = pParser->pCtx->pAstDecs;
+
 	bool isDefn = (funcheaderk == FUNCHEADERK_Defn);
 
-	int iStart = peekTokenStartEnd(pParser->pScanner).iStart;
+	int iStart = peekTokenStartEnd(pScanner).iStart;
 
 	// Parse header
 	
@@ -2233,8 +2282,8 @@ AstNode * parseFuncDefnStmtOrLiteralExpr(Parser * pParser, FUNCHEADERK funcheade
 		goto LFailCleanup;
 	}
 
-	int iEndHeader = prevTokenStartEnd(pParser->pScanner).iEnd;
-	decorate(&pParser->astDecs.startEndDecoration, Up(pParamsReturnsUnderConstruction)->astid, StartEndIndices(iStart, iEndHeader));
+	int iEndHeader = prevTokenStartEnd(pScanner).iEnd;
+	decorate(&pAstDecs->startEndDecoration, Up(pParamsReturnsUnderConstruction)->astid, StartEndIndices(iStart, iEndHeader));
 
 	// Parse { <stmts> } or do <stmt>
 
@@ -2251,8 +2300,8 @@ AstNode * parseFuncDefnStmtOrLiteralExpr(Parser * pParser, FUNCHEADERK funcheade
 
 	// Replace our start/end placeholder
 
-	int iEnd = prevTokenStartEnd(pParser->pScanner).iEnd;
-	decorate(&pParser->astDecs.startEndDecoration, pNodeUnderConstruction->astid, StartEndIndices(iStart, iEnd));
+	int iEnd = prevTokenStartEnd(pScanner).iEnd;
+	decorate(&pAstDecs->startEndDecoration, pNodeUnderConstruction->astid, StartEndIndices(iStart, iEnd));
 
 	if (isDefn)
 	{
@@ -2269,7 +2318,7 @@ AstNode * parseFuncDefnStmtOrLiteralExpr(Parser * pParser, FUNCHEADERK funcheade
 
 		defineSymbol(pScopeOuter, pNode->ident.lexeme, funcDefnInfo);
 		registerPendingFuncType(
-			&pParser->typeTable,
+			pTypeTable,
 			pScopeOuter,
 			aTypemodDummy,
 			aPendingTypidParam,
@@ -2285,7 +2334,7 @@ AstNode * parseFuncDefnStmtOrLiteralExpr(Parser * pParser, FUNCHEADERK funcheade
 		pNode->scopeid = pScopeInner->id;
 
 		registerPendingFuncType(
-			&pParser->typeTable,
+			pTypeTable,
 			pScopeOuter,
 			aTypemodDummy,
 			aPendingTypidParam,
@@ -2310,8 +2359,10 @@ LFailCleanup:
 
 AstNode * handleScanOrUnexpectedTokenkErr(Parser * pParser, DynamicArray<AstNode *> * papChildren)
 {
+	Scanner * pScanner = pParser->pCtx->pScanner;
+
 	Token * pErrToken =	 ensureAndClaimPendingToken(pParser);
-	consumeToken(pParser->pScanner, pErrToken);
+	consumeToken(pScanner, pErrToken);
 
 	if (pErrToken->tokenk == TOKENK_Error)
 	{
@@ -2351,14 +2402,16 @@ AstNode * handleScanOrUnexpectedTokenkErr(Parser * pParser, DynamicArray<AstNode
 
 Scope * pushScope(Parser * pParser, SCOPEK scopek)
 {
+	MeekCtx * pCtx = pParser->pCtx;
+
 	Assert(pParser->pScopeCurrent);
 
 	Scope * pScope = allocate(&pParser->scopeAlloc);
 
 	init(pScope, pParser->scopeidNext, scopek, pParser->pScopeCurrent);
 
-	Assert(pParser->mpScopeidPScope.cItem == pScope->id);
-	append(&pParser->mpScopeidPScope, pScope);
+	Assert(pCtx->mpScopeidPScope.cItem == pScope->id);
+	append(&pCtx->mpScopeidPScope, pScope);
 
 	pParser->pScopeCurrent = pScope;
 	pParser->scopeidNext = SCOPEID(pParser->scopeidNext + 1);
@@ -2379,6 +2432,8 @@ Scope * popScope(Parser * pParser)
 
 void reportScanAndParseErrors(const Parser & parser)
 {
+	Scanner * pScanner = parser.pCtx->pScanner;
+
 	for (int i = 0; i < parser.apErrorNodes.cItem; i++)
 	{
 		auto * pNode = parser.apErrorNodes[i];
@@ -2397,7 +2452,7 @@ void reportScanAndParseErrors(const Parser & parser)
 				{
 					if (pErr->pErrToken->grferrtok & ferrtok)
 					{
-						reportScanError(*parser.pScanner, *pErr->pErrToken, errMessageFromFerrtok(ferrtok));
+						reportScanError(*pScanner, *pErr->pErrToken, errMessageFromFerrtok(ferrtok));
 					}
 				}
 			}
@@ -2492,7 +2547,7 @@ void reportScanAndParseErrors(const Parser & parser)
 
 			default:
 			{
-				reportIceAndExit("Unknown parse error: %d", pNode->astk);
+				AssertNotReached;
 			}
 			break;
 		}
@@ -2501,12 +2556,14 @@ void reportScanAndParseErrors(const Parser & parser)
 
 AstNode * astNew(Parser * pParser, ASTK astk, StartEndIndices startEnd)
 {
+	AstDecorations * pAstDecs = pParser->pCtx->pAstDecs;
+
 	AstNode * pNode = allocate(&pParser->astAlloc);
 	pNode->astk = astk;
 	pNode->astid = static_cast<ASTID>(pParser->iNode);
 	pParser->iNode++;
 
-	decorate(&pParser->astDecs.startEndDecoration, pNode->astid, startEnd);
+	decorate(&pAstDecs->startEndDecoration, pNode->astid, startEnd);
 
 	return pNode;
 }
@@ -2609,6 +2666,8 @@ bool tryRecoverFromPanic(Parser * pParser, const TOKENK * aTokenkRecover, int cT
 
 	// NOTE: The token that we successfully match to recover also gets consumed.
 
+	Scanner * pScanner = pParser->pCtx->pScanner;
+
 #if DEBUG
 	for (int i = 0; i < cTokenkRecover; i++)
 	{
@@ -2635,9 +2694,9 @@ bool tryRecoverFromPanic(Parser * pParser, const TOKENK * aTokenkRecover, int cT
 
 	while(true)
 	{
-		if (isFinished(pParser->pScanner)) return false;
+		if (isFinished(*pScanner)) return false;
 
-		TOKENK tokenk = peekToken(pParser->pScanner);
+		TOKENK tokenk = peekToken(pScanner);
 
 		// Push contexts
 
@@ -2675,21 +2734,21 @@ bool tryRecoverFromPanic(Parser * pParser, const TOKENK * aTokenkRecover, int cT
 				if (tokenkRecover == tokenk)
 				{
 					if (poTokenkMatch) *poTokenkMatch = tokenk;
-					consumeToken(pParser->pScanner);
+					consumeToken(pScanner);
 					return true;
 				}
 			}
 
 			if (tokenk == TOKENK_Semicolon)
 			{
-				consumeToken(pParser->pScanner);
+				consumeToken(pScanner);
 				return false;
 			}
 		}
 
 		// Keep chewing!
 
-		consumeToken(pParser->pScanner);
+		consumeToken(pScanner);
 	}
 }
 

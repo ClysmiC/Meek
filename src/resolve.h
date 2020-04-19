@@ -7,12 +7,9 @@
 struct Parser;
 struct TypeTable;
 
-struct ResolvePassCtx
+struct ResolvePass
 {
-	// TODO: make these globals
-
-	TypeTable * pTypeTable;
-	DynamicArray<Scope *> * pMpScopeidPScope;
+	MeekCtx * pCtx;
 
 	// Bookkeeping
 
@@ -34,15 +31,15 @@ struct ResolvePassCtx
 	bool hadError = false;
 };
 
-void init(ResolvePassCtx * pPass, Parser * pParser);
-void pushAndAuditScopeid(ResolvePassCtx * pPass, SCOPEID scopeid);
+void init(ResolvePass * pPass, MeekCtx * pCtx);
+void pushAndAuditScopeid(ResolvePass * pPass, SCOPEID scopeid);
 
 // Tree walk
 
-void visitResolvePreorder(AstNode * pNode, void * pContext);
-void visitResolvePostorder(AstNode * pNode, void * pContext);
-void visitResolveHook(AstNode * pNode, AWHK awhk, void * pContext);
+void visitResolvePreorder(AstNode * pNode, void * pPass_);
+void visitResolvePostorder(AstNode * pNode, void * pPass_);
+void visitResolveHook(AstNode * pNode, AWHK awhk, void * pPass_);
 
-void resolveExpr(ResolvePassCtx * pPass, AstNode * pNode);
-void resolveStmt(ResolvePassCtx * pPass, AstNode * pNode);
-void doResolvePass(ResolvePassCtx * pPass, AstNode * pNode);
+void resolveExpr(ResolvePass * pPass, AstNode * pNode);
+void resolveStmt(ResolvePass * pPass, AstNode * pNode);
+void doResolvePass(ResolvePass * pPass, AstNode * pNode);

@@ -37,6 +37,7 @@
     <ClInclude Include="src\ast_print.h" />
     <ClInclude Include="src\bytecode.h" />
     <ClInclude Include="src\error.h" />
+    <ClInclude Include="src\global_context.h" />
     <ClInclude Include="src\id_def.h" />
     <ClInclude Include="src\interp.h" />
     <ClInclude Include="src\literal.h" />
@@ -53,6 +54,7 @@
     <ClCompile Include="src\ast_print.cpp" />
     <ClCompile Include="src\bytecode.cpp" />
     <ClCompile Include="src\error.cpp" />
+    <ClCompile Include="src\global_context.cpp" />
     <ClCompile Include="src\interp.cpp" />
     <ClCompile Include="src\literal.cpp" />
     <ClCompile Include="src\main.cpp" />

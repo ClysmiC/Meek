@@ -239,8 +239,7 @@ SCOPEID scopeidFromSymbolInfo(const SymbolInfo & symbInfo)
 
 		default:
 		{
-			reportIceAndExit("Unknown SYMBOLK %d", symbInfo.symbolk);
-			return SCOPEID_Nil;
+			AssertNotReached;
 		}
 	}
 }

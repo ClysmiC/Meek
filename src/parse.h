@@ -7,7 +7,7 @@
 #include "token.h"
 #include "type.h"
 
-struct Scanner;
+struct MeekCtx;
 
 struct BinopInfo
 {
@@ -20,9 +20,7 @@ struct BinopInfo
 
 struct Parser
 {
-	// Scanner
-
-	Scanner * pScanner = nullptr;
+	MeekCtx * pCtx;
 
 	// Allocators
 
@@ -30,35 +28,32 @@ struct Parser
 	DynamicPoolAllocator<Token> tokenAlloc;
 	DynamicPoolAllocator<Scope> scopeAlloc;
 
-
 	// Scope
 
 	SCOPEID scopeidNext = SCOPEID_Nil;
 	Scope * pScopeCurrent = nullptr;
 
-	DynamicArray<Scope *> mpScopeidPScope;
+	Scope * pScopeBuiltin = nullptr;
+	Scope * pScopeGlobal = nullptr;
+
+	// Vars
+
 	VARSEQID varseqidNext = VARSEQID_Nil;
-
-	// Type Table
-
-	TypeTable typeTable;
-
-	// AST decoration
-
-	AstDecorations astDecs;
 
 	// Node construction / bookkeeping
 
 	uint iNode = 0;				// Becomes node's id
 	Token * pPendingToken = nullptr;
 
-
 	// Error and error recovery
 
 	DynamicArray<AstNode *> apErrorNodes;
 };
 
+void init(Parser * pParser, MeekCtx * pCtx);
+void reportScanAndParseErrors(const Parser & parser);
 
+AstNode * parseProgram(Parser * pParser, bool * poSuccess);
 
 // Might want to move this out of parse.h as this will probably be reusable elsewhere
 
@@ -84,21 +79,6 @@ enum PARAMK
 	PARAMK_Param,
 	PARAMK_Return
 };
-
-
-// Public
-
-// NOTE: Any memory by the parser is never freed, since it is all put into the AST and we really
-//	have no need to want to free AST nodes. If we ever find that need then we can offer an interface to
-//	deallocate stuff through the pool allocator's deallocate functions.
-
-void init(Parser * pParser, Scanner * pScanner);
-AstNode * parseProgram(Parser * pParser, bool * poSuccess);
-void reportScanAndParseErrors(const Parser & parser);
-
-
-
-// Internal
 
 // Scope management
 

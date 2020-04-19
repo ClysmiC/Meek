@@ -59,7 +59,7 @@ struct Scanner
 // Public
 
 void init(Scanner * pScanner, char * pText, uint textSize);
-bool isFinished(Scanner * pScanner);
+bool isFinished(const Scanner & scanner);
 int lineFromI(const Scanner & scanner, int iText);
 
 // Scanning

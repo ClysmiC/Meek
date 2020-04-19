@@ -37,7 +37,7 @@ TOKENK peekToken(Scanner * pScanner, NULLABLE Token * poToken, uint lookahead)
 	// Consume tokens until we have enough in our buffer to peek that far
 
 	Token tokenLookahead;
-	while (!isFinished(pScanner) && rbuf.cItem <= lookahead)
+	while (!isFinished(*pScanner) && rbuf.cItem <= lookahead)
 	{
 		produceNextToken(pScanner, &tokenLookahead);
 		write(&rbuf, tokenLookahead);
@@ -533,9 +533,9 @@ TOKENK produceNextToken(Scanner * pScanner, Token * poToken)
 	return poToken->tokenk;
 }
 
-bool isFinished(Scanner * pScanner)
+bool isFinished(const Scanner & scanner)
 {
-	return pScanner->scanexitk != SCANEXITK_Nil;
+	return scanner.scanexitk != SCANEXITK_Nil;
 }
 
 int lineFromI(const Scanner & scanner, int iText)

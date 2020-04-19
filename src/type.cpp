@@ -1,5 +1,6 @@
 #include "ast.h"
 #include "error.h"
+#include "global_context.h"
 #include "literal.h"
 #include "parse.h"
 #include "type.h"
@@ -490,8 +491,10 @@ bool areTypidListTypesEq(const DynamicArray<TYPID> & aTypid0, const DynamicArray
 //	return true;
 //}
 
-void init(TypeTable * pTable)
+void init(TypeTable * pTable, MeekCtx * pCtx)
 {
+	pTable->pCtx = pCtx;
+
 	init(&pTable->table,
 		typidHash,
 		typidEq,
@@ -592,7 +595,7 @@ TYPID ensureInTypeTable(TypeTable * pTable, Type * pType, bool debugAssertIfAlre
 	return typidInsert;
 }
 
-bool tryResolveAllTypes(Parser * pParser)
+bool tryResolveAllTypes(TypeTable * pTable)
 {
 	auto tryResolvePendingType = [](TypeTable::TypePendingResolve * pTypePending)
 	{
@@ -759,6 +762,8 @@ bool tryResolveAllTypes(Parser * pParser)
 		return true;
 	};
 
+	MeekCtx * pCtx = pTable->pCtx;
+
 	// Resolve named types (and eagerly resolve type infos where we can)
 
 	DynamicArray<TYPID> aTypidInfoPending;
@@ -767,22 +772,22 @@ bool tryResolveAllTypes(Parser * pParser)
 
 	int cTypeUnresolved = 0;
 	{
-		for (int i = 0; i < pParser->typeTable.typesPendingResolution.cItem; i++)
+		for (int i = 0; i < pTable->typesPendingResolution.cItem; i++)
 		{
-			TypeTable::TypePendingResolve * pTypePending = &pParser->typeTable.typesPendingResolution[i];
+			TypeTable::TypePendingResolve * pTypePending = &pTable->typesPendingResolution[i];
 			if (tryResolvePendingType(pTypePending))
 			{
-				TYPID typid = ensureInTypeTable(&pParser->typeTable, &pTypePending->type);
+				TYPID typid = ensureInTypeTable(pTable, &pTypePending->type);
 				for (int iTypidUpdate = 0; iTypidUpdate < pTypePending->cPTypidUpdateOnResolve; iTypidUpdate++)
 				{
 					TYPID * pTypidUpdate = pTypePending->apTypidUpdateOnResolve[iTypidUpdate];
 					*pTypidUpdate = typid;
 				}
 
-				const Type * pType = lookupType(pParser->typeTable, typid);
+				const Type * pType = lookupType(*pTable, typid);
 				if (pType->info.size == Type::TypeInfo::s_unset)
 				{
-					if (tryResolvePendingTypeInfo(pParser->typeTable, pParser->mpScopeidPScope, typid))
+					if (tryResolvePendingTypeInfo(*pTable, pCtx->mpScopeidPScope, typid))
 					{
 						Assert(pType->info.size != Type::TypeInfo::s_unset);
 					}
@@ -802,7 +807,7 @@ bool tryResolveAllTypes(Parser * pParser)
 			dispose(pTypePending);
 		}
 
-		dispose(&pParser->typeTable.typesPendingResolution);
+		dispose(&pTable->typesPendingResolution);
 	}
 
 	// Resolve type infos we weren't able to resolve eagerly
@@ -817,7 +822,7 @@ bool tryResolveAllTypes(Parser * pParser)
 			TYPID typidInfoPending = aTypidInfoPending[i];
 			Assert(isTypeResolved(typidInfoPending));
 
-			const Type * pType = lookupType(pParser->typeTable, typidInfoPending);
+			const Type * pType = lookupType(*pTable, typidInfoPending);
 			if (pType->info.size != Type::TypeInfo::s_unset)
 			{
 				// NOTE (andrew) This can happen when multiple copies of the same typid are added to
@@ -826,7 +831,7 @@ bool tryResolveAllTypes(Parser * pParser)
 
 				unorderedRemove(&aTypidInfoPending, i);
 			}
-			else if (tryResolvePendingTypeInfo(pParser->typeTable, pParser->mpScopeidPScope, typidInfoPending))
+			else if (tryResolvePendingTypeInfo(*pTable, pCtx->mpScopeidPScope, typidInfoPending))
 			{
 				madeProgress = true;
 				unorderedRemove(&aTypidInfoPending, i);

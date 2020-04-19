@@ -10,7 +10,7 @@
 // Forward declarations
 
 struct AstNode;
-struct Parser;
+struct MeekCtx;
 struct Type;
 
 enum TYPEMODK : u8
@@ -138,6 +138,8 @@ inline bool typidEq(const TYPID & typid0, const TYPID & typid1)
 
 struct TypeTable
 {
+	MeekCtx * pCtx;
+
 	struct TypePendingResolve
 	{
 		// Info we need to resolve the type
@@ -159,7 +161,7 @@ struct TypeTable
 	TYPID typidNext = TYPID_ActualTypesStart;
 };
 
-void init(TypeTable * pTable);
+void init(TypeTable * pTable, MeekCtx * pCtx);
 void init(TypeTable::TypePendingResolve * pTypePending, Scope * pScope, bool isFuncType);
 void dispose(TypeTable::TypePendingResolve * pTypePending);
 
@@ -187,7 +189,7 @@ void setPendingTypeUpdateOnResolvePtr(TypeTable * pTable, PENDINGTYPID pendingTy
 
 TYPID ensureInTypeTable(TypeTable * pTable, Type * pType, bool debugAssertIfAlreadyInTable=false);
 
-bool tryResolveAllTypes(Parser * pParser);
+bool tryResolveAllTypes(TypeTable * pTable);
 
 TYPID typidFromLiteralk(LITERALK literalk);
 
