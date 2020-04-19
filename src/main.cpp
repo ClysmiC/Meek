@@ -5,7 +5,7 @@
 #include "error.h"
 #include "parse.h"
 #include "print.h"
-#include "resolve_pass.h"
+#include "resolve.h"
 #include "scan.h"
 
 #include <stdio.h>
@@ -86,7 +86,7 @@ int main()
 	//	return 1;
 	//}
 
-	ResolvePass resolvePass;
+	ResolvePassCtx resolvePass;
 	init(&resolvePass, &parser);
 	doResolvePass(&resolvePass, pAstRoot);
 

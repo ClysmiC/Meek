@@ -954,6 +954,7 @@ AstNode * parseBlockStmt(Parser * pParser, bool pushPopScope)
 	auto * pNode = AstNew(pParser, BlockStmt, makeStartEnd(iStart, iEnd));
 	initMove(&pNode->apStmts, &apStmts);
 	pNode->scopeid = pParser->pScopeCurrent->id;
+	pNode->inheritsParentScopeid = !pushPopScope;
 
 	return Up(pNode);
 }

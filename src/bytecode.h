@@ -2,6 +2,8 @@
 
 #include "als.h"
 
+struct AstNode;
+
 // ByteCode OPeration
 
 enum BCOP : u8

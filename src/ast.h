@@ -398,6 +398,7 @@ struct AstBlockStmt
 {
 	DynamicArray<AstNode *> apStmts;
 	SCOPEID scopeid;
+	bool inheritsParentScopeid;
 };
 
 struct AstIfStmt
@@ -509,9 +510,28 @@ struct AstNode
 static constexpr uint s_nodeSizeDebug = sizeof(AstNode);
 #endif
 
-typedef void (* AstVisitFn)(AstNode *, void *);
 
-void walkAstPostorder(AstNode * pNode, AstVisitFn visitFn, void * pContext);
+
+// Walking AST
+
+// Ast Walk Hook Kind
+
+enum AWHK
+{
+	AWHK_PostFormalReturnVardecls,
+};
+
+typedef void (* AstWalkVisitFn)(AstNode *, void *);
+typedef void (* AstWalkHookFn)(AstNode *, AWHK awhk, void *);
+
+void walkAst(
+	AstNode * pNodeSubtreeRoot,
+	AstWalkVisitFn visitPreorderFn,
+	AstWalkHookFn hookFn,
+	AstWalkVisitFn visitPostorderFn,
+	void * pContext);
+
+
 
 // TODO: other "value" functions
 // TODO: move to literal.h / literal.cpp ?

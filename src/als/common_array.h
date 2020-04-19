@@ -363,6 +363,12 @@ void remove(DynamicArray<T> * pArray, int iItem)
 }
 
 template <typename T>
+void removeAll(DynamicArray<T> * pArray)
+{
+	pArray->cItem = 0;
+}
+
+template <typename T>
 void reverse(DynamicArray<T> * pArray)
 {
 	for (int iItem = 0; iItem < pArray->cItem / 2; iItem++)

@@ -9,30 +9,31 @@
 
 #define SetBubbleIfUnresolved(typid) do { if (!isTypeResolved(typid)) (typid) = TYPID_BubbleError; } while(0)
 
-void init(ResolvePass * pPass, Parser * pParser)
+void init(ResolvePassCtx * pPass, Parser * pParser)
 {
 	pPass->varseqidSeen = VARSEQID_Zero;
 	init(&pPass->unresolvedIdents);
 	init(&pPass->fnCtxStack);
+	init(&pPass->aTypidChild);
+	init(&pPass->scopeidStack);
+
+	push(&pPass->scopeidStack, SCOPEID_BuiltIn);
+	push(&pPass->scopeidStack, SCOPEID_Global);
 
 	pPass->hadError = false;
 	pPass->cNestedBreakable = 0;
-
-	pPass->scopeidCur = SCOPEID_Global;
 
 	pPass->pMpScopeidPScope = &pParser->mpScopeidPScope;
 	pPass->pTypeTable = &pParser->typeTable;
 }
 
-void auditDuplicateSymbols(ResolvePass * pPass)
+void pushAndAuditScopeid(ResolvePassCtx * pPass, SCOPEID scopeid)
 {
-	if (!auditDuplicateSymbols((*pPass->pMpScopeidPScope)[pPass->scopeidCur]))
-	{
-		pPass->hadError = true;
-	}
+	push(&pPass->scopeidStack, scopeid);
+	auditDuplicateSymbols((*pPass->pMpScopeidPScope)[scopeid]);
 }
 
-TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
+void resolveExpr(ResolvePassCtx * pPass, AstNode * pNode)
 {
 	Assert(category(pNode->astk) == ASTCATK_Expr);
 
@@ -48,8 +49,11 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 
 			auto * pExpr = Down(pNode, BinopExpr);
 
-			TYPID typidLhs = resolveExpr(pPass, pExpr->pLhsExpr);
-			TYPID typidRhs = resolveExpr(pPass, pExpr->pRhsExpr);
+			Assert(pPass->aTypidChild.cItem == 2);
+			TYPID typidLhs = pPass->aTypidChild[0];
+			TYPID typidRhs = pPass->aTypidChild[1];
+
+			removeAll(&pPass->aTypidChild);
 
 			if (!isTypeResolved(typidLhs) || !isTypeResolved(typidRhs))
 			{
@@ -71,21 +75,21 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 
 		case ASTK_GroupExpr:
 		{
-			// This could technically still be an lvalue, but it would let you do stuff like this:
-			//	(a) = 15;
-			// This is semantically equivalent to:
-			//	a = 15;
-			// But it's kind of dumb, so I'm just going to say that groups are NOT lvalues.
-
 			auto * pExpr = Down(pNode, GroupExpr);
 
-			typidResult = resolveExpr(pPass, pExpr->pExpr);
+			Assert(pPass->aTypidChild.cItem == 1);
+			typidResult = pPass->aTypidChild[0];
+
+			removeAll(&pPass->aTypidChild);
+
 			SetBubbleIfUnresolved(typidResult);
 		} break;
 
 		case ASTK_LiteralExpr:
 		{
 			auto * pExpr = Down(pNode, LiteralExpr);
+
+			Assert(pPass->aTypidChild.cItem == 0);
 
 			typidResult = typidFromLiteralk(pExpr->literalk);
 			SetBubbleIfUnresolved(typidResult);
@@ -95,7 +99,10 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 		{
 			auto * pExpr = Down(pNode, UnopExpr);
 
-			TYPID typidExpr = resolveExpr(pPass, pExpr->pExpr);
+			Assert(pPass->aTypidChild.cItem == 1);
+			TYPID typidExpr = pPass->aTypidChild[0];
+
+			removeAll(&pPass->aTypidChild);
 
 			if (!isTypeResolved(typidExpr))
 			{
@@ -147,11 +154,9 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 
 					// Lookup all funcs matching this identifier
 
-					Scope * pScopeCur = (*pPass->pMpScopeidPScope)[pPass->scopeidCur];
-
-					{
-						lookupFuncSymbol(*pScopeCur, pExpr->ident, &pExpr->unresolvedData.aCandidates);
-					}
+					SCOPEID scopeidCur = peek(pPass->scopeidStack);
+					Scope * pScopeCur = (*pPass->pMpScopeidPScope)[scopeidCur];
+					lookupFuncSymbol(*pScopeCur, pExpr->ident, &pExpr->unresolvedData.aCandidates);
 
 					// Lookup var matching this identifier, and slot it in where it fits
 
@@ -233,7 +238,10 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 					Assert(pExpr->memberData.pOwner);
 					AssertInfo(!pExpr->memberData.pDeclCached, "This shouldn't be resolved yet because this is the code that should resolve it!");
 
-					TYPID ownerTypid = resolveExpr(pPass, pExpr->memberData.pOwner);
+					Assert(pPass->aTypidChild.cItem == 1);
+					TYPID ownerTypid = pPass->aTypidChild[0];
+
+					removeAll(&pPass->aTypidChild);
 
 					if (!isTypeResolved(ownerTypid))
 					{
@@ -286,7 +294,8 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 				{
 					AssertInfo(!pExpr->funcData.pDefnCached, "This shouldn't be resolved yet because this is the code that should resolve it!");
 
-					Scope * pScopeCur = (*pPass->pMpScopeidPScope)[pPass->scopeidCur];
+					SCOPEID scopeidCur = peek(pPass->scopeidStack);
+					Scope * pScopeCur = (*pPass->pMpScopeidPScope)[scopeidCur];
 
 					DynamicArray<SymbolInfo> aSymbInfoFuncCandidates;
 					init(&aSymbInfoFuncCandidates);
@@ -361,7 +370,10 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 		{
 			auto * pExpr = Down(pNode, PointerDereferenceExpr);
 
-			TYPID typidPtr = resolveExpr(pPass, pExpr->pPointerExpr);
+			Assert(pPass->aTypidChild.cItem == 1);
+			TYPID typidPtr = pPass->aTypidChild[0];
+
+			removeAll(&pPass->aTypidChild);
 
 			if (!isTypeResolved(typidPtr))
 			{
@@ -392,7 +404,11 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 		{
 			auto * pExpr = Down(pNode, ArrayAccessExpr);
 
-			TYPID typidArray = resolveExpr(pPass, pExpr->pArrayExpr);
+			Assert(pPass->aTypidChild.cItem == 2);
+			TYPID typidArray = pPass->aTypidChild[0];
+			TYPID typidSubscript = pPass->aTypidChild[1];
+
+			removeAll(&pPass->aTypidChild);
 
 			if (!isTypeResolved(typidArray))
 			{
@@ -400,7 +416,6 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 				goto LEndSetTypidAndReturn;
 			}
 
-			TYPID typidSubscript = resolveExpr(pPass, pExpr->pSubscriptExpr);
 			if (typidSubscript != TYPID_S32)
 			{
 				// TODO: support s8, s16, s64, u8, etc...
@@ -439,26 +454,26 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 		{
 			auto * pExpr = Down(pNode, FuncCallExpr);
 
-			// Resolve calling expression 
+			// Calling expression 
 
-			TYPID typidCallingExpr = resolveExpr(pPass, pExpr->pFunc);
+			Assert(pPass->aTypidChild.cItem == 1 + pExpr->apArgs.cItem);
+
+			TYPID typidCallingExpr = pPass->aTypidChild[0];
 			Assert(Implies(typidCallingExpr == TYPID_UnresolvedHasCandidates, pExpr->pFunc->astk == ASTK_SymbolExpr));
 
 			bool callingExprResolvedOrHasCandidates = isTypeResolved(typidCallingExpr) || typidCallingExpr == TYPID_UnresolvedHasCandidates;
 
-			// Resolve args
-
-			// TODO: implement reserve(..) for dynamic array, since we already know ahead of time
-			//	how many typids we will have in it.
+			// Args
 
 			DynamicArray<TYPID> aTypidArg;
 			init(&aTypidArg);
+			ensureCapacity(&aTypidArg, pExpr->apArgs.cItem);
 			Defer(dispose(&aTypidArg));
 
 			bool allArgsResolvedOrHasCandidates = true;
-			for (int i = 0; i < pExpr->apArgs.cItem; i++)
+			for (int iArg = 0; iArg < pExpr->apArgs.cItem; iArg++)
 			{
-				TYPID typidArg = resolveExpr(pPass, pExpr->apArgs[i]);
+				TYPID typidArg = pPass->aTypidChild[1 + iArg];
 				if (!isTypeResolved(typidArg) && typidArg != TYPID_UnresolvedHasCandidates)
 				{
 					allArgsResolvedOrHasCandidates = false;
@@ -466,6 +481,8 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 
 				append(&aTypidArg, typidArg);
 			}
+
+			removeAll(&pPass->aTypidChild);
 
 			if (!callingExprResolvedOrHasCandidates || !allArgsResolvedOrHasCandidates)
 			{
@@ -847,45 +864,15 @@ TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode)
 		{
 			auto * pExpr = Down(pNode, FuncLiteralExpr);
 
-			// NOTE: Func literal expressions define a type that we should have already put into the type table when parsing,
-			//	so we just need to make sure we resolve the children here.
+			// TODO: Test that this assert actually holds... I think it shouldn't?
 
 			Assert(isTypeResolved(UpExpr(pExpr)->typidEval));
 			typidResult = UpExpr(pExpr)->typidEval;
 
-			// Push scope and resolve children
+			ResolvePassCtx::FnCtx fnCtx = pop(&pPass->fnCtxStack);
+			dispose(&fnCtx.aTypidReturn);
 
-			SCOPEID scopeidRestore = pPass->scopeidCur;
-			pPass->scopeidCur = pExpr->scopeid;
-			Defer(pPass->scopeidCur = scopeidRestore);
-
-			auditDuplicateSymbols(pPass);
-
-			auto * papParamVarDecls = &pExpr->pParamsReturnsGrp->apParamVarDecls;
-			for (int i = 0; i < papParamVarDecls->cItem; i++)
-			{
-				doResolvePass(pPass, (*papParamVarDecls)[i]);
-			}
-
-			auto * papReturnVarDecls = &pExpr->pParamsReturnsGrp->apReturnVarDecls;
-			for (int i = 0; i < papReturnVarDecls->cItem; i++)
-			{
-				doResolvePass(pPass, (*papReturnVarDecls)[i]);
-			}
-
-			// Push ctx
-
-			auto * pFnCtx = pushNew(&pPass->fnCtxStack);
-			initExtract(&pFnCtx->aTypidReturn, *papReturnVarDecls, offsetof(AstVarDeclStmt, typidDefn));
-			Defer(dispose(&pFnCtx->aTypidReturn));
-
-			// Resolve body
-
-			doResolvePass(pPass, pExpr->pBodyStmt);
-
-			// Pop ctx
-
-			pop(&pPass->fnCtxStack);
+			pop(&pPass->scopeidStack);
 		} break;
 
 		default:
@@ -898,10 +885,10 @@ LEndSetTypidAndReturn:
 
 	AstExpr * pExpr = DownExpr(pNode);
 	pExpr->typidEval = typidResult;
-	return typidResult;
+	append(&pPass->aTypidChild, typidResult);
 }
 
-void resolveStmt(ResolvePass * pPass, AstNode * pNode)
+void resolveStmt(ResolvePassCtx * pPass, AstNode * pNode)
 {
 	Assert(category(pNode->astk) == ASTCATK_Stmt);
 
@@ -909,8 +896,7 @@ void resolveStmt(ResolvePass * pPass, AstNode * pNode)
 	{
 		case ASTK_ExprStmt:
 		{
-			auto * pStmt = Down(pNode, ExprStmt);
-			doResolvePass(pPass, pStmt->pExpr);
+			removeAll(&pPass->aTypidChild);
 		} break;
 
 		case ASTK_AssignStmt:
@@ -919,8 +905,12 @@ void resolveStmt(ResolvePass * pPass, AstNode * pNode)
 			//	and make sure that the LHS is an lvalue
 
 			auto * pStmt = Down(pNode, AssignStmt);
-			TYPID typidLhs = resolveExpr(pPass, pStmt->pLhsExpr);
-			TYPID typidRhs = resolveExpr(pPass, pStmt->pRhsExpr);
+
+			Assert(pPass->aTypidChild.cItem == 2);
+			TYPID typidLhs = pPass->aTypidChild[0];
+			TYPID typidRhs = pPass->aTypidChild[1];
+			
+			removeAll(&pPass->aTypidChild);
 
 			if (!isLValue(pStmt->pLhsExpr->astk))
 			{
@@ -944,14 +934,14 @@ void resolveStmt(ResolvePass * pPass, AstNode * pNode)
 		{
 			auto * pStmt = Down(pNode, VarDeclStmt);
 
-
 			AssertInfo(isTypeResolved(pStmt->typidDefn), "Inferred types are TODO");
 			const Type * pType = lookupType(*pPass->pTypeTable, pStmt->typidDefn);
 
 			if (pStmt->ident.lexeme.strv.cCh > 0)
 			{
 #if DEBUG
-				Scope * pScopeCur = (*pPass->pMpScopeidPScope)[pPass->scopeidCur];
+				SCOPEID scopeidCur = peek(pPass->scopeidStack);
+				Scope * pScopeCur = (*pPass->pMpScopeidPScope)[scopeidCur];
 				SymbolInfo symbInfo = lookupVarSymbol(*pScopeCur, pStmt->ident.lexeme);
 				Assert(symbInfo.symbolk == SYMBOLK_Var);
 #endif
@@ -967,7 +957,10 @@ void resolveStmt(ResolvePass * pPass, AstNode * pNode)
 
 			if (pStmt->pInitExpr)
 			{
-				TYPID typidInit = resolveExpr(pPass, pStmt->pInitExpr);
+				Assert(pPass->aTypidChild.cItem == 1);
+				TYPID typidInit = pPass->aTypidChild[0];
+
+				removeAll(&pPass->aTypidChild);
 
 				if (isTypeResolved(typidInit) && typidInit != pStmt->typidDefn)
 				{
@@ -982,25 +975,12 @@ void resolveStmt(ResolvePass * pPass, AstNode * pNode)
 			auto * pStmt = Down(pNode, StructDefnStmt);
 
 #if DEBUG
-			Scope * pScopeOuter = (*pPass->pMpScopeidPScope)[pPass->scopeidCur];
+			SCOPEID scopeidCur = peek(pPass->scopeidStack);
+			Scope * pScopeOuter = (*pPass->pMpScopeidPScope)[scopeidCur];
 			SymbolInfo symbInfo = lookupTypeSymbol(*pScopeOuter, pStmt->ident.lexeme);
 			Assert(symbInfo.symbolk == SYMBOLK_Struct);
 #endif
-
-			// Record scope id
-
-			SCOPEID scopeidRestore = pPass->scopeidCur;
-			pPass->scopeidCur = pStmt->scopeid;
-			Defer(pPass->scopeidCur = scopeidRestore);
-
-			auditDuplicateSymbols(pPass);
-
-			// Resolve member decls
-
-			for (int i = 0; i < pStmt->apVarDeclStmt.cItem; i++)
-			{
-				doResolvePass(pPass, pStmt->apVarDeclStmt[i]);
-			}
+			pop(&pPass->scopeidStack);
 		} break;
 
 		case ASTK_FuncDefnStmt:
@@ -1008,92 +988,36 @@ void resolveStmt(ResolvePass * pPass, AstNode * pNode)
 			auto * pStmt = Down(pNode, FuncDefnStmt);
 
 #if DEBUG
-			Scope * pScopeCur = (*pPass->pMpScopeidPScope)[pPass->scopeidCur];
-			DynamicArray<SymbolInfo> aSymbInfo;
-			init(&aSymbInfo);
-			Defer(dispose(&aSymbInfo));
-			lookupFuncSymbol(*pScopeCur, pStmt->ident.lexeme, &aSymbInfo);
-			AssertInfo(aSymbInfo.cItem > 0, "We should have put this func decl in the symbol table when we parsed it...");
+			{
+				SCOPEID scopeidCur = peek(pPass->scopeidStack);
+				Scope * pScopeCur = (*pPass->pMpScopeidPScope)[scopeidCur];
+				DynamicArray<SymbolInfo> aSymbInfo;
+				init(&aSymbInfo);
+				Defer(dispose(&aSymbInfo));
+				lookupFuncSymbol(*pScopeCur, pStmt->ident.lexeme, &aSymbInfo);
+				AssertInfo(aSymbInfo.cItem > 0, "We should have put this func decl in the symbol table when we parsed it...");
+			}
 #endif
-
-			// Record scope id
-
-			SCOPEID scopeidRestore = pPass->scopeidCur;
-			pPass->scopeidCur = pStmt->scopeid;
-			Defer(pPass->scopeidCur = scopeidRestore);
-
-			auditDuplicateSymbols(pPass);
-
-			// Resolve params
-
-			auto * papParamVarDecls = &pStmt->pParamsReturnsGrp->apParamVarDecls;
-			for (int i = 0; i < papParamVarDecls->cItem; i++)
-			{
-				doResolvePass(pPass, (*papParamVarDecls)[i]);
-			}
-
-			// Resolve return values
-
-			auto * papReturnVarDecls = &pStmt->pParamsReturnsGrp->apReturnVarDecls;
-			for (int i = 0; i < papReturnVarDecls->cItem; i++)
-			{
-				doResolvePass(pPass, (*papReturnVarDecls)[i]);
-			}
-
-			// Push ctx
-
-			auto * pFnCtx = pushNew(&pPass->fnCtxStack);
-			initExtract(&pFnCtx->aTypidReturn, *papReturnVarDecls, offsetof(AstVarDeclStmt, typidDefn));
-			Defer(dispose(&pFnCtx->aTypidReturn));
-
-			// Resolve body
-
-			doResolvePass(pPass, pStmt->pBodyStmt);
-
-			// Pop ctx
-
-			pop(&pPass->fnCtxStack);
+			
+			pop(&pPass->scopeidStack);
 		} break;
 
 		case ASTK_BlockStmt:
 		{
 			auto * pStmt = Down(pNode, BlockStmt);
-
-			// NOTE (andrew) The scope push/pop here may be a no-op if this block is from a function
-			//	definition (since blocks get their scope folded into the function definition's scope)
-
-			SCOPEID scopeidRestore = pPass->scopeidCur;
-			pPass->scopeidCur = pStmt->scopeid;
-			Defer(pPass->scopeidCur = scopeidRestore);
-
-			auditDuplicateSymbols(pPass);
-
-			for (int i = 0; i < pStmt->apStmts.cItem; i++)
+			if (!pStmt->inheritsParentScopeid)
 			{
-				doResolvePass(pPass, pStmt->apStmts[i]);
+				pop(&pPass->scopeidStack);
 			}
 		} break;
 
 		case ASTK_WhileStmt:
 		{
-			auto * pStmt = Down(pNode, WhileStmt);
-			doResolvePass(pPass, pStmt->pCondExpr);
-
-			bool isBodyBlock = pStmt->pBodyStmt->astk == ASTK_BlockStmt;
-			if (isBodyBlock) pPass->cNestedBreakable++;
-
-			doResolvePass(pPass, pStmt->pBodyStmt);
-
-			if (isBodyBlock) pPass->cNestedBreakable--;
+			pPass->cNestedBreakable--;
 		} break;
 
 		case ASTK_IfStmt:
-		{
-			auto * pStmt = Down(pNode, IfStmt);
-			doResolvePass(pPass, pStmt->pCondExpr);
-			doResolvePass(pPass, pStmt->pThenStmt);
-			if (pStmt->pElseStmt) doResolvePass(pPass, pStmt->pElseStmt);
-		} break;
+			break;
 
 		case ASTK_ReturnStmt:
 		{
@@ -1113,7 +1037,10 @@ void resolveStmt(ResolvePass * pPass, AstNode * pNode)
 
 			if (pStmt->pExpr)
 			{
-				TYPID typidReturn = resolveExpr(pPass, pStmt->pExpr);
+				Assert(pPass->aTypidChild.cItem == 1);
+				TYPID typidReturn = pPass->aTypidChild[0];
+
+				removeAll(&pPass->aTypidChild);
 
 				// TODO: Handle multiple return values
 
@@ -1155,14 +1082,93 @@ void resolveStmt(ResolvePass * pPass, AstNode * pNode)
 	}
 }
 
-void doResolvePass(ResolvePass * pPass, AstNode * pNode)
+void doResolvePass(ResolvePassCtx * pPass, AstNode * pNode)
 {
-	AssertInfo(
-		pNode,
-		"For optional node children, it is the caller's responsibility to perform null check, because I want to catch "
-		"errors if we ever accidentally have null children in spots where they shouldn't be null"
-	);
+	walkAst(pNode, &visitResolvePreorder, visitResolveHook, visitResolvePostorder, pPass);
+}
 
+void visitResolvePreorder(AstNode * pNode, void * pContext)
+{
+	Assert(pNode);
+
+	if (isErrorNode(*pNode))
+		return;
+
+	ResolvePassCtx * pPass = reinterpret_cast<ResolvePassCtx *>(pContext);
+	switch (pNode->astk)
+	{
+		case ASTK_UnopExpr:
+		case ASTK_BinopExpr:
+		case ASTK_LiteralExpr:
+		case ASTK_GroupExpr:
+		case ASTK_SymbolExpr:
+		case ASTK_PointerDereferenceExpr:
+		case ASTK_ArrayAccessExpr:
+		case ASTK_FuncCallExpr:
+			break;
+
+		case ASTK_FuncLiteralExpr:
+		{
+			/*pop(&pPass->scopeidStack);
+			ResolvePassCtx::FnCtx fnCtx = pop(&pPass->fnCtxStack);
+			dispose(&fnCtx.aTypidReturn);*/
+
+			auto * pExpr = Down(pNode, FuncLiteralExpr);
+			pushAndAuditScopeid(pPass, pExpr->scopeid);
+		} break;
+
+		case ASTK_ExprStmt:
+		case ASTK_AssignStmt:
+		case ASTK_VarDeclStmt:
+			break;
+
+		case ASTK_FuncDefnStmt:
+		{
+			auto * pStmt = Down(pNode, FuncDefnStmt);
+			pushAndAuditScopeid(pPass, pStmt->scopeid);
+		} break;
+
+		case ASTK_StructDefnStmt:
+		{
+			auto * pStmt = Down(pNode, StructDefnStmt);
+			pushAndAuditScopeid(pPass, pStmt->scopeid);
+		} break;
+
+		case ASTK_IfStmt:
+			break;
+
+		case ASTK_WhileStmt:
+		{
+			pPass->cNestedBreakable++;
+		} break;
+
+		case ASTK_BlockStmt:
+		{
+			auto * pStmt = Down(pNode, BlockStmt);
+			if (!pStmt->inheritsParentScopeid)
+			{
+				pushAndAuditScopeid(pPass, pStmt->scopeid);
+			}
+		} break;
+
+		case ASTK_ReturnStmt:
+		case ASTK_BreakStmt:
+		case ASTK_ContinueStmt:
+		case ASTK_ParamsReturnsGrp:
+		case ASTK_Program:
+			break;
+
+		default:
+			AssertNotReached;
+			break;
+	}
+}
+
+void visitResolvePostorder(AstNode * pNode, void * pContext)
+{
+	Assert(pNode);
+
+	ResolvePassCtx * pPass = reinterpret_cast<ResolvePassCtx *>(pContext);
 	switch (category(pNode->astk))
 	{
 		case ASTCATK_Expr:
@@ -1178,17 +1184,37 @@ void doResolvePass(ResolvePass * pPass, AstNode * pNode)
 		// PROGRAM
 
 		case ASTCATK_Program:
-		{
-			auto * pProgram = Down(pNode, Program);
-			for (int i = 0; i < pProgram->apNodes.cItem; i++)
-			{
-				doResolvePass(pPass, pProgram->apNodes[i]);
-			}
-		} break;
+			break;
+
+		case ASTCATK_Grp:
+			break;
 
 		default:
 		{
 			reportIceAndExit("Unknown astcatk in doResolvePass: %d", category(pNode->astk));
 		} break;
 	}
+}
+
+void visitResolveHook(AstNode * pNode, AWHK awhk, void * pContext)
+{
+	if (awhk != AWHK_PostFormalReturnVardecls)
+		return;
+
+	ResolvePassCtx * pPass = reinterpret_cast<ResolvePassCtx *>(pContext);
+	AstParamsReturnsGrp * pGrp = nullptr;
+	if (pNode->astk == ASTK_FuncLiteralExpr)
+	{
+		pGrp = Down(pNode, FuncLiteralExpr)->pParamsReturnsGrp;
+	}
+	else
+	{
+		Assert(pNode->astk == ASTK_FuncDefnStmt);
+		pGrp = Down(pNode, FuncDefnStmt)->pParamsReturnsGrp;
+	}
+
+	// Push ctx
+
+	auto * pFnCtx = pushNew(&pPass->fnCtxStack);
+	initExtract(&pFnCtx->aTypidReturn, pGrp->apReturnVarDecls, offsetof(AstVarDeclStmt, typidDefn));
 }

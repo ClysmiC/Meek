@@ -1,23 +1,23 @@
 #pragma once
 
 #include "als.h"
+#include "ast.h"
 #include "symbol.h"
 
-struct AstNode;
 struct Parser;
 struct TypeTable;
 
-struct ResolvePass
+struct ResolvePassCtx
 {
-	VARSEQID varseqidSeen = VARSEQID_Nil;
+	// TODO: make these globals
 
-	SCOPEID scopeidCur = SCOPEID_Global;
 	TypeTable * pTypeTable;
 	DynamicArray<Scope *> * pMpScopeidPScope;
 
-	DynamicArray<ScopedIdentifier> unresolvedIdents;
+	// Bookkeeping
 
-	// FnCtx for making sure return values match expected types
+	VARSEQID varseqidSeen;
+	int cNestedBreakable = 0;		// TODO: Support labeled break?
 
 	struct FnCtx
 	{
@@ -25,23 +25,24 @@ struct ResolvePass
 	};
 
 	Stack<FnCtx> fnCtxStack;
+	Stack<SCOPEID> scopeidStack;
+	DynamicArray<TYPID> aTypidChild;
 
-	int cNestedBreakable = 0;		// TODO: Support labeled break?
+	// Output
 
+	DynamicArray<ScopedIdentifier> unresolvedIdents;
 	bool hadError = false;
 };
 
-void init(ResolvePass * pPass, Parser * pParser);
+void init(ResolvePassCtx * pPass, Parser * pParser);
+void pushAndAuditScopeid(ResolvePassCtx * pPass, SCOPEID scopeid);
 
+// Tree walk
 
-//inline void dispose(ResolvePass * pResolvePass)
-//{
-//	dispose(&pResolvePass->scopeStack);
-//	dispose(&pResolvePass->unresolvedIdents);
-//}
+void visitResolvePreorder(AstNode * pNode, void * pContext);
+void visitResolvePostorder(AstNode * pNode, void * pContext);
+void visitResolveHook(AstNode * pNode, AWHK awhk, void * pContext);
 
-void auditDuplicateSymbols(ResolvePass * pPass);
-
-TYPID resolveExpr(ResolvePass * pPass, AstNode * pNode);
-void resolveStmt(ResolvePass * pPass, AstNode * pNode);
-void doResolvePass(ResolvePass * pPass, AstNode * pNode);
+void resolveExpr(ResolvePassCtx * pPass, AstNode * pNode);
+void resolveStmt(ResolvePassCtx * pPass, AstNode * pNode);
+void doResolvePass(ResolvePassCtx * pPass, AstNode * pNode);
