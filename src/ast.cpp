@@ -1,8 +1,10 @@
 #include "ast.h"
 
+#include "ast_decorate.h"
 #include "error.h"
 
 void walkAst(
+	MeekCtx * pCtx,
 	AstNode * pNodeSubtreeRoot,
 	AstWalkVisitFn visitPreorderFn,
 	AstWalkHookFn hookFn,
@@ -13,6 +15,16 @@ void walkAst(
 	Assert(visitPreorderFn);
 	Assert(visitPostorderFn);
 
+#if DEBUG
+	{
+		int iLine = getStartLine(*pCtx, pNodeSubtreeRoot->astid);
+		if (iLine == 20)
+		{
+			bool brk = true;
+		}
+	}
+#endif
+
 	visitPreorderFn(pNodeSubtreeRoot, pContext);
 
 	if (category(pNodeSubtreeRoot->astk) == ASTCATK_Error)
@@ -20,7 +32,7 @@ void walkAst(
 		AstErr * pErr = DownErr(pNodeSubtreeRoot);
 		for (int iChild = 0; iChild < pErr->apChildren.cItem; iChild++)
 		{
-			walkAst(pErr->apChildren[iChild], visitPreorderFn, hookFn, visitPostorderFn, pContext);
+			walkAst(pCtx, pErr->apChildren[iChild], visitPreorderFn, hookFn, visitPostorderFn, pContext);
 		}
 	}
 
@@ -29,14 +41,14 @@ void walkAst(
 		case ASTK_UnopExpr:
 		{
 			auto * pNode = Down(pNodeSubtreeRoot, UnopExpr);
-			walkAst(pNode->pExpr, visitPreorderFn, hookFn, visitPostorderFn, pContext);
+			walkAst(pCtx, pNode->pExpr, visitPreorderFn, hookFn, visitPostorderFn, pContext);
 		} break;
 
 		case ASTK_BinopExpr:
 		{
 			auto * pNode = Down(pNodeSubtreeRoot, BinopExpr);
-			walkAst(pNode->pLhsExpr, visitPreorderFn, hookFn, visitPostorderFn, pContext);
-			walkAst(pNode->pRhsExpr, visitPreorderFn, hookFn, visitPostorderFn, pContext);
+			walkAst(pCtx, pNode->pLhsExpr, visitPreorderFn, hookFn, visitPostorderFn, pContext);
+			walkAst(pCtx, pNode->pRhsExpr, visitPreorderFn, hookFn, visitPostorderFn, pContext);
 		} break;
 
 		case ASTK_LiteralExpr:
@@ -45,7 +57,7 @@ void walkAst(
 		case ASTK_GroupExpr:
 		{
 			auto * pNode = Down(pNodeSubtreeRoot, GroupExpr);
-			walkAst(pNode->pExpr, visitPreorderFn, hookFn, visitPostorderFn, pContext);
+			walkAst(pCtx, pNode->pExpr, visitPreorderFn, hookFn, visitPostorderFn, pContext);
 		} break;
 
 		case ASTK_SymbolExpr:
@@ -53,14 +65,14 @@ void walkAst(
 			auto * pNode = Down(pNodeSubtreeRoot, SymbolExpr);
 			if (pNode->symbexprk == SYMBEXPRK_MemberVar)
 			{
-				walkAst(pNode->memberData.pOwner, visitPreorderFn, hookFn, visitPostorderFn, pContext);
+				walkAst(pCtx, pNode->memberData.pOwner, visitPreorderFn, hookFn, visitPostorderFn, pContext);
 			}
 		} break;
 
 		case ASTK_PointerDereferenceExpr:
 		{
 			auto * pNode = Down(pNodeSubtreeRoot, PointerDereferenceExpr);
-			walkAst(pNode->pPointerExpr, visitPreorderFn, hookFn, visitPostorderFn, pContext);
+			walkAst(pCtx, pNode->pPointerExpr, visitPreorderFn, hookFn, visitPostorderFn, pContext);
 		} break;
 
 		case ASTK_ArrayAccessExpr:
@@ -68,8 +80,8 @@ void walkAst(
 			// NOTE (andrew) in foo[bar], this evaluates foo, then bar
 
 			auto * pNode = Down(pNodeSubtreeRoot, ArrayAccessExpr);
-			walkAst(pNode->pArrayExpr, visitPreorderFn, hookFn, visitPostorderFn, pContext);
-			walkAst(pNode->pSubscriptExpr, visitPreorderFn, hookFn, visitPostorderFn, pContext);
+			walkAst(pCtx, pNode->pArrayExpr, visitPreorderFn, hookFn, visitPostorderFn, pContext);
+			walkAst(pCtx, pNode->pSubscriptExpr, visitPreorderFn, hookFn, visitPostorderFn, pContext);
 		} break;
 
 		case ASTK_FuncCallExpr:
@@ -77,26 +89,26 @@ void walkAst(
 			// NOTE (andrew) in foo(bar, baz), this evaluates foo, then bar, then baz.
 
 			auto * pNode = Down(pNodeSubtreeRoot, FuncCallExpr);
-			walkAst(pNode->pFunc, visitPreorderFn, hookFn, visitPostorderFn, pContext);
+			walkAst(pCtx, pNode->pFunc, visitPreorderFn, hookFn, visitPostorderFn, pContext);
 
 			for (int iArg = 0; iArg < pNode->apArgs.cItem; iArg++)
 			{
-				walkAst(pNode->apArgs[iArg], visitPreorderFn, hookFn, visitPostorderFn, pContext);
+				walkAst(pCtx, pNode->apArgs[iArg], visitPreorderFn, hookFn, visitPostorderFn, pContext);
 			}
 		} break;
 
 		case ASTK_FuncLiteralExpr:
 		{
 			auto * pNode = Down(pNodeSubtreeRoot, FuncLiteralExpr);
-			walkAst(Up(pNode->pParamsReturnsGrp), visitPreorderFn, hookFn, visitPostorderFn, pContext);
+			walkAst(pCtx, Up(pNode->pParamsReturnsGrp), visitPreorderFn, hookFn, visitPostorderFn, pContext);
 			hookFn(Up(pNode), AWHK_PostFormalReturnVardecls, pContext);
-			walkAst(pNode->pBodyStmt, visitPreorderFn, hookFn, visitPostorderFn, pContext);
+			walkAst(pCtx, pNode->pBodyStmt, visitPreorderFn, hookFn, visitPostorderFn, pContext);
 		} break;
 
 		case ASTK_ExprStmt:
 		{
 			auto * pNode = Down(pNodeSubtreeRoot, ExprStmt);
-			walkAst(pNode->pExpr, visitPreorderFn, hookFn, visitPostorderFn, pContext);
+			walkAst(pCtx, pNode->pExpr, visitPreorderFn, hookFn, visitPostorderFn, pContext);
 		} break;
 
 		case ASTK_AssignStmt:
@@ -104,8 +116,8 @@ void walkAst(
 			// NOTE (andrew) in foo = bar, this evaluates bar, then foo.
 
 			auto * pNode = Down(pNodeSubtreeRoot, AssignStmt);
-			walkAst(pNode->pRhsExpr, visitPreorderFn, hookFn, visitPostorderFn, pContext);
-			walkAst(pNode->pLhsExpr, visitPreorderFn, hookFn, visitPostorderFn, pContext);
+			walkAst(pCtx, pNode->pRhsExpr, visitPreorderFn, hookFn, visitPostorderFn, pContext);
+			walkAst(pCtx, pNode->pLhsExpr, visitPreorderFn, hookFn, visitPostorderFn, pContext);
 		} break;
 
 		case ASTK_VarDeclStmt:
@@ -113,16 +125,16 @@ void walkAst(
 			auto * pNode = Down(pNodeSubtreeRoot, VarDeclStmt);
 			if (pNode->pInitExpr)
 			{
-				walkAst(pNode->pInitExpr, visitPreorderFn, hookFn, visitPostorderFn, pContext);
+				walkAst(pCtx, pNode->pInitExpr, visitPreorderFn, hookFn, visitPostorderFn, pContext);
 			}
 		} break;
 
 		case ASTK_FuncDefnStmt:
 		{
 			auto * pNode = Down(pNodeSubtreeRoot, FuncDefnStmt);
-			walkAst(Up(pNode->pParamsReturnsGrp), visitPreorderFn, hookFn, visitPostorderFn, pContext);
+			walkAst(pCtx, Up(pNode->pParamsReturnsGrp), visitPreorderFn, hookFn, visitPostorderFn, pContext);
 			hookFn(Up(pNode), AWHK_PostFormalReturnVardecls, pContext);
-			walkAst(pNode->pBodyStmt, visitPreorderFn, hookFn, visitPostorderFn, pContext);
+			walkAst(pCtx, pNode->pBodyStmt, visitPreorderFn, hookFn, visitPostorderFn, pContext);
 		} break;
 
 		case ASTK_StructDefnStmt:
@@ -130,19 +142,19 @@ void walkAst(
 			auto * pNode = Down(pNodeSubtreeRoot, StructDefnStmt);
 			for (int iVarDecl = 0; iVarDecl < pNode->apVarDeclStmt.cItem; iVarDecl++)
 			{
-				walkAst(pNode->apVarDeclStmt[iVarDecl], visitPreorderFn, hookFn, visitPostorderFn, pContext);
+				walkAst(pCtx, pNode->apVarDeclStmt[iVarDecl], visitPreorderFn, hookFn, visitPostorderFn, pContext);
 			}
 		} break;
 
 		case ASTK_IfStmt:
 		{
 			auto * pNode = Down(pNodeSubtreeRoot, IfStmt);
-			walkAst(pNode->pCondExpr, visitPreorderFn, hookFn, visitPostorderFn, pContext);
-			walkAst(pNode->pThenStmt, visitPreorderFn, hookFn, visitPostorderFn, pContext);
+			walkAst(pCtx, pNode->pCondExpr, visitPreorderFn, hookFn, visitPostorderFn, pContext);
+			walkAst(pCtx, pNode->pThenStmt, visitPreorderFn, hookFn, visitPostorderFn, pContext);
 
 			if (pNode->pElseStmt)
 			{
-				walkAst(pNode->pElseStmt, visitPreorderFn, hookFn, visitPostorderFn, pContext);
+				walkAst(pCtx, pNode->pElseStmt, visitPreorderFn, hookFn, visitPostorderFn, pContext);
 			}
 		} break;
 
@@ -156,7 +168,7 @@ void walkAst(
 			auto * pNode = Down(pNodeSubtreeRoot, BlockStmt);
 			for (int iStmt = 0; iStmt < pNode->apStmts.cItem; iStmt++)
 			{
-				walkAst(pNode->apStmts[iStmt], visitPreorderFn, hookFn, visitPostorderFn, pContext);
+				walkAst(pCtx, pNode->apStmts[iStmt], visitPreorderFn, hookFn, visitPostorderFn, pContext);
 			}
 		} break;
 
@@ -165,7 +177,7 @@ void walkAst(
 			auto * pNode = Down(pNodeSubtreeRoot, ReturnStmt);
 			if (pNode->pExpr)
 			{
-				walkAst(pNode->pExpr, visitPreorderFn, hookFn, visitPostorderFn, pContext);
+				walkAst(pCtx, pNode->pExpr, visitPreorderFn, hookFn, visitPostorderFn, pContext);
 			}
 		} break;
 
@@ -180,12 +192,12 @@ void walkAst(
 			auto * pNode = Down(pNodeSubtreeRoot, ParamsReturnsGrp);
 			for (int iParam = 0; iParam < pNode->apParamVarDecls.cItem; iParam++)
 			{
-				walkAst(pNode->apParamVarDecls[iParam], visitPreorderFn, hookFn, visitPostorderFn, pContext);
+				walkAst(pCtx, pNode->apParamVarDecls[iParam], visitPreorderFn, hookFn, visitPostorderFn, pContext);
 			}
 
 			for (int iParam = 0; iParam < pNode->apReturnVarDecls.cItem; iParam++)
 			{
-				walkAst(pNode->apReturnVarDecls[iParam], visitPreorderFn, hookFn, visitPostorderFn, pContext);
+				walkAst(pCtx, pNode->apReturnVarDecls[iParam], visitPreorderFn, hookFn, visitPostorderFn, pContext);
 			}
 		} break;
 
@@ -194,7 +206,7 @@ void walkAst(
 			auto * pNode = Down(pNodeSubtreeRoot, Program);
 			for (int iNode = 0; iNode < pNode->apNodes.cItem; iNode++)
 			{
-				walkAst(pNode->apNodes[iNode], visitPreorderFn, hookFn, visitPostorderFn, pContext);
+				walkAst(pCtx, pNode->apNodes[iNode], visitPreorderFn, hookFn, visitPostorderFn, pContext);
 			}
 		} break;
 	}

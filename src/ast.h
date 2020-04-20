@@ -525,6 +525,7 @@ typedef void (* AstWalkVisitFn)(AstNode *, void *);
 typedef void (* AstWalkHookFn)(AstNode *, AWHK awhk, void *);
 
 void walkAst(
+	MeekCtx * pCtx,
 	AstNode * pNodeSubtreeRoot,
 	AstWalkVisitFn visitPreorderFn,
 	AstWalkHookFn hookFn,

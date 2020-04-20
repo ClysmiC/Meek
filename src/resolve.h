@@ -23,7 +23,6 @@ struct ResolvePass
 
 	Stack<FnCtx> fnCtxStack;
 	Stack<SCOPEID> scopeidStack;
-	DynamicArray<TYPID> aTypidChild;
 
 	// Output
 

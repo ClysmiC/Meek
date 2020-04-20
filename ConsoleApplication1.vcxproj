@@ -51,6 +51,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\ast.cpp" />
+    <ClCompile Include="src\ast_decorate.cpp" />
     <ClCompile Include="src\ast_print.cpp" />
     <ClCompile Include="src\bytecode.cpp" />
     <ClCompile Include="src\error.cpp" />

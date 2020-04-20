@@ -55,10 +55,10 @@ int main()
 	MeekCtx ctx;
 	init(&ctx, buffer, bytesRead);
 
-	AstNode * pAstRoot = nullptr;
+	AstNode * pNodeRoot = nullptr;
 	{
 		bool success;
-		pAstRoot = parseProgram(ctx.pParser, &success);
+		pNodeRoot = parseProgram(ctx.pParser, &success);
 
 		if (!success)
 		{
@@ -68,6 +68,8 @@ int main()
 			return 1;
 		}
 	}
+
+	ctx.pNodeRoot = pNodeRoot;
 
 	if (!tryResolveAllTypes(ctx.pTypeTable))
 	{
@@ -86,7 +88,7 @@ int main()
 
 	ResolvePass resolvePass;
 	init(&resolvePass, &ctx);
-	doResolvePass(&resolvePass, pAstRoot);
+	doResolvePass(&resolvePass, pNodeRoot);
 
 	print("Resolve pass all done\n");
 

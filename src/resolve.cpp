@@ -17,7 +17,6 @@ void init(ResolvePass * pPass, MeekCtx * pCtx)
 	pPass->varseqidSeen = VARSEQID_Zero;
 	init(&pPass->unresolvedIdents);
 	init(&pPass->fnCtxStack);
-	init(&pPass->aTypidChild);
 	init(&pPass->scopeidStack);
 
 	push(&pPass->scopeidStack, SCOPEID_BuiltIn);
@@ -54,11 +53,8 @@ void resolveExpr(ResolvePass * pPass, AstNode * pNode)
 
 			auto * pExpr = Down(pNode, BinopExpr);
 
-			Assert(pPass->aTypidChild.cItem == 2);
-			TYPID typidLhs = pPass->aTypidChild[0];
-			TYPID typidRhs = pPass->aTypidChild[1];
-
-			removeAll(&pPass->aTypidChild);
+			TYPID typidLhs = DownExpr(pExpr->pLhsExpr)->typidEval;
+			TYPID typidRhs = DownExpr(pExpr->pRhsExpr)->typidEval;
 
 			if (!isTypeResolved(typidLhs) || !isTypeResolved(typidRhs))
 			{
@@ -81,11 +77,7 @@ void resolveExpr(ResolvePass * pPass, AstNode * pNode)
 		case ASTK_GroupExpr:
 		{
 			auto * pExpr = Down(pNode, GroupExpr);
-
-			Assert(pPass->aTypidChild.cItem == 1);
-			typidResult = pPass->aTypidChild[0];
-
-			removeAll(&pPass->aTypidChild);
+			typidResult = DownExpr(pExpr->pExpr)->typidEval;
 
 			SetBubbleIfUnresolved(typidResult);
 		} break;
@@ -94,8 +86,6 @@ void resolveExpr(ResolvePass * pPass, AstNode * pNode)
 		{
 			auto * pExpr = Down(pNode, LiteralExpr);
 
-			Assert(pPass->aTypidChild.cItem == 0);
-
 			typidResult = typidFromLiteralk(pExpr->literalk);
 			SetBubbleIfUnresolved(typidResult);
 		} break;
@@ -103,11 +93,7 @@ void resolveExpr(ResolvePass * pPass, AstNode * pNode)
 		case ASTK_UnopExpr:
 		{
 			auto * pExpr = Down(pNode, UnopExpr);
-
-			Assert(pPass->aTypidChild.cItem == 1);
-			TYPID typidExpr = pPass->aTypidChild[0];
-
-			removeAll(&pPass->aTypidChild);
+			TYPID typidExpr = DownExpr(pExpr->pExpr)->typidEval;
 
 			if (!isTypeResolved(typidExpr))
 			{
@@ -243,10 +229,7 @@ void resolveExpr(ResolvePass * pPass, AstNode * pNode)
 					Assert(pExpr->memberData.pOwner);
 					AssertInfo(!pExpr->memberData.pDeclCached, "This shouldn't be resolved yet because this is the code that should resolve it!");
 
-					Assert(pPass->aTypidChild.cItem == 1);
-					TYPID ownerTypid = pPass->aTypidChild[0];
-
-					removeAll(&pPass->aTypidChild);
+					TYPID ownerTypid = DownExpr(pExpr->memberData.pOwner)->typidEval;
 
 					if (!isTypeResolved(ownerTypid))
 					{
@@ -374,11 +357,7 @@ void resolveExpr(ResolvePass * pPass, AstNode * pNode)
 		case ASTK_PointerDereferenceExpr:
 		{
 			auto * pExpr = Down(pNode, PointerDereferenceExpr);
-
-			Assert(pPass->aTypidChild.cItem == 1);
-			TYPID typidPtr = pPass->aTypidChild[0];
-
-			removeAll(&pPass->aTypidChild);
+			TYPID typidPtr = DownExpr(pExpr->pPointerExpr)->typidEval;
 
 			if (!isTypeResolved(typidPtr))
 			{
@@ -409,11 +388,8 @@ void resolveExpr(ResolvePass * pPass, AstNode * pNode)
 		{
 			auto * pExpr = Down(pNode, ArrayAccessExpr);
 
-			Assert(pPass->aTypidChild.cItem == 2);
-			TYPID typidArray = pPass->aTypidChild[0];
-			TYPID typidSubscript = pPass->aTypidChild[1];
-
-			removeAll(&pPass->aTypidChild);
+			TYPID typidArray = DownExpr(pExpr->pArrayExpr)->typidEval;
+			TYPID typidSubscript = DownExpr(pExpr->pSubscriptExpr)->typidEval;
 
 			if (!isTypeResolved(typidArray))
 			{
@@ -461,9 +437,7 @@ void resolveExpr(ResolvePass * pPass, AstNode * pNode)
 
 			// Calling expression 
 
-			Assert(pPass->aTypidChild.cItem == 1 + pExpr->apArgs.cItem);
-
-			TYPID typidCallingExpr = pPass->aTypidChild[0];
+			TYPID typidCallingExpr = DownExpr(pExpr->pFunc)->typidEval;
 			Assert(Implies(typidCallingExpr == TYPID_UnresolvedHasCandidates, pExpr->pFunc->astk == ASTK_SymbolExpr));
 
 			bool callingExprResolvedOrHasCandidates = isTypeResolved(typidCallingExpr) || typidCallingExpr == TYPID_UnresolvedHasCandidates;
@@ -478,7 +452,7 @@ void resolveExpr(ResolvePass * pPass, AstNode * pNode)
 			bool allArgsResolvedOrHasCandidates = true;
 			for (int iArg = 0; iArg < pExpr->apArgs.cItem; iArg++)
 			{
-				TYPID typidArg = pPass->aTypidChild[1 + iArg];
+				TYPID typidArg = DownExpr(pExpr->apArgs[iArg])->typidEval;
 				if (!isTypeResolved(typidArg) && typidArg != TYPID_UnresolvedHasCandidates)
 				{
 					allArgsResolvedOrHasCandidates = false;
@@ -486,8 +460,6 @@ void resolveExpr(ResolvePass * pPass, AstNode * pNode)
 
 				append(&aTypidArg, typidArg);
 			}
-
-			removeAll(&pPass->aTypidChild);
 
 			if (!callingExprResolvedOrHasCandidates || !allArgsResolvedOrHasCandidates)
 			{
@@ -890,7 +862,6 @@ LEndSetTypidAndReturn:
 
 	AstExpr * pExpr = DownExpr(pNode);
 	pExpr->typidEval = typidResult;
-	append(&pPass->aTypidChild, typidResult);
 }
 
 void resolveStmt(ResolvePass * pPass, AstNode * pNode)
@@ -903,9 +874,7 @@ void resolveStmt(ResolvePass * pPass, AstNode * pNode)
 	switch (pNode->astk)
 	{
 		case ASTK_ExprStmt:
-		{
-			removeAll(&pPass->aTypidChild);
-		} break;
+			break;
 
 		case ASTK_AssignStmt:
 		{
@@ -914,11 +883,8 @@ void resolveStmt(ResolvePass * pPass, AstNode * pNode)
 
 			auto * pStmt = Down(pNode, AssignStmt);
 
-			Assert(pPass->aTypidChild.cItem == 2);
-			TYPID typidLhs = pPass->aTypidChild[0];
-			TYPID typidRhs = pPass->aTypidChild[1];
-			
-			removeAll(&pPass->aTypidChild);
+			TYPID typidLhs = DownExpr(pStmt->pLhsExpr)->typidEval;
+			TYPID typidRhs = DownExpr(pStmt->pLhsExpr)->typidEval;
 
 			if (!isLValue(pStmt->pLhsExpr->astk))
 			{
@@ -965,11 +931,7 @@ void resolveStmt(ResolvePass * pPass, AstNode * pNode)
 
 			if (pStmt->pInitExpr)
 			{
-				Assert(pPass->aTypidChild.cItem == 1);
-				TYPID typidInit = pPass->aTypidChild[0];
-
-				removeAll(&pPass->aTypidChild);
-
+				TYPID typidInit = DownExpr(pStmt->pInitExpr)->typidEval;
 				if (isTypeResolved(typidInit) && typidInit != pStmt->typidDefn)
 				{
 					// TODO: report better error
@@ -1045,10 +1007,7 @@ void resolveStmt(ResolvePass * pPass, AstNode * pNode)
 
 			if (pStmt->pExpr)
 			{
-				Assert(pPass->aTypidChild.cItem == 1);
-				TYPID typidReturn = pPass->aTypidChild[0];
-
-				removeAll(&pPass->aTypidChild);
+				TYPID typidReturn = DownExpr(pStmt->pExpr)->typidEval;
 
 				// TODO: Handle multiple return values
 
@@ -1092,7 +1051,7 @@ void resolveStmt(ResolvePass * pPass, AstNode * pNode)
 
 void doResolvePass(ResolvePass * pPass, AstNode * pNode)
 {
-	walkAst(pNode, &visitResolvePreorder, visitResolveHook, visitResolvePostorder, pPass);
+	walkAst(pPass->pCtx, pNode, &visitResolvePreorder, visitResolveHook, visitResolvePostorder, pPass);
 }
 
 void visitResolvePreorder(AstNode * pNode, void * pPass_)

@@ -102,12 +102,7 @@ AstNode * parseProgram(Parser * pParser, bool * poSuccess)
 
 AstNode * parseStmt(Parser * pParser, PARSESTMTK parsestmtk)
 {
-	// HMM: Need different syntax for const and compile time const vardecls. for struct defn's and
-	//	top-level fun defn's they want to be compile time const. But maybe we can aggressively infer
-	//	compile time constness and make it a semantic error if they aren't. So that way the following
-	//	syntaxes would be allowed
-
-	// Basically just need to think a lot about how fun and struct decl's look (or if they are even permitted!) in the following 3 cases
+	// HMM: need to think a lot about how fun and struct decl's look (or if they are even permitted!) in the following 3 cases
 	//	-compile time immutable
 	//	-runtime immutable
 	//	-runtime mutable
