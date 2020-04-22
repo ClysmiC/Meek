@@ -26,12 +26,13 @@ void init(ResolvePass * pPass, MeekCtx * pCtx)
 	pPass->cNestedBreakable = 0;
 }
 
-void pushAndAuditScopeid(ResolvePass * pPass, SCOPEID scopeid)
+void pushAndProcessScope(ResolvePass * pPass, SCOPEID scopeid)
 {
 	MeekCtx * pCtx = pPass->pCtx;
 
 	push(&pPass->scopeidStack, scopeid);
 	auditDuplicateSymbols(pCtx->mpScopeidPScope[scopeid]);
+	computeScopedVariableOffsets(pCtx, pCtx->mpScopeidPScope[scopeid]);
 }
 
 void resolveExpr(ResolvePass * pPass, AstNode * pNode)
@@ -1054,12 +1055,12 @@ void doResolvePass(ResolvePass * pPass, AstNode * pNode)
 	walkAst(pPass->pCtx, pNode, &visitResolvePreorder, visitResolveHook, visitResolvePostorder, pPass);
 }
 
-void visitResolvePreorder(AstNode * pNode, void * pPass_)
+bool visitResolvePreorder(AstNode * pNode, void * pPass_)
 {
 	Assert(pNode);
 
 	if (isErrorNode(*pNode))
-		return;
+		return true;	// Should we continue here? An error might have some well-formed children...
 
 	ResolvePass * pPass = reinterpret_cast<ResolvePass *>(pPass_);
 	switch (pNode->astk)
@@ -1081,7 +1082,7 @@ void visitResolvePreorder(AstNode * pNode, void * pPass_)
 			dispose(&fnCtx.aTypidReturn);*/
 
 			auto * pExpr = Down(pNode, FuncLiteralExpr);
-			pushAndAuditScopeid(pPass, pExpr->scopeid);
+			pushAndProcessScope(pPass, pExpr->scopeid);
 		} break;
 
 		case ASTK_ExprStmt:
@@ -1092,13 +1093,13 @@ void visitResolvePreorder(AstNode * pNode, void * pPass_)
 		case ASTK_FuncDefnStmt:
 		{
 			auto * pStmt = Down(pNode, FuncDefnStmt);
-			pushAndAuditScopeid(pPass, pStmt->scopeid);
+			pushAndProcessScope(pPass, pStmt->scopeid);
 		} break;
 
 		case ASTK_StructDefnStmt:
 		{
 			auto * pStmt = Down(pNode, StructDefnStmt);
-			pushAndAuditScopeid(pPass, pStmt->scopeid);
+			pushAndProcessScope(pPass, pStmt->scopeid);
 		} break;
 
 		case ASTK_IfStmt:
@@ -1114,7 +1115,7 @@ void visitResolvePreorder(AstNode * pNode, void * pPass_)
 			auto * pStmt = Down(pNode, BlockStmt);
 			if (!pStmt->inheritsParentScopeid)
 			{
-				pushAndAuditScopeid(pPass, pStmt->scopeid);
+				pushAndProcessScope(pPass, pStmt->scopeid);
 			}
 		} break;
 
@@ -1129,6 +1130,8 @@ void visitResolvePreorder(AstNode * pNode, void * pPass_)
 			AssertNotReached;
 			break;
 	}
+
+	return true;
 }
 
 void visitResolvePostorder(AstNode * pNode, void * pPass_)

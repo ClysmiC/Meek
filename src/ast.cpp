@@ -6,9 +6,9 @@
 void walkAst(
 	MeekCtx * pCtx,
 	AstNode * pNodeSubtreeRoot,
-	AstWalkVisitFn visitPreorderFn,
+	AstWalkVisitPreFn visitPreorderFn,
 	AstWalkHookFn hookFn,
-	AstWalkVisitFn visitPostorderFn,
+	AstWalkVisitPostFn visitPostorderFn,
 	void * pContext)
 {
 	Assert(pNodeSubtreeRoot);
@@ -25,7 +25,9 @@ void walkAst(
 	}
 #endif
 
-	visitPreorderFn(pNodeSubtreeRoot, pContext);
+	bool shouldVisitChildren = visitPreorderFn(pNodeSubtreeRoot, pContext);
+	if (!shouldVisitChildren)
+		return;
 
 	if (category(pNodeSubtreeRoot->astk) == ASTCATK_Error)
 	{

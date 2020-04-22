@@ -189,6 +189,8 @@ void setPendingTypeUpdateOnResolvePtr(TypeTable * pTable, PENDINGTYPID pendingTy
 
 TYPID ensureInTypeTable(TypeTable * pTable, Type * pType, bool debugAssertIfAlreadyInTable=false);
 
+Type::TypeInfo tryComputeTypeInfoAndSetMemberOffsets(const MeekCtx & ctx, SCOPEID scopeid, const DynamicArray<AstNode *> & apVarDeclStmt, bool includeEndPadding=true);
+
 bool tryResolveAllTypes(TypeTable * pTable);
 
 TYPID typidFromLiteralk(LITERALK literalk);

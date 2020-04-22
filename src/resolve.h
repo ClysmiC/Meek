@@ -1,5 +1,7 @@
 #pragma once
 
+// TODO: Rename this file/pass since it does a lot more than resolve names/types now
+
 #include "als.h"
 #include "ast.h"
 #include "symbol.h"
@@ -31,11 +33,11 @@ struct ResolvePass
 };
 
 void init(ResolvePass * pPass, MeekCtx * pCtx);
-void pushAndAuditScopeid(ResolvePass * pPass, SCOPEID scopeid);
+void pushAndProcessScope(ResolvePass * pPass, SCOPEID scopeid);
 
 // Tree walk
 
-void visitResolvePreorder(AstNode * pNode, void * pPass_);
+bool visitResolvePreorder(AstNode * pNode, void * pPass_);
 void visitResolvePostorder(AstNode * pNode, void * pPass_);
 void visitResolveHook(AstNode * pNode, AWHK awhk, void * pPass_);
 

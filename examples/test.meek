@@ -4,6 +4,9 @@ fn newVector() -> ^Vector
 	return v;
 }
 
+Vector global1;
+Vector global2;
+
 fn doOperation(
 	Vector v1,
 	Vector v2,
@@ -13,6 +16,7 @@ fn doOperation(
 	return operation(v1, v2);
 }
 
+int global3;
 
 fn add(Vector v1, Vector v2) -> Vector
 {
@@ -43,6 +47,11 @@ struct //InlineComment Vector
 	fn (^Vector, float) fakeAddMethod;	// This is really just a variable that holds a function type. This use case is idiotic but it is just for testing.
 	u8 b1;
 }
+
+
+int global4;
+int global5;
+int global6;
 
 fn main(int a)
 {
@@ -75,7 +84,7 @@ fn main(int a)
 	newVector()^ = doOperation(v1, v2, add);
 }
 
-
+int global7;
 
 
 
@@ -129,7 +138,7 @@ fn main2()
 }
 
 
-
+int global8;
 
 
 

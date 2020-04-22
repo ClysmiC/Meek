@@ -33,7 +33,7 @@ struct Parser
 	SCOPEID scopeidNext = SCOPEID_Nil;
 	Scope * pScopeCurrent = nullptr;
 
-	Scope * pScopeBuiltin = nullptr;
+	Scope * pScopeBuiltin = nullptr;	// Parser probably shouldn't own these...
 	Scope * pScopeGlobal = nullptr;
 
 	// Vars

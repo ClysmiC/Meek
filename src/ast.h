@@ -521,18 +521,21 @@ enum AWHK
 	AWHK_PostFormalReturnVardecls,
 };
 
-typedef void (* AstWalkVisitFn)(AstNode *, void *);
+typedef bool (* AstWalkVisitPreFn)(AstNode *, void *);
+typedef void (*AstWalkVisitPostFn)(AstNode *, void *);
 typedef void (* AstWalkHookFn)(AstNode *, AWHK awhk, void *);
+
+inline bool visitPreNoOp(AstNode * pNode, void * pCtx) { return true; }
+inline void visitPostNoOp(AstNode * pNode, void * pCtx) { }
+inline void visitHookNoOp(AstNode * pNode, AWHK awhk, void * pCtx) { }
 
 void walkAst(
 	MeekCtx * pCtx,
 	AstNode * pNodeSubtreeRoot,
-	AstWalkVisitFn visitPreorderFn,
+	AstWalkVisitPreFn visitPreorderFn,
 	AstWalkHookFn hookFn,
-	AstWalkVisitFn visitPostorderFn,
+	AstWalkVisitPostFn visitPostorderFn,
 	void * pContext);
-
-
 
 // TODO: other "value" functions
 // TODO: move to literal.h / literal.cpp ?

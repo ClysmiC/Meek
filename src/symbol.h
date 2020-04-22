@@ -10,6 +10,7 @@ struct AstVarDeclStmt;
 struct AstFuncDefnStmt;
 struct AstStructDefnStmt;
 struct Lexeme;
+struct MeekCtx;
 struct Token;
 struct Type;
 
@@ -32,22 +33,23 @@ struct SymbolInfo
 	{
 		struct UVarData
 		{
-			AstVarDeclStmt * pVarDeclStmt;		    // SYMBOLK_Var
+			AstVarDeclStmt * pVarDeclStmt;
+			u32 byteOffset;
 		} varData;
 
 		struct UFuncData
 		{
-			AstFuncDefnStmt * pFuncDefnStmt;		// SYMBOLK_Func
+			AstFuncDefnStmt * pFuncDefnStmt;
 		} funcData;
 
 		struct UStructData
 		{
-			AstStructDefnStmt * pStructDefnStmt;	// SYMBOLK_Struct
+			AstStructDefnStmt * pStructDefnStmt;
 		} structData;
 
 		struct UBuiltInData
 		{
-			TYPID typid;                            // SYMBOLK_BuiltInType
+			TYPID typid;
 		} builtInData;
 	};
 };
@@ -67,6 +69,8 @@ struct Scope
 	NULLABLE Scope * pScopeParent = nullptr;
 	SCOPEID id = SCOPEID_Nil;
 	SCOPEK scopek = SCOPEK_Nil;
+
+	u32 cByteVariables = 0;
 
 	HashMap<Lexeme, DynamicArray<SymbolInfo>> symbolsDefined;
 };
@@ -98,6 +102,7 @@ void init(Scope * pScope, SCOPEID scopeid, SCOPEK scopek, Scope * pScopeParent);
 void defineSymbol(Scope * pScope, const Lexeme & lexeme, const SymbolInfo & symbInfo);
 
 bool auditDuplicateSymbols(Scope * pScope);
+void computeScopedVariableOffsets(MeekCtx * pCtx, Scope * pScope);
 
 SCOPEID scopeidFromSymbolInfo(const SymbolInfo & symbInfo);
 SymbolInfo lookupVarSymbol(const Scope & scope, const Lexeme & lexeme, GRFSYMBQ grfsymbq = GRFSYMBQ_None);
@@ -105,6 +110,9 @@ SymbolInfo lookupTypeSymbol(const Scope & scope, const Lexeme & lexeme, GRFSYMBQ
 void lookupFuncSymbol(const Scope & scope, const Lexeme & lexeme, DynamicArray<SymbolInfo> * poResult, GRFSYMBQ grfsymbq = GRFSYMBQ_None);
 
 void lookupSymbol(const Scope & scope, const Lexeme & lexeme, DynamicArray<SymbolInfo> * poResult, GRFSYMBQ grfsymbq=GRFSYMBQ_None);
+void lookupAllVars(const Scope & scope, DynamicArray<SymbolInfo> * poResult, GRFSYMBQ grfsymbq = GRFSYMBQ_None);
+
+void updateVarSymbolOffset(const Scope & scope, const Lexeme & lexeme, u32 cByteOffset);
 
 bool isDeclarationOrderIndependent(SYMBOLK symbolk);
 bool isDeclarationOrderIndependent(const SymbolInfo & info);

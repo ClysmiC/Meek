@@ -14,14 +14,14 @@ struct TypeTable;
 
 struct MeekCtx
 {
-	Scanner * pScanner;
-	Parser * pParser;
-	TypeTable * pTypeTable;
+	Scanner * pScanner = nullptr;
+	Parser * pParser = nullptr;
+	TypeTable * pTypeTable = nullptr;
 
 	DynamicArray<Scope *> mpScopeidPScope;
 
-	AstNode * pNodeRoot;
-	AstDecorations * pAstDecs;
+	AstNode * pNodeRoot = nullptr;
+	AstDecorations * pAstDecs = nullptr;
 };
 
 void init(MeekCtx * pMeekCtx, char * pText, uint textSize);

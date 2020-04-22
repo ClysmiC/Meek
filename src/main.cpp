@@ -8,6 +8,7 @@
 #include "print.h"
 #include "resolve.h"
 #include "scan.h"
+#include "symbol.h"
 
 #include <stdio.h>
 
@@ -76,6 +77,8 @@ int main()
 		print("Unable to resolve some types\n");
 		return 1;
 	}
+
+	computeScopedVariableOffsets(&ctx, ctx.pParser->pScopeGlobal);
 
 	// TODO (andrew) Probably just eagerly insert func names into the symbol table like we do for others, and generate types pending resolution
 	//	that will poke in the typid's of the args. Then, this function could be a simple audit to make sure that there are no redefined funcs.

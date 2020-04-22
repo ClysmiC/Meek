@@ -2,6 +2,7 @@
 
 #include "ast.h"
 #include "error.h"
+#include "global_context.h"
 #include "literal.h"
 #include "print.h"
 #include "token.h"
@@ -93,41 +94,6 @@ void defineSymbol(Scope * pScope, const Lexeme & lexeme, const SymbolInfo & symb
 	append(paSymbInfo, symbInfo);
 }
 
-//void finalizeTypes(Scope * pScope)
-//{
-//	// @Slow - could be combined with auditDuplicateSymbols to avoid doing an extra pass
-//
-//	for (auto it = iter(pScope->symbolsDefined); it.pValue; iterNext(&it))
-//	{
-//		Lexeme lexeme = *it.pKey;
-//		DynamicArray<SymbolInfo> * paSymbInfo = it.pValue;
-//
-//		for (int iSymbInfo = 0; iSymbInfo < paSymbInfo->cItem; iSymbInfo++)
-//		{
-//			SymbolInfo symbInfo = (*paSymbInfo)[iSymbInfo];
-//			if (symbInfo.symbolk != SYMBOLK_Var && symbInfo.symbolk != SYMBOLK_Func)
-//				continue;
-//
-//			if (symbInfo.symbolk == SYMBOLK_Var)
-//			{
-//				AstVarDeclStmt * pDeclStmt = symbInfo.varData.pVarDeclStmt;
-//				Assert(pDeclStmt->typid == TYPID_Unresolved);
-//
-//				// TODO: finish
-//			}
-//			else
-//			{
-//				Assert(symbInfo.symbolk == SYMBOLK_Func);
-//
-//				AstFuncDefnStmt * pDefnStmt = symbInfo.funcData.pFuncDefnStmt;
-//				Assert(pDefnStmt->typid == TYPID_Unresolved);
-//
-//				// TODO: finish
-//			}
-//		}
-//	}
-//}
-
 bool auditDuplicateSymbols(Scope * pScope)
 {
 	bool duplicateFound = false;
@@ -213,6 +179,34 @@ bool auditDuplicateSymbols(Scope * pScope)
 	return !duplicateFound;
 }
 
+void computeScopedVariableOffsets(MeekCtx * pCtx, Scope * pScope)
+{
+	// Gather vardecls
+
+	DynamicArray<SymbolInfo> aSymbInfo;
+	init(&aSymbInfo);
+	Defer(dispose(&aSymbInfo));
+
+	lookupAllVars(*pScope, &aSymbInfo, FSYMBQ_IgnoreParent);
+
+	// For now, I am treating each local scope as if it is a single struct and re-using the struct size/offset
+	//	computation code.
+
+	// @Slow
+
+	DynamicArray<AstNode *> apVarDecl;
+	initExtract(&apVarDecl, aSymbInfo, offsetof(SymbolInfo, varData.pVarDeclStmt));
+	Defer(dispose(&apVarDecl));
+
+	bool includeEndPadding = false;
+	Type::TypeInfo fakeTypeInfo = tryComputeTypeInfoAndSetMemberOffsets(*pCtx, pScope->id, apVarDecl, includeEndPadding);
+
+	Assert(fakeTypeInfo.size != Type::TypeInfo::s_unset);
+	Assert(fakeTypeInfo.alignment != Type::TypeInfo::s_unset);
+
+	pScope->cByteVariables = fakeTypeInfo.size;
+}
+
 SCOPEID scopeidFromSymbolInfo(const SymbolInfo & symbInfo)
 {
 	switch (symbInfo.symbolk)
@@ -240,6 +234,7 @@ SCOPEID scopeidFromSymbolInfo(const SymbolInfo & symbInfo)
 		default:
 		{
 			AssertNotReached;
+			return SCOPEID_Nil;
 		}
 	}
 }
@@ -353,6 +348,45 @@ void lookupSymbol(const Scope & scope, const Lexeme & lexeme, DynamicArray<Symbo
 
 		pScope = (grfsymbq & FSYMBQ_IgnoreParent) ? nullptr : pScope->pScopeParent;
 	}
+}
+
+void lookupAllVars(const Scope & scope, DynamicArray<SymbolInfo> * poResult, GRFSYMBQ grfsymbq)
+{
+	for (auto it = iter(scope.symbolsDefined); it.pKey; iterNext(&it))
+	{
+		for (int iSymb = 0; iSymb < it.pValue->cItem; iSymb++)
+		{
+			SymbolInfo symbInfo = (*it.pValue)[iSymb];
+			if (symbInfo.symbolk != SYMBOLK_Var)
+				continue;
+
+			append(poResult, symbInfo);
+		}
+	}
+
+	if ((grfsymbq & FSYMBQ_IgnoreParent) == 0)
+	{
+		lookupAllVars(*scope.pScopeParent, poResult, grfsymbq);
+	}
+}
+
+void updateVarSymbolOffset(const Scope & scope, const Lexeme & lexeme, u32 cByteOffset)
+{
+	DynamicArray<SymbolInfo> * paSymbInfoMatch = lookup(scope.symbolsDefined, lexeme);
+	Assert(paSymbInfoMatch);
+
+	bool updated = false;
+	for (int iSymbInfoMatch = 0; iSymbInfoMatch < paSymbInfoMatch->cItem; iSymbInfoMatch++)
+	{
+		SymbolInfo * pSymbInfoMatch = &(*paSymbInfoMatch)[iSymbInfoMatch];
+		if (pSymbInfoMatch->symbolk != SYMBOLK_Var)
+			continue;
+
+		pSymbInfoMatch->varData.byteOffset = cByteOffset;
+		updated = true;
+	}
+
+	Assert(updated);
 }
 
 bool isDeclarationOrderIndependent(const SymbolInfo & info)

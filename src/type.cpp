@@ -595,6 +595,78 @@ TYPID ensureInTypeTable(TypeTable * pTable, Type * pType, bool debugAssertIfAlre
 	return typidInsert;
 }
 
+Type::TypeInfo tryComputeTypeInfoAndSetMemberOffsets(const MeekCtx & ctx, SCOPEID scopeid, const DynamicArray<AstNode *> & apVarDeclStmt, bool includeEndPadding)
+{
+	Type::TypeInfo result;
+	result.size = Type::TypeInfo::s_unset;
+	result.alignment = Type::TypeInfo::s_unset;
+
+	bool allMembersCounted = true;
+	u32 sizeWithPadding = 0;
+	u32 alignmentMax = 1;
+
+	for (int iVarDeclStmt = 0; iVarDeclStmt < apVarDeclStmt.cItem; iVarDeclStmt++)
+	{
+		auto * pVarDeclStmt = Down(apVarDeclStmt[iVarDeclStmt], VarDeclStmt);
+		if (!isTypeResolved(pVarDeclStmt->typidDefn))
+		{
+			allMembersCounted = false;
+			break;
+		}
+
+		const Type * pTypeVarDecl = lookupType(*ctx.pTypeTable, pVarDeclStmt->typidDefn);
+		Assert(pTypeVarDecl);
+
+		u32 sizeMember = pTypeVarDecl->info.size;
+		u32 alignmentMember = pTypeVarDecl->info.alignment;
+
+		Assert(Iff(sizeMember == Type::TypeInfo::s_unset, alignmentMember == Type::TypeInfo::s_unset));
+		if (sizeMember == Type::TypeInfo::s_unset)
+		{
+			allMembersCounted = false;
+			break;
+		}
+
+		// Using C-like struct packing.
+		// http://www.catb.org/esr/structure-packing/
+
+		if (iVarDeclStmt > 0)
+		{
+			int bytesPastAlignment = sizeWithPadding % alignmentMember;
+			int padding = (bytesPastAlignment == 0) ? 0 : alignmentMember - bytesPastAlignment;
+			sizeWithPadding += padding;
+		}
+
+		SymbolInfo symbInfoVar = lookupVarSymbol(
+			*ctx.mpScopeidPScope[scopeid],
+			pVarDeclStmt->ident.lexeme,
+			FSYMBQ_IgnoreParent
+		);
+
+		updateVarSymbolOffset(*ctx.mpScopeidPScope[scopeid], pVarDeclStmt->ident.lexeme, sizeWithPadding);
+
+		sizeWithPadding += sizeMember;
+		alignmentMax = Max(alignmentMax, alignmentMember);
+	}
+
+	if (allMembersCounted)
+	{
+		result.alignment = alignmentMax;
+
+		int bytesPastAlignment = sizeWithPadding % result.alignment;
+
+		if (includeEndPadding)
+		{
+			int endPadding = (bytesPastAlignment == 0) ? 0 : result.alignment - bytesPastAlignment;
+			sizeWithPadding += endPadding;
+		}
+
+		result.size = sizeWithPadding;
+	}
+
+	return result;
+}
+
 bool tryResolveAllTypes(TypeTable * pTable)
 {
 	auto tryResolvePendingType = [](TypeTable::TypePendingResolve * pTypePending)
@@ -634,10 +706,12 @@ bool tryResolveAllTypes(TypeTable * pTable)
 		}
 	};
 
-	auto tryResolvePendingTypeInfo = [](const TypeTable & typeTable, const DynamicArray<Scope *> & mpScopeidPScope, TYPID typid)
+	auto tryResolvePendingTypeInfo = [](const TypeTable & typeTable, TYPID typid)
 	{
 		static const int s_targetWordSize = 64;		// TODO: configurable target
 		static const int s_cBytePtr = (s_targetWordSize + 7) / 8;
+
+		MeekCtx * pCtx = typeTable.pCtx;
 
 		const Type * pType = lookupType(typeTable, typid);
 
@@ -681,7 +755,7 @@ bool tryResolveAllTypes(TypeTable * pTable)
 			{
 				SymbolInfo symbInfo =
 					lookupTypeSymbol(
-						*mpScopeidPScope[pType->nonFuncTypeData.ident.scopeid],
+						*pCtx->mpScopeidPScope[pType->nonFuncTypeData.ident.scopeid],
 						pType->nonFuncTypeData.ident.lexeme);
 				
 				Assert(symbInfo.symbolk == SYMBOLK_Struct);
@@ -698,56 +772,7 @@ bool tryResolveAllTypes(TypeTable * pTable)
 				}
 				else
 				{
-					bool allMembersCounted = true;
-					u32 sizeWithPadding = 0;
-					u32 alignmentMax = 1;
-
-					for (int iVarDeclStmt = 0; iVarDeclStmt < pStructDefn->apVarDeclStmt.cItem; iVarDeclStmt++)
-					{
-						auto * pVarDeclStmt = Down(pStructDefn->apVarDeclStmt[iVarDeclStmt], VarDeclStmt);
-						if (!isTypeResolved(pVarDeclStmt->typidDefn))
-						{
-							allMembersCounted = false;
-							break;
-						}
-
-						const Type * pTypeVarDecl = lookupType(typeTable, pVarDeclStmt->typidDefn);
-						Assert(pTypeVarDecl);
-
-						u32 sizeMember = pTypeVarDecl->info.size;
-						u32 alignmentMember = pTypeVarDecl->info.alignment;
-
-						Assert(Iff(sizeMember == Type::TypeInfo::s_unset, alignmentMember == Type::TypeInfo::s_unset));
-						if (sizeMember == Type::TypeInfo::s_unset)
-						{
-							allMembersCounted = false;
-							break;
-						}
-
-						// Using C-like struct packing for now.
-						// http://www.catb.org/esr/structure-packing/
-
-						if (iVarDeclStmt > 0)
-						{
-							int bytesPastAlignment = sizeWithPadding % alignmentMember;
-							int padding = (bytesPastAlignment == 0) ? 0 : alignmentMember - bytesPastAlignment;
-							sizeWithPadding += padding;
-						}
-
-						sizeWithPadding += sizeMember;
-						alignmentMax = Max(alignmentMax, alignmentMember);
-					}
-
-					if (allMembersCounted)
-					{
-						typeInfoResult.alignment = alignmentMax;
-
-						int bytesPastAlignment = sizeWithPadding % typeInfoResult.alignment;
-						int endPadding = (bytesPastAlignment == 0) ? 0 : typeInfoResult.alignment - bytesPastAlignment;
-						sizeWithPadding += endPadding;
-
-						typeInfoResult.size = sizeWithPadding;
-					}
+					typeInfoResult = tryComputeTypeInfoAndSetMemberOffsets(*pCtx, pStructDefn->scopeid, pStructDefn->apVarDeclStmt);
 				}
 			}
 		}
@@ -787,7 +812,7 @@ bool tryResolveAllTypes(TypeTable * pTable)
 				const Type * pType = lookupType(*pTable, typid);
 				if (pType->info.size == Type::TypeInfo::s_unset)
 				{
-					if (tryResolvePendingTypeInfo(*pTable, pCtx->mpScopeidPScope, typid))
+					if (tryResolvePendingTypeInfo(*pTable, typid))
 					{
 						Assert(pType->info.size != Type::TypeInfo::s_unset);
 					}
@@ -831,7 +856,7 @@ bool tryResolveAllTypes(TypeTable * pTable)
 
 				unorderedRemove(&aTypidInfoPending, i);
 			}
-			else if (tryResolvePendingTypeInfo(*pTable, pCtx->mpScopeidPScope, typidInfoPending))
+			else if (tryResolvePendingTypeInfo(*pTable, typidInfoPending))
 			{
 				madeProgress = true;
 				unorderedRemove(&aTypidInfoPending, i);

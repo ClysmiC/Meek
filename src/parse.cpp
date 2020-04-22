@@ -706,6 +706,8 @@ AstNode * parseVarDeclStmt(
 		defineSymbol(pParser->pScopeCurrent, pTokenIdent->lexeme, varDeclInfo);
 	}
 
+	// Set seqid
+
 	pNode->varseqid = pParser->varseqidNext;
 	pParser->varseqidNext = VARSEQID(pParser->varseqidNext + 1);
 
