@@ -64,6 +64,7 @@ struct Type
 	DynamicArray<TypeModifier> aTypemods;
 	bool isFuncType = false;
 	bool isInferred = false;
+	int cTypemodIgnore = 0;		// HMM: Might be better to just make modified type have a single TypeModifier and a pointer to another type...
 
 	// Non-identifying info
 
@@ -86,6 +87,10 @@ bool isUnmodifiedType(const Type & type);
 bool isPointerType(const Type & type);
 
 bool isFuncTypeResolved(const FuncType & funcType);
+
+void pushIgnoreLeadingTypemod(Type * pType);
+void popIgnoreLeadingTypemod(Type * pType);
+int cTypemodActive(Type * pType);
 
 inline bool isTypeResolved(TYPID typid)
 {

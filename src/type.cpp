@@ -13,6 +13,7 @@ void init(Type * pType, bool isFuncType)
 	pType->info.alignment = Type::TypeInfo::s_unset;
 
 	init(&pType->aTypemods);
+	pType->cTypemodIgnore = 0;
 
 	if (pType->isFuncType)
 	{
@@ -43,6 +44,7 @@ void initCopy(Type * pType, const Type & typeSrc)
 	pType->isInferred = typeSrc.isInferred;
 	pType->info = typeSrc.info;
 	initCopy(&pType->aTypemods, typeSrc.aTypemods);
+	pType->cTypemodIgnore = typeSrc.cTypemodIgnore;
 
 	if (pType->isFuncType)
 	{
@@ -93,6 +95,17 @@ bool isFuncTypeResolved(const FuncType & funcType)
 	}
 
 	return true;
+}
+
+void pushIgnoreLeadingTypemod(Type * pType)
+{
+	pType->cTypemodIgnore++;
+}
+
+void popIgnoreLeadingTypemod(Type * pType)
+{
+	pType->cTypemodIgnore--;
+	Assert(pType->cTypemodIgnore >= 0);
 }
 
 NULLABLE const FuncType * funcTypeFromDefnStmt(const TypeTable & typeTable, const AstFuncDefnStmt & defnStmt)
@@ -193,12 +206,14 @@ void setPendingTypeUpdateOnResolvePtr(TypeTable * pTable, PENDINGTYPID pendingTy
 
 bool isUnmodifiedType(const Type & type)
 {
-	return type.aTypemods.cItem == 0;
+	return type.aTypemods.cItem > type.cTypemodIgnore;
 }
 
 bool isPointerType(const Type & type)
 {
-	return type.aTypemods.cItem > 0 && type.aTypemods[0].typemodk == TYPEMODK_Pointer;
+	return
+		type.aTypemods.cItem > type.cTypemodIgnore &&
+		type.aTypemods[type.cTypemodIgnore].typemodk == TYPEMODK_Pointer;
 }
 
 Lexeme getDealiasedTypeLexeme(const Lexeme & lexeme)
@@ -227,14 +242,14 @@ Lexeme getDealiasedTypeLexeme(const Lexeme & lexeme)
 bool typeEq(const Type & t0, const Type & t1)
 {
 	if (t0.isFuncType != t1.isFuncType) return false;
-	if (t0.aTypemods.cItem != t1.aTypemods.cItem) return false;
+	if (t0.aTypemods.cItem - t0.cTypemodIgnore != t1.aTypemods.cItem - t1.cTypemodIgnore) return false;
 
 	// Check typemods are same
 
-	for (int i = 0; i < t0.aTypemods.cItem; i++)
+	for (int i = 0; i < t0.aTypemods.cItem - t0.cTypemodIgnore; i++)
 	{
-		TypeModifier tmod0 = t0.aTypemods[i];
-		TypeModifier tmod1 = t1.aTypemods[i];
+		TypeModifier tmod0 = t0.aTypemods[t0.cTypemodIgnore + i];
+		TypeModifier tmod1 = t1.aTypemods[t1.cTypemodIgnore + i];
 		if (tmod0.typemodk != tmod1.typemodk)
 		{
 			return false;
@@ -248,7 +263,7 @@ bool typeEq(const Type & t0, const Type & t1)
 			AssertInfo(tmod1.pSubscriptExpr->astk == ASTK_LiteralExpr, "Parser should enforce this... for now");
 
 			auto * pIntLit0 = Down(tmod0.pSubscriptExpr, LiteralExpr);
-			auto * pIntLit1 = Down(tmod0.pSubscriptExpr, LiteralExpr);
+			auto * pIntLit1 = Down(tmod1.pSubscriptExpr, LiteralExpr);
 
 			AssertInfo(pIntLit0->literalk == LITERALK_Int, "Parser should enforce this... for now");
 			AssertInfo(pIntLit1->literalk == LITERALK_Int, "Parser should enforce this... for now");
@@ -283,7 +298,7 @@ uint typeHash(const Type & t)
 {
 	auto hash = startHash();
 
-	for (int i = 0; i < t.aTypemods.cItem; i++)
+	for (int i = t.cTypemodIgnore; i < t.aTypemods.cItem; i++)
 	{
 		TypeModifier tmod = t.aTypemods[i];
 		hash = buildHash(&tmod.typemodk, sizeof(tmod.typemodk), hash);
@@ -706,7 +721,7 @@ bool tryResolveAllTypes(TypeTable * pTable)
 		}
 	};
 
-	auto tryResolvePendingTypeInfo = [](const TypeTable & typeTable, TYPID typid)
+	auto tryResolvePendingTypeInfo = [](const TypeTable & typeTable, TYPID typid, int cTypemodIgnore=0)
 	{
 		static const int s_targetWordSize = 64;		// TODO: configurable target
 		static const int s_cBytePtr = (s_targetWordSize + 7) / 8;
@@ -729,7 +744,9 @@ bool tryResolveAllTypes(TypeTable * pTable)
 			{
 				case TYPEMODK_Array:
 				{
+					pushIgnoreLeadingTypemod(pType);
 					AssertTodo;
+					popIgnoreLeadingTypemod(pType);
 				} break;
 
 				case TYPEMODK_Pointer:
@@ -780,7 +797,7 @@ bool tryResolveAllTypes(TypeTable * pTable)
 		Assert(typeInfoResult.alignment <= typeInfoResult.size);
 		Assert(typeInfoResult.size % typeInfoResult.alignment == 0);
 		Assert(Iff(typeInfoResult.size == Type::TypeInfo::s_unset, typeInfoResult.alignment == Type::TypeInfo::s_unset));
-		if (typeInfoResult.size == Type::TypeInfo::s_unset)
+		if (typeInfoResult.size != Type::TypeInfo::s_unset)
 			return false;
 
 		setTypeInfo(typeTable, typid, typeInfoResult);
