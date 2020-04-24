@@ -546,11 +546,14 @@ AstNode * parseStructDefnStmt(Parser * pParser)
 	// Insert into type table
 
 	Type type;
-	init(&type, false /* isFuncType */);
+	init(&type, TYPEK_Named);
 
-	type.nonFuncTypeData.ident.lexeme = pNode->ident.lexeme;
-	type.nonFuncTypeData.ident.scopeid = pNode->ident.scopeid;
-	pNode->typidDefn = ensureInTypeTable(pTypeTable, &type, true /* debugAssertIfAlreadyInTable */ );
+	type.namedTypeData.ident.lexeme = pNode->ident.lexeme;
+	type.namedTypeData.ident.scopeid = pNode->ident.scopeid;
+
+	const bool debugAssertIfAlreadyInTable = true;
+	auto ensureResult = ensureInTypeTable(pTypeTable, &type, debugAssertIfAlreadyInTable);
+	pNode->typidDefn = ensureResult.typid;
 
 	return Up(pNode);
 }
@@ -1539,9 +1542,9 @@ ParseTypeResult tryParseType(Parser * pParser)
 	Scanner * pScanner = pParser->pCtx->pScanner;
 	TypeTable * pTypeTable = pParser->pCtx->pTypeTable;
 
-	DynamicArray<TypeModifier> aTypemods;
-	init(&aTypemods);
-	Defer(dispose(&aTypemods););
+	Stack<TypeModifier> typemods;
+	init(&typemods);
+	Defer(dispose(&typemods));
 
 	ParseTypeResult result;
 
@@ -1576,7 +1579,7 @@ ParseTypeResult tryParseType(Parser * pParser)
 			TypeModifier mod;
 			mod.typemodk = TYPEMODK_Array;
 			mod.pSubscriptExpr = pSubscriptExpr;
-			append(&aTypemods, mod);
+			push(&typemods, mod);
 		}
 		else if (tryConsumeToken(pScanner, TOKENK_Carat))
 		{
@@ -1584,7 +1587,7 @@ ParseTypeResult tryParseType(Parser * pParser)
 
 			TypeModifier mod;
 			mod.typemodk = TYPEMODK_Pointer;
-			append(&aTypemods, mod);
+			push(&typemods, mod);
 		}
 		else
 		{
@@ -1596,72 +1599,85 @@ ParseTypeResult tryParseType(Parser * pParser)
 		}
 	}
 
-	TOKENK tokenkPeek = peekToken(pScanner);
-	if (tokenkPeek == TOKENK_Identifier)
+	PENDINGTYPID pendingTypidUnmodified = PENDINGTYPID_Nil;
 	{
-		// Non-func type
-
-		// Success!
-
-		Token * pTokenIdent = ensureAndClaimPendingToken(pParser);
-		consumeToken(pScanner, pTokenIdent);
-
-		result.ptrk = PTRK_NonFuncType;
-		result.nonErrorData.pendingTypid =
-			registerPendingNonFuncType(
-				pTypeTable,
-				pParser->pScopeCurrent,
-				pTokenIdent->lexeme,
-				aTypemods);
-
-		return result;
-	}
-	else if (tokenkPeek == TOKENK_Fn)
-	{
-		// Func type
-
-		DynamicArray<PENDINGTYPID> aPendingTypidParam;
-		init(&aPendingTypidParam);
-		Defer(dispose(&aPendingTypidParam));
-
-		DynamicArray<PENDINGTYPID> aPendingTypidReturn;
-		init(&aPendingTypidReturn);
-		Defer(dispose(&aPendingTypidReturn));
-
-		ParseFuncHeaderParam param;
-		param.funcheaderk = FUNCHEADERK_Type;
-		param.paramType.paPendingTypidParam = &aPendingTypidParam;
-		param.paramType.paPendingTypidReturn = &aPendingTypidReturn;
-
-		AstErr * pErr = tryParseFuncHeader(pParser, param);
-		if (pErr)
+		TOKENK tokenkPeek = peekToken(pScanner);
+		if (tokenkPeek == TOKENK_Identifier)
 		{
+			// Non-func type
+
+			// Success!
+
+			Token * pTokenIdent = ensureAndClaimPendingToken(pParser);
+			consumeToken(pScanner, pTokenIdent);
+
+			result.ptrk = PTRK_NonFuncType;
+			pendingTypidUnmodified =
+				registerPendingNamedType(
+					pTypeTable,
+					pParser->pScopeCurrent,
+					pTokenIdent->lexeme);
+		}
+		else if (tokenkPeek == TOKENK_Fn)
+		{
+			// Func type
+
+			DynamicArray<PENDINGTYPID> aPendingTypidParam;
+			init(&aPendingTypidParam);
+			Defer(dispose(&aPendingTypidParam));
+
+			DynamicArray<PENDINGTYPID> aPendingTypidReturn;
+			init(&aPendingTypidReturn);
+			Defer(dispose(&aPendingTypidReturn));
+
+			ParseFuncHeaderParam param;
+			param.funcheaderk = FUNCHEADERK_Type;
+			param.paramType.paPendingTypidParam = &aPendingTypidParam;
+			param.paramType.paPendingTypidReturn = &aPendingTypidReturn;
+
+			AstErr * pErr = tryParseFuncHeader(pParser, param);
+			if (pErr)
+			{
+				result.ptrk = PTRK_Error;
+				result.errorData.pErr = pErr;
+				return result;
+			}
+
+			// Success!
+
+			result.ptrk = PTRK_FuncType;
+			pendingTypidUnmodified =
+				registerPendingFuncType(
+					pTypeTable,
+					pParser->pScopeCurrent,
+					aPendingTypidParam,
+					aPendingTypidReturn);
+		}
+		else
+		{
+			AstNode * pErr = handleScanOrUnexpectedTokenkErr(pParser, nullptr);
+
 			result.ptrk = PTRK_Error;
-			result.errorData.pErr = pErr;
+			result.errorData.pErr = DownErr(pErr);
 			return result;
 		}
+	}
 
-		// Success!
+	Assert(pendingTypidUnmodified != PENDINGTYPID_Nil);
 
-		result.ptrk = PTRK_FuncType;
-		result.nonErrorData.pendingTypid =
-			registerPendingFuncType(
+	while (!isEmpty(typemods))
+	{
+		TypeModifier typemod = pop(&typemods);
+		pendingTypidUnmodified =
+			registerPendingModType(
 				pTypeTable,
 				pParser->pScopeCurrent,
-				aTypemods,
-				aPendingTypidParam,
-				aPendingTypidReturn);
+				typemod,
+				pendingTypidUnmodified);
+	}
 
-		return result;
-	}
-	else
-	{
-		AstNode * pErr = handleScanOrUnexpectedTokenkErr(pParser, nullptr);
-		
-		result.ptrk = PTRK_Error;
-		result.errorData.pErr = DownErr(pErr);
-		return result;
-	}
+	result.nonErrorData.pendingTypid = pendingTypidUnmodified;
+	return result;
 }
 
 NULLABLE AstErr * tryParseFuncHeader(Parser * pParser, const ParseFuncHeaderParam & param)
@@ -2234,10 +2250,6 @@ AstNode * parseFuncDefnStmtOrLiteralExpr(Parser * pParser, FUNCHEADERK funcheade
 	init(&aPendingTypidReturn);
 	Defer(dispose(&aPendingTypidReturn));
 
-	DynamicArray<TypeModifier> aTypemodDummy;
-	init(&aTypemodDummy);
-	Defer(dispose(&aTypemodDummy));
-
 	// NOTE (andrew) We break our normal pattern and allocate the node eagerly here because parseFuncHeaderGrp
 	//	needs the node to fill its info out. We are responsible for the cleanup if we hit any errors.
 
@@ -2317,7 +2329,6 @@ AstNode * parseFuncDefnStmtOrLiteralExpr(Parser * pParser, FUNCHEADERK funcheade
 		registerPendingFuncType(
 			pTypeTable,
 			pScopeOuter,
-			aTypemodDummy,
 			aPendingTypidParam,
 			aPendingTypidReturn,
 			&pNode->typidDefn);
@@ -2333,7 +2344,6 @@ AstNode * parseFuncDefnStmtOrLiteralExpr(Parser * pParser, FUNCHEADERK funcheade
 		registerPendingFuncType(
 			pTypeTable,
 			pScopeOuter,
-			aTypemodDummy,
 			aPendingTypidParam,
 			aPendingTypidReturn,
 			&UpExpr(pNode)->typidEval);

@@ -100,7 +100,7 @@ int main()
 	/*debugPrintSymbolTable(parser.symbTable);*/
 
 	println();
-	debugPrintTypeTable(*ctx.pTypeTable);
+	// debugPrintTypeTable(*ctx.pTypeTable);
 
 #if DEBUG && 0
 	DebugPrintCtx debugPrintCtx;

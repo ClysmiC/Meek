@@ -5,23 +5,35 @@
 #include "parse.h"
 #include "type.h"
 
-void init(Type * pType, bool isFuncType)
+void init(Type * pType, TYPEK typek)
 {
-	pType->isFuncType = isFuncType;
-	pType->isInferred = false;
-	pType->info.size = Type::TypeInfo::s_unset;
-	pType->info.alignment = Type::TypeInfo::s_unset;
+	pType->typek = typek;
+	pType->isInferred = false;	// TODO
+	pType->info.size = Type::ComputedInfo::s_unset;
+	pType->info.alignment = Type::ComputedInfo::s_unset;
 
-	init(&pType->aTypemods);
+	switch (pType->typek)
+	{
+		case TYPEK_Named:
+		{
+			setLexeme(&pType->namedTypeData.ident.lexeme, "");
+			pType->namedTypeData.ident.scopeid = SCOPEID_Nil;
+		} break;
 
-	if (pType->isFuncType)
-	{
-		init(&pType->funcTypeData.funcType);
-	}
-	else
-	{
-		setLexeme(&pType->nonFuncTypeData.ident.lexeme, "");
-		pType->nonFuncTypeData.ident.scopeid = SCOPEID_Nil;
+		case TYPEK_Func:
+		{
+			init(&pType->funcTypeData.funcType);
+		} break;
+
+		case TYPEK_Mod:
+		{
+			pType->modTypeData.typemod.typemodk = TYPEMODK_Nil;
+			pType->modTypeData.typidModified = TYPID_Unresolved;
+		} break;
+
+		default:
+			AssertNotReached;
+			break;
 	}
 }
 
@@ -39,30 +51,37 @@ void init(Type * pType, bool isFuncType)
 
 void initCopy(Type * pType, const Type & typeSrc)
 {
-	pType->isFuncType = typeSrc.isFuncType;
+	pType->typek = typeSrc.typek;
 	pType->isInferred = typeSrc.isInferred;
 	pType->info = typeSrc.info;
-	initCopy(&pType->aTypemods, typeSrc.aTypemods);
 
-	if (pType->isFuncType)
+	switch (pType->typek)
 	{
-		initCopy(&pType->funcTypeData.funcType, typeSrc.funcTypeData.funcType);
-	}
-	else
-	{
-		// META: This assignment is fine since ScopedIdentifier doesn't own any resources. How would I make this more robust
-		//	if I wanted to change ScopedIdentifier to allow it to own resources in the future? Writing an initCopy for ident
-		//	that just does this assignment seems like too much boilerplate. I would also like to prefer avoiding C++ constructor
-		//	craziness. Is there a middle ground? How do I want to handle this in Meek?
+		case TYPEK_Named:
+		{
+			// META: This assignment is fine since ScopedIdentifier doesn't own any resources. How would I make this more robust
+			//	if I wanted to change ScopedIdentifier to allow it to own resources in the future? Writing an initCopy for ident
+			//	that just does this assignment seems like too much boilerplate. I would also like to prefer avoiding C++ constructor
+			//	craziness. Is there a middle ground?
 
-		pType->nonFuncTypeData.ident = typeSrc.nonFuncTypeData.ident;
+			pType->namedTypeData = typeSrc.namedTypeData;
+		} break;
+
+		case TYPEK_Func:
+		{
+			initCopy(&pType->funcTypeData.funcType, typeSrc.funcTypeData.funcType);
+		} break;
+
+		case TYPEK_Mod:
+		{
+			pType->modTypeData = typeSrc.modTypeData;
+		} break;
 	}
 }
 
 void dispose(Type * pType)
 {
-	dispose(&pType->aTypemods);
-	if (pType->isFuncType)
+	if (pType->typek == TYPEK_Func)
 	{
 		dispose(&pType->funcTypeData.funcType);
 	}
@@ -70,13 +89,20 @@ void dispose(Type * pType)
 
 bool isTypeResolved(const Type & type)
 {
-	if (type.isFuncType)
+	switch (type.typek)
 	{
-		return isFuncTypeResolved(type.funcTypeData.funcType);
-	}
-	else
-	{
-		return type.nonFuncTypeData.ident.scopeid != SCOPEID_Nil;
+		case TYPEK_Named:
+			return type.namedTypeData.ident.scopeid != SCOPEID_Nil;
+
+		case TYPEK_Func:
+			return isFuncTypeResolved(type.funcTypeData.funcType);
+
+		case TYPEK_Mod:
+			return isTypeResolved(type.modTypeData.typidModified);
+
+		default:
+			AssertNotReached;
+			return false;
 	}
 }
 
@@ -95,13 +121,28 @@ bool isFuncTypeResolved(const FuncType & funcType)
 	return true;
 }
 
+bool isTypeResolved(TYPID typid)
+{
+	return typid >= TYPID_ActualTypesStart;
+}
+
+bool isPointerType(const Type & type)
+{
+	return type.typek == TYPEK_Mod && type.modTypeData.typemod.typemodk == TYPEMODK_Pointer;
+}
+
+bool isArrayType(const Type & type)
+{
+	return type.typek == TYPEK_Mod && type.modTypeData.typemod.typemodk == TYPEMODK_Array;
+}
+
 NULLABLE const FuncType * funcTypeFromDefnStmt(const TypeTable & typeTable, const AstFuncDefnStmt & defnStmt)
 {
 	Assert(isTypeResolved(defnStmt.typidDefn));
 	const Type * pType = lookupType(typeTable, defnStmt.typidDefn);
 	Assert(pType);
 
-	if (pType->isFuncType)
+	if (pType->typek == TYPEK_Func)
 	{
 		return &pType->funcTypeData.funcType;
 	}
@@ -111,30 +152,24 @@ NULLABLE const FuncType * funcTypeFromDefnStmt(const TypeTable & typeTable, cons
 	}
 }
 
-PENDINGTYPID registerPendingNonFuncType(
+PENDINGTYPID registerPendingNamedType(
 	TypeTable * pTable,
 	Scope * pScope,
 	Lexeme ident,
-	const DynamicArray<TypeModifier> & aTypemod,
 	NULLABLE TYPID * pTypidUpdateOnResolve)
 {
 	PENDINGTYPID result = PENDINGTYPID(pTable->typesPendingResolution.cItem);
 
-	const bool isFuncType = false;
 	TypeTable::TypePendingResolve * pTypePending = appendNew(&pTable->typesPendingResolution);
-	init(pTypePending, pScope, isFuncType);
-	pTypePending->type.nonFuncTypeData.ident.lexeme = ident;
-	pTypePending->type.nonFuncTypeData.ident.scopeid = SCOPEID_Nil;		// Not yet known
+	init(pTypePending, pScope, TYPEK_Named);
+	pTypePending->type.namedTypeData.ident.lexeme = ident;
+	pTypePending->type.namedTypeData.ident.scopeid = SCOPEID_Nil;		// Not yet known
 
 	if (pTypidUpdateOnResolve)
 	{
 		pTypePending->apTypidUpdateOnResolve[0] = pTypidUpdateOnResolve;
 		pTypePending->cPTypidUpdateOnResolve++;
 	}
-
-	// @Slow - move?
-
-	reinitCopy(&pTypePending->type.aTypemods, aTypemod);
 
 	return result;
 }
@@ -142,26 +177,20 @@ PENDINGTYPID registerPendingNonFuncType(
 PENDINGTYPID registerPendingFuncType(
 	TypeTable * pTable,
 	Scope * pScope,
-	const DynamicArray<TypeModifier> & aTypemod,
 	const DynamicArray<PENDINGTYPID> & aPendingTypidParam,
 	const DynamicArray<PENDINGTYPID> & aPendingTypidReturn,
 	NULLABLE TYPID * pTypidUpdateOnResolve)
 {
 	PENDINGTYPID result = PENDINGTYPID(pTable->typesPendingResolution.cItem);
 
-	const bool isFuncType = true;
 	TypeTable::TypePendingResolve * pTypePending = appendNew(&pTable->typesPendingResolution);
-	init(pTypePending, pScope, isFuncType);
+	init(pTypePending, pScope, TYPEK_Func);
 	
 	if (pTypidUpdateOnResolve)
 	{
 		pTypePending->apTypidUpdateOnResolve[0] = pTypidUpdateOnResolve;
 		pTypePending->cPTypidUpdateOnResolve++;
 	}
-
-	// @Slow - move?
-
-	reinitCopy(&pTypePending->type.aTypemods, aTypemod);
 
 	for (int iParam = 0; iParam < aPendingTypidParam.cItem; iParam++)
 	{
@@ -180,6 +209,35 @@ PENDINGTYPID registerPendingFuncType(
 	return result;
 }
 
+PENDINGTYPID registerPendingModType(
+	TypeTable * pTable,
+	Scope * pScope,
+	TypeModifier typemod,
+	PENDINGTYPID pendingTypidModified,
+	NULLABLE TYPID * pTypidUpdateOnResolve)
+{
+	Assert(pendingTypidModified <  pTable->typesPendingResolution.cItem);
+	AssertInfo(pendingTypidModified == pTable->typesPendingResolution.cItem - 1, "I think this should be true if we register them in the order I think we do");
+
+	PENDINGTYPID result = PENDINGTYPID(pTable->typesPendingResolution.cItem);
+
+	TypeTable::TypePendingResolve * pTypePending = appendNew(&pTable->typesPendingResolution);
+	init(pTypePending, pScope, TYPEK_Mod);
+
+	// NOTE (andrew) This relies on the fact that the modified type should always get added to the pending list (and thus resolved) first
+
+	pTypePending->type.modTypeData.typemod = typemod;
+	setPendingTypeUpdateOnResolvePtr(pTable, pendingTypidModified, &pTypePending->type.modTypeData.typidModified);
+
+	if (pTypidUpdateOnResolve)
+	{
+		pTypePending->apTypidUpdateOnResolve[0] = pTypidUpdateOnResolve;
+		pTypePending->cPTypidUpdateOnResolve++;
+	}
+
+	return result;
+}
+
 void setPendingTypeUpdateOnResolvePtr(TypeTable * pTable, PENDINGTYPID pendingTypid, TYPID * pTypidUpdateOnResolve)
 {
 	Assert(pendingTypid < PENDINGTYPID(pTable->typesPendingResolution.cItem));
@@ -189,16 +247,6 @@ void setPendingTypeUpdateOnResolvePtr(TypeTable * pTable, PENDINGTYPID pendingTy
 
 	pTypePending->apTypidUpdateOnResolve[pTypePending->cPTypidUpdateOnResolve] = pTypidUpdateOnResolve;
 	pTypePending->cPTypidUpdateOnResolve++;
-}
-
-bool isUnmodifiedType(const Type & type)
-{
-	return type.aTypemods.cItem == 0;
-}
-
-bool isPointerType(const Type & type)
-{
-	return type.aTypemods.cItem > 0 && type.aTypemods[0].typemodk == TYPEMODK_Pointer;
 }
 
 Lexeme getDealiasedTypeLexeme(const Lexeme & lexeme)
@@ -226,90 +274,108 @@ Lexeme getDealiasedTypeLexeme(const Lexeme & lexeme)
 
 bool typeEq(const Type & t0, const Type & t1)
 {
-	if (t0.isFuncType != t1.isFuncType) return false;
-	if (t0.aTypemods.cItem != t1.aTypemods.cItem) return false;
+	Assert(isTypeResolved(t0), "Asking if these types are equal is an ill-formed question if they aren't fully resolved");
+	Assert(isTypeResolved(t1), "Asking if these types are equal is an ill-formed question if they aren't fully resolved");
 
-	// Check typemods are same
+	if (t0.typek != t1.typek)
+		return false;
 
-	for (int i = 0; i < t0.aTypemods.cItem; i++)
+	switch (t0.typek)
 	{
-		TypeModifier tmod0 = t0.aTypemods[i];
-		TypeModifier tmod1 = t1.aTypemods[i];
-		if (tmod0.typemodk != tmod1.typemodk)
+		case TYPEK_Named:
 		{
-			return false;
-		}
+			ScopedIdentifier identDealiased0 = t0.namedTypeData.ident;
+			identDealiased0.lexeme = getDealiasedTypeLexeme(identDealiased0.lexeme);
 
-		if (tmod0.typemodk == TYPEMODK_Array)
+			ScopedIdentifier identDealiased1 = t1.namedTypeData.ident;
+			identDealiased1.lexeme = getDealiasedTypeLexeme(identDealiased1.lexeme);
+
+			return scopedIdentEq(identDealiased0, identDealiased1);
+		} break;
+
+		case TYPEK_Func:
 		{
-			// TODO: Support arbitrary compile time expressions here... not just int literals
+			return funcTypeEq(t0.funcTypeData.funcType, t1.funcTypeData.funcType);
+		} break;
 
-			AssertInfo(tmod0.pSubscriptExpr->astk == ASTK_LiteralExpr, "Parser should enforce this... for now");
-			AssertInfo(tmod1.pSubscriptExpr->astk == ASTK_LiteralExpr, "Parser should enforce this... for now");
+		case TYPEK_Mod:
+		{
+			// TODO: Refactor into typemodEq(..) ?
 
-			auto * pIntLit0 = Down(tmod0.pSubscriptExpr, LiteralExpr);
-			auto * pIntLit1 = Down(tmod0.pSubscriptExpr, LiteralExpr);
-
-			AssertInfo(pIntLit0->literalk == LITERALK_Int, "Parser should enforce this... for now");
-			AssertInfo(pIntLit1->literalk == LITERALK_Int, "Parser should enforce this... for now");
-
-			int intValue0 = intValue(pIntLit0);
-			int intValue1 = intValue(pIntLit1);
-
-			if (intValue0 != intValue1)
-			{
+			TypeModifier tmod0 = t0.modTypeData.typemod;
+			TypeModifier tmod1 = t1.modTypeData.typemod;
+			if (tmod0.typemodk != tmod1.typemodk)
 				return false;
+
+			if (tmod0.typemodk == TYPEMODK_Array)
+			{
+				// TODO: Support arbitrary compile time expressions here... not just int literals
+
+				AssertInfo(tmod0.pSubscriptExpr->astk == ASTK_LiteralExpr, "Parser should enforce this... for now");
+				AssertInfo(tmod1.pSubscriptExpr->astk == ASTK_LiteralExpr, "Parser should enforce this... for now");
+
+				auto * pIntLit0 = Down(tmod0.pSubscriptExpr, LiteralExpr);
+				auto * pIntLit1 = Down(tmod0.pSubscriptExpr, LiteralExpr);
+
+				AssertInfo(pIntLit0->literalk == LITERALK_Int, "Parser should enforce this... for now");
+				AssertInfo(pIntLit1->literalk == LITERALK_Int, "Parser should enforce this... for now");
+
+				int intValue0 = intValue(pIntLit0);
+				int intValue1 = intValue(pIntLit1);
+
+				if (intValue0 != intValue1)
+					return false;
 			}
-		}
-	}
 
-	if (t0.isFuncType)
-	{
-		return funcTypeEq(t0.funcTypeData.funcType, t1.funcTypeData.funcType);
-	}
-	else
-	{
-		ScopedIdentifier identDealiased0 = t0.nonFuncTypeData.ident;
-		identDealiased0.lexeme = getDealiasedTypeLexeme(identDealiased0.lexeme);
+			return t0.modTypeData.typidModified == t1.modTypeData.typidModified;
+		} break;
 
-		ScopedIdentifier identDealiased1 = t1.nonFuncTypeData.ident;
-		identDealiased1.lexeme = getDealiasedTypeLexeme(identDealiased1.lexeme);
-
-		return scopedIdentEq(identDealiased0, identDealiased1);
+		default:
+			AssertNotReached;
+			return false;
 	}
 }
 
 uint typeHash(const Type & t)
 {
-	auto hash = startHash();
-
-	for (int i = 0; i < t.aTypemods.cItem; i++)
+	switch (t.typek)
 	{
-		TypeModifier tmod = t.aTypemods[i];
-		hash = buildHash(&tmod.typemodk, sizeof(tmod.typemodk), hash);
-
-		if (tmod.typemodk == TYPEMODK_Array)
+		case TYPEK_Named:
 		{
-			AssertInfo(tmod.pSubscriptExpr->astk == ASTK_LiteralExpr, "Parser should enforce this... for now");
+			ScopedIdentifier identDealiased = t.namedTypeData.ident;
+			identDealiased.lexeme = getDealiasedTypeLexeme(identDealiased.lexeme);
 
-			auto * pIntLit = Down(tmod.pSubscriptExpr, LiteralExpr);
-			AssertInfo(pIntLit->literalk == LITERALK_Int, "Parser should enforce this... for now");
+			return scopedIdentHash(identDealiased);
+		} break;
 
-			int intVal = intValue(pIntLit);
-			hash = buildHash(&intVal, sizeof(intVal), hash);
-		}
-	}
+		case TYPEK_Func:
+		{
+			return funcTypeHash(t.funcTypeData.funcType);
+		} break;
+		
+		case TYPEK_Mod:
+		{
+			auto hash = startHash();
+			TypeModifier tmod = t.modTypeData.typemod;
+			hash = buildHash(&tmod.typemodk, sizeof(tmod.typemodk), hash);
 
-	if (t.isFuncType)
-	{
-		return combineHash(hash, funcTypeHash(t.funcTypeData.funcType));
-	}
-	else
-	{
-		ScopedIdentifier identDealiased = t.nonFuncTypeData.ident;
-		identDealiased.lexeme = getDealiasedTypeLexeme(identDealiased.lexeme);
+			if (tmod.typemodk == TYPEMODK_Array)
+			{
+				AssertInfo(tmod.pSubscriptExpr->astk == ASTK_LiteralExpr, "Parser should enforce this... for now");
 
-		return combineHash(hash, scopedIdentHash(identDealiased));
+				auto * pIntLit = Down(tmod.pSubscriptExpr, LiteralExpr);
+				AssertInfo(pIntLit->literalk == LITERALK_Int, "Parser should enforce this... for now");
+
+				int intVal = intValue(pIntLit);
+				hash = buildHash(&intVal, sizeof(intVal), hash);
+			}
+
+			return hash;
+		} break;
+
+		default:
+			AssertNotReached;
+			return 0;
 	}
 }
 
@@ -318,12 +384,6 @@ void init(FuncType * pFuncType)
 	init(&pFuncType->paramTypids);
 	init(&pFuncType->returnTypids);
 }
-
-//void initMove(FuncType * pFuncType, FuncType * pFuncTypeSrc)
-//{
-//	initMove(&pFuncType->paramTypids, &pFuncTypeSrc->paramTypids);
-//	initMove(&pFuncType->returnTypids, &pFuncTypeSrc->returnTypids);
-//}
 
 void initCopy(FuncType * pFuncType, const FuncType & funcTypeSrc)
 {
@@ -511,13 +571,17 @@ void init(TypeTable * pTable, MeekCtx * pCtx)
 		ident.scopeid = SCOPEID_BuiltIn;
 
 		Type type;
-		init(&type, false /* isFuncType */);
-		type.nonFuncTypeData.ident = ident;
+		init(&type, TYPEK_Named);
+		type.namedTypeData.ident = ident;
 		type.info.size = size;
 		type.info.alignment = size;
 
 		Verify(isTypeResolved(type));
-		Verify(ensureInTypeTable(pTable, &type) == typidExpected);
+
+		const bool debugAssertIfAlreadyInTable = true;
+		auto ensureResult = ensureInTypeTable(pTable, &type, debugAssertIfAlreadyInTable);
+		Assert(ensureResult.typid == typidExpected);
+		Assert(ensureResult.typeInfoComputed);
 	};
 
 	insertBuiltInType(pTable, "void", TYPID_Void, 0);
@@ -537,12 +601,12 @@ void init(TypeTable * pTable, MeekCtx * pCtx)
 
 	insertBuiltInType(pTable, "bool", TYPID_Bool, 1);
 
-	insertBuiltInType(pTable, "string", TYPID_String, -1);	// TODO: Pass actual size once I figure out the in-memory representation.
+	insertBuiltInType(pTable, "string", TYPID_String, 16);	// TODO: Pass actual size once I figure out the in-memory representation.
 }
 
-void init(TypeTable::TypePendingResolve * pTypePending, Scope * pScope, bool isFuncType)
+void init(TypeTable::TypePendingResolve * pTypePending, Scope * pScope, TYPEK typek)
 {
-	init(&pTypePending->type, isFuncType);
+	init(&pTypePending->type, typek);
 	pTypePending->pScope = pScope;
 	pTypePending->cPTypidUpdateOnResolve = 0;
 }
@@ -561,7 +625,7 @@ NULLABLE const Type * lookupType(const TypeTable & table, TYPID typid)
 	return *ppType;
 }
 
-void setTypeInfo(const TypeTable & table, TYPID typid, const Type::TypeInfo & typeInfo)
+void setTypeInfo(const TypeTable & table, TYPID typid, const Type::ComputedInfo & typeInfo)
 {
 	Assert(isTypeResolved(typid));
 	
@@ -572,7 +636,7 @@ void setTypeInfo(const TypeTable & table, TYPID typid, const Type::TypeInfo & ty
 	(*ppType)->info = typeInfo;
 }
 
-TYPID ensureInTypeTable(TypeTable * pTable, Type * pType, bool debugAssertIfAlreadyInTable)
+EnsureInTypeTableResult ensureInTypeTable(TypeTable * pTable, Type * pType, bool debugAssertIfAlreadyInTable)
 {
 	AssertInfo(isTypeResolved(*pType), "Shouldn't be inserting an unresolved type into the type table...");
 
@@ -582,7 +646,15 @@ TYPID ensureInTypeTable(TypeTable * pTable, Type * pType, bool debugAssertIfAlre
 	if (pTypid)
 	{
 		Assert(!debugAssertIfAlreadyInTable);
-		return *pTypid;
+
+		const Type * pTypeInTable = *lookupByKey(pTable->table, *pTypid);
+		Assert(pTypeInTable);
+
+		EnsureInTypeTableResult result;
+		result.typid = *pTypid;
+		result.typeInfoComputed = pTypeInTable->info.size != Type::ComputedInfo::s_unset;
+
+		return result;
 	}
 
 	Type * pTypeCopy = allocate(&pTable->typeAlloc);
@@ -592,14 +664,27 @@ TYPID ensureInTypeTable(TypeTable * pTable, Type * pType, bool debugAssertIfAlre
 	pTable->typidNext = static_cast<TYPID>(pTable->typidNext + 1);
 
 	Verify(insert(&pTable->table, typidInsert, pTypeCopy));
-	return typidInsert;
+
+	EnsureInTypeTableResult result;
+	result.typid = typidInsert;
+
+	if (pTypeCopy->info.size == Type::ComputedInfo::s_unset)
+	{
+		result.typeInfoComputed = tryComputeTypeInfo(*pTable, typidInsert);
+	}
+	else
+	{
+		result.typeInfoComputed = true;
+	}
+
+	return result;
 }
 
-Type::TypeInfo tryComputeTypeInfoAndSetMemberOffsets(const MeekCtx & ctx, SCOPEID scopeid, const DynamicArray<AstNode *> & apVarDeclStmt, bool includeEndPadding)
+Type::ComputedInfo tryComputeTypeInfoAndSetMemberOffsets(const MeekCtx & ctx, SCOPEID scopeid, const DynamicArray<AstNode *> & apVarDeclStmt, bool includeEndPadding)
 {
-	Type::TypeInfo result;
-	result.size = Type::TypeInfo::s_unset;
-	result.alignment = Type::TypeInfo::s_unset;
+	Type::ComputedInfo result;
+	result.size = Type::ComputedInfo::s_unset;
+	result.alignment = Type::ComputedInfo::s_unset;
 
 	bool allMembersCounted = true;
 	u32 sizeWithPadding = 0;
@@ -620,8 +705,8 @@ Type::TypeInfo tryComputeTypeInfoAndSetMemberOffsets(const MeekCtx & ctx, SCOPEI
 		u32 sizeMember = pTypeVarDecl->info.size;
 		u32 alignmentMember = pTypeVarDecl->info.alignment;
 
-		Assert(Iff(sizeMember == Type::TypeInfo::s_unset, alignmentMember == Type::TypeInfo::s_unset));
-		if (sizeMember == Type::TypeInfo::s_unset)
+		Assert(Iff(sizeMember == Type::ComputedInfo::s_unset, alignmentMember == Type::ComputedInfo::s_unset));
+		if (sizeMember == Type::ComputedInfo::s_unset)
 		{
 			allMembersCounted = false;
 			break;
@@ -667,69 +752,89 @@ Type::TypeInfo tryComputeTypeInfoAndSetMemberOffsets(const MeekCtx & ctx, SCOPEI
 	return result;
 }
 
-bool tryResolveAllTypes(TypeTable * pTable)
+bool tryComputeTypeInfo(const TypeTable & typeTable, TYPID typid)
 {
-	auto tryResolvePendingType = [](TypeTable::TypePendingResolve * pTypePending)
+	static const int s_targetWordSize = 64;		// TODO: configurable target
+	static const int s_cBytePtr = (s_targetWordSize + 7) / 8;
+
+	Assert(isTypeResolved(typid));
+
+	const Type * pType = lookupType(typeTable, typid);
+	Assert(pType);
+	AssertInfo(pType->info.size == Type::ComputedInfo::s_unset, "Trying to resolve pending type info that has already been resolved?");
+
+	MeekCtx * pCtx = typeTable.pCtx;
+
+	Type::ComputedInfo typeInfoResult;
+	typeInfoResult.size = Type::ComputedInfo::s_unset;
+	typeInfoResult.alignment = Type::ComputedInfo::s_unset;
+
+	switch (pType->typek)
 	{
-		if (!pTypePending->type.isFuncType)
+		case TYPEK_Named:
 		{
-			// Non-func type
+			SymbolInfo symbInfo =
+				lookupTypeSymbol(
+					*pCtx->mpScopeidPScope[pType->namedTypeData.ident.scopeid],
+					pType->namedTypeData.ident.lexeme);
 
-			SymbolInfo symbInfo = lookupTypeSymbol(*pTypePending->pScope, pTypePending->type.nonFuncTypeData.ident.lexeme);
-			if (symbInfo.symbolk == SYMBOLK_Nil)
-				return false;
+			Assert(symbInfo.symbolk == SYMBOLK_Struct);
 
-			pTypePending->type.nonFuncTypeData.ident.scopeid = scopeidFromSymbolInfo(symbInfo);
-			return true;
-		}
-		else
-		{
-			// Func type
+			auto * pStructDefn = symbInfo.structData.pStructDefnStmt;
+			Assert(pStructDefn);
 
-			for (int i = 0; i < pTypePending->type.funcTypeData.funcType.paramTypids.cItem; i++)
+			if (pStructDefn->apVarDeclStmt.cItem == 0)
 			{
-				if (!isTypeResolved(pTypePending->type.funcTypeData.funcType.paramTypids[i]))
-				{
-					return false;
-				}
-			}
+				// Empty struct
 
-			for (int i = 0; i < pTypePending->type.funcTypeData.funcType.returnTypids.cItem; i++)
+				typeInfoResult.size = 1;
+				typeInfoResult.alignment = 1;
+			}
+			else
 			{
-				if (!isTypeResolved(pTypePending->type.funcTypeData.funcType.returnTypids[i]))
-				{
-					return false;
-				}
+				typeInfoResult = tryComputeTypeInfoAndSetMemberOffsets(*pCtx, pStructDefn->scopeid, pStructDefn->apVarDeclStmt);
 			}
+		} break;
 
-			return true;
-		}
-	};
-
-	auto tryResolvePendingTypeInfo = [](const TypeTable & typeTable, TYPID typid)
-	{
-		static const int s_targetWordSize = 64;		// TODO: configurable target
-		static const int s_cBytePtr = (s_targetWordSize + 7) / 8;
-
-		MeekCtx * pCtx = typeTable.pCtx;
-
-		const Type * pType = lookupType(typeTable, typid);
-
-		Type::TypeInfo typeInfoResult;
-		typeInfoResult.size = Type::TypeInfo::s_unset;
-		typeInfoResult.alignment = Type::TypeInfo::s_unset;
-
-		Assert(pType);
-		AssertInfo(pType->info.size == Type::TypeInfo::s_unset, "Trying to resolve pending type info that has already been resolved?");
-
-		if (pType->aTypemods.cItem > 0)
+		case TYPEK_Func:
 		{
-			TypeModifier typeMod = pType->aTypemods[0];
+			typeInfoResult.size = s_cBytePtr;
+			typeInfoResult.alignment = s_cBytePtr;
+		} break;
+
+		case TYPEK_Mod:
+		{
+			Assert(isTypeResolved(pType->modTypeData.typidModified));
+
+			TypeModifier typeMod = pType->modTypeData.typemod;
 			switch (typeMod.typemodk)
 			{
 				case TYPEMODK_Array:
 				{
-					AssertTodo;
+					AssertInfo(typeMod.pSubscriptExpr->astk == ASTK_LiteralExpr, "Parser should enforce this... for now");
+
+					auto * pIntLit = Down(typeMod.pSubscriptExpr, LiteralExpr);
+					AssertInfo(pIntLit->literalk == LITERALK_Int, "Parser should enforce this... for now");
+
+					int intVal = intValue(pIntLit);
+
+					// TODO: look up if the modified type already has its info computed, and if not add it to the set of things that
+					//	need to be computed and then return false?
+
+					const Type * pTypeModified = lookupType(typeTable, pType->modTypeData.typidModified);
+					Assert(pTypeModified);
+
+					if (pTypeModified->info.size != Type::ComputedInfo::s_unset)
+					{
+						typeInfoResult.size = intVal * pTypeModified->info.size;
+						typeInfoResult.alignment = pTypeModified->info.alignment;
+					}
+					else
+					{
+						// HMM: For now we just fail and wait for the next attempt. We could possibly try to recursively call
+						//	this on the pType->modTypeData.typidModified, but if the modified type info is unset, then it
+						//	probably just failed such a call, and re-trying probably wouldn't be successful.
+					}
 				} break;
 
 				case TYPEMODK_Pointer:
@@ -739,61 +844,82 @@ bool tryResolveAllTypes(TypeTable * pTable)
 				} break;
 
 				default:
-				{
 					AssertNotReached;
-				} break;
+					break;
 			}
-		}
-		else
+		} break;
+
+		default:
+			AssertNotReached;
+			break;
+	}
+
+	Assert(typeInfoResult.alignment <= typeInfoResult.size);
+	Assert(typeInfoResult.size % typeInfoResult.alignment == 0);
+	Assert(Iff(typeInfoResult.size == Type::ComputedInfo::s_unset, typeInfoResult.alignment == Type::ComputedInfo::s_unset));
+	if (typeInfoResult.size == Type::ComputedInfo::s_unset)
+		return false;
+
+	setTypeInfo(typeTable, typid, typeInfoResult);
+
+	return true;
+}
+
+bool tryResolveAllTypes(TypeTable * pTable)
+{
+	auto tryResolvePendingType = [](TypeTable::TypePendingResolve * pTypePending)
+	{
+		switch (pTypePending->type.typek)
 		{
-			if (pType->isFuncType)
+			case TYPEK_Named:
 			{
-				typeInfoResult.size = s_cBytePtr;
-				typeInfoResult.alignment = s_cBytePtr;
-			}
-			else
+				SymbolInfo symbInfo = lookupTypeSymbol(*pTypePending->pScope, pTypePending->type.namedTypeData.ident.lexeme);
+				if (symbInfo.symbolk == SYMBOLK_Nil)
+					return false;
+
+				pTypePending->type.namedTypeData.ident.scopeid = scopeidFromSymbolInfo(symbInfo);
+				return true;
+			} break;
+
+			case TYPEK_Func:
 			{
-				SymbolInfo symbInfo =
-					lookupTypeSymbol(
-						*pCtx->mpScopeidPScope[pType->nonFuncTypeData.ident.scopeid],
-						pType->nonFuncTypeData.ident.lexeme);
-				
-				Assert(symbInfo.symbolk == SYMBOLK_Struct);
-
-				auto * pStructDefn = symbInfo.structData.pStructDefnStmt;
-				Assert(pStructDefn);
-
-				if (pStructDefn->apVarDeclStmt.cItem == 0)
+				for (int i = 0; i < pTypePending->type.funcTypeData.funcType.paramTypids.cItem; i++)
 				{
-					// Empty struct
+					if (!isTypeResolved(pTypePending->type.funcTypeData.funcType.paramTypids[i]))
+					{
+						return false;
+					}
+				}
 
-					typeInfoResult.size = 1;
-					typeInfoResult.alignment = 1;
-				}
-				else
+				for (int i = 0; i < pTypePending->type.funcTypeData.funcType.returnTypids.cItem; i++)
 				{
-					typeInfoResult = tryComputeTypeInfoAndSetMemberOffsets(*pCtx, pStructDefn->scopeid, pStructDefn->apVarDeclStmt);
+					if (!isTypeResolved(pTypePending->type.funcTypeData.funcType.returnTypids[i]))
+					{
+						return false;
+					}
 				}
-			}
+
+				return true;
+			} break;
+
+			case TYPEK_Mod:
+			{
+				return isTypeResolved(pTypePending->type.modTypeData.typidModified);
+			} break;
+
+			default:
+				AssertNotReached;
+				return false;
 		}
-
-		Assert(typeInfoResult.alignment <= typeInfoResult.size);
-		Assert(typeInfoResult.size % typeInfoResult.alignment == 0);
-		Assert(Iff(typeInfoResult.size == Type::TypeInfo::s_unset, typeInfoResult.alignment == Type::TypeInfo::s_unset));
-		if (typeInfoResult.size == Type::TypeInfo::s_unset)
-			return false;
-
-		setTypeInfo(typeTable, typid, typeInfoResult);
-		return true;
 	};
 
 	MeekCtx * pCtx = pTable->pCtx;
 
 	// Resolve named types (and eagerly resolve type infos where we can)
 
-	DynamicArray<TYPID> aTypidInfoPending;
-	init(&aTypidInfoPending);
-	Defer(dispose(&aTypidInfoPending));
+	DynamicArray<TYPID> aTypidComputePending;
+	init(&aTypidComputePending);
+	Defer(dispose(&aTypidComputePending));
 
 	int cTypeUnresolved = 0;
 	{
@@ -802,23 +928,19 @@ bool tryResolveAllTypes(TypeTable * pTable)
 			TypeTable::TypePendingResolve * pTypePending = &pTable->typesPendingResolution[i];
 			if (tryResolvePendingType(pTypePending))
 			{
-				TYPID typid = ensureInTypeTable(pTable, &pTypePending->type);
+				auto ensureResult = ensureInTypeTable(pTable, &pTypePending->type);
+				TYPID typid = ensureResult.typid;
 				for (int iTypidUpdate = 0; iTypidUpdate < pTypePending->cPTypidUpdateOnResolve; iTypidUpdate++)
 				{
 					TYPID * pTypidUpdate = pTypePending->apTypidUpdateOnResolve[iTypidUpdate];
 					*pTypidUpdate = typid;
 				}
 
-				const Type * pType = lookupType(*pTable, typid);
-				if (pType->info.size == Type::TypeInfo::s_unset)
+				if (!ensureResult.typeInfoComputed)
 				{
-					if (tryResolvePendingTypeInfo(*pTable, typid))
+					if (!tryComputeTypeInfo(*pTable, typid))
 					{
-						Assert(pType->info.size != Type::TypeInfo::s_unset);
-					}
-					else
-					{
-						append(&aTypidInfoPending, typid);
+						append(&aTypidComputePending, typid);
 					}
 				}
 			}
@@ -842,24 +964,24 @@ bool tryResolveAllTypes(TypeTable * pTable)
 	{
 		madeProgress = false;
 
-		for (int i = aTypidInfoPending.cItem - 1; i >= 0; i--)
+		for (int i = aTypidComputePending.cItem - 1; i >= 0; i--)
 		{
-			TYPID typidInfoPending = aTypidInfoPending[i];
+			TYPID typidInfoPending = aTypidComputePending[i];
 			Assert(isTypeResolved(typidInfoPending));
 
 			const Type * pType = lookupType(*pTable, typidInfoPending);
-			if (pType->info.size != Type::TypeInfo::s_unset)
+			if (pType->info.size != Type::ComputedInfo::s_unset)
 			{
 				// NOTE (andrew) This can happen when multiple copies of the same typid are added to
 				//	this list. This makes it kind of @Slow, we should probably use a HashSet instead
 				//	of a DynamicArray for the pending typeinfo typid's...
 
-				unorderedRemove(&aTypidInfoPending, i);
+				unorderedRemove(&aTypidComputePending, i);
 			}
-			else if (tryResolvePendingTypeInfo(*pTable, typidInfoPending))
+			else if (tryComputeTypeInfo(*pTable, typidInfoPending))
 			{
 				madeProgress = true;
-				unorderedRemove(&aTypidInfoPending, i);
+				unorderedRemove(&aTypidComputePending, i);
 			}
 			else
 			{
@@ -871,7 +993,7 @@ bool tryResolveAllTypes(TypeTable * pTable)
 	// TODO: Better distinction between type resolve failing and type *info* resolve failing.
 	// TODO: Better terminology...
 
-	return cTypeUnresolved == 0 && aTypidInfoPending.cItem == 0;
+	return cTypeUnresolved == 0 && aTypidComputePending.cItem == 0;
 }
 
 TYPID typidFromLiteralk(LITERALK literalk)
@@ -907,69 +1029,69 @@ bool canCoerce(TYPID typidFrom, TYPID typidTo)
 
 #include "print.h"
 
-void debugPrintType(const Type& type)
-{
-	for (int i = 0; i < type.aTypemods.cItem; i++)
-	{
-		TypeModifier tmod = type.aTypemods[i];
+//void debugPrintType(const Type& type)
+//{
+//	for (int i = 0; i < type.aTypemods.cItem; i++)
+//	{
+//		TypeModifier tmod = type.aTypemods[i];
+//
+//		switch (tmod.typemodk)
+//		{
+//			case TYPEMODK_Array:
+//			{
+//				// TODO: Change this when arbitrary compile time expressions are allowed
+//				//	as the array size expression
+//
+//				print("[");
+//
+//				Assert(tmod.pSubscriptExpr && tmod.pSubscriptExpr->astk == ASTK_LiteralExpr);
+//
+//				auto* pNode = Down(tmod.pSubscriptExpr, LiteralExpr);
+//				Assert(pNode->literalk == LITERALK_Int);
+//
+//				int value = intValue(pNode);
+//				Assert(pNode->isValueSet);
+//				AssertInfo(!pNode->isValueErroneous, "Just for sake of testing... in reality if it was erroneous then we don't really care/bother about the symbol table");
+//
+//				printfmt("%d", value);
+//
+//				print("]");
+//			} break;
+//
+//			case TYPEMODK_Pointer:
+//			{
+//				print("^");
+//			} break;
+//		}
+//	}
+//
+//	if (!type.isFuncType)
+//	{
+//		print(type.namedTypeData.ident.lexeme.strv);
+//		printfmt(" (scopeid: %d)", type.namedTypeData.ident.scopeid);
+//	}
+//	else
+//	{
+//		// TODO: :) ... will need to set up tab/new line stuff so that it
+//		//	can nest arbitrarily. Can't be bothered right now!!!
+//
+//		print("(function type... CBA to print LOL)");
+//	}
+//}
 
-		switch (tmod.typemodk)
-		{
-			case TYPEMODK_Array:
-			{
-				// TODO: Change this when arbitrary compile time expressions are allowed
-				//	as the array size expression
-
-				print("[");
-
-				Assert(tmod.pSubscriptExpr && tmod.pSubscriptExpr->astk == ASTK_LiteralExpr);
-
-				auto* pNode = Down(tmod.pSubscriptExpr, LiteralExpr);
-				Assert(pNode->literalk == LITERALK_Int);
-
-				int value = intValue(pNode);
-				Assert(pNode->isValueSet);
-				AssertInfo(!pNode->isValueErroneous, "Just for sake of testing... in reality if it was erroneous then we don't really care/bother about the symbol table");
-
-				printfmt("%d", value);
-
-				print("]");
-			} break;
-
-			case TYPEMODK_Pointer:
-			{
-				print("^");
-			} break;
-		}
-	}
-
-	if (!type.isFuncType)
-	{
-		print(type.nonFuncTypeData.ident.lexeme.strv);
-		printfmt(" (scopeid: %d)", type.nonFuncTypeData.ident.scopeid);
-	}
-	else
-	{
-		// TODO: :) ... will need to set up tab/new line stuff so that it
-		//	can nest arbitrarily. Can't be bothered right now!!!
-
-		print("(function type... CBA to print LOL)");
-	}
-}
-
-void debugPrintTypeTable(const TypeTable& typeTable)
-{
-	print("===============\n");
-	print("=====TYPES=====\n");
-	print("===============\n\n");
-
-	for (auto it = iter(typeTable.table); it.pValue; iterNext(&it))
-	{
-		const Type * pType = *(it.pValue);
-		debugPrintType(*pType);
-
-		println();
-	}
-}
+//void debugPrintTypeTable(const TypeTable& typeTable)
+//{
+//	print("===============\n");
+//	print("=====TYPES=====\n");
+//	print("===============\n\n");
+//
+//	for (auto it = iter(typeTable.table); it.pValue; iterNext(&it))
+//	{
+//		const Type * pType = *(it.pValue);
+//		debugPrintType(*pType);
+//
+//		println();
+//	}
+//}
 
 #endif

@@ -13,10 +13,12 @@ struct AstNode;
 struct MeekCtx;
 struct Type;
 
-enum TYPEMODK : u8
+enum TYPEMODK : s8
 {
 	TYPEMODK_Array,
-	TYPEMODK_Pointer
+	TYPEMODK_Pointer,
+
+	TYPEMODK_Nil = -1
 };
 
 struct TypeModifier
@@ -44,53 +46,60 @@ struct FuncType
 //	Then we can use the former while resolving names without
 //	having to lug around this unset type info struct.
 
+enum TYPEK
+{
+	TYPEK_Named,
+	TYPEK_Func,
+	TYPEK_Mod
+};
+
 struct Type
 {
 	Type() {}
 
 	union
 	{
-		struct UNonFuncTypeData
+		struct UNamedTypeData
 		{
 			ScopedIdentifier ident;
-		} nonFuncTypeData;
+		} namedTypeData;
 
 		struct UFuncTypeData
 		{
 			FuncType funcType;
 		} funcTypeData;
+
+		struct UModTypeData
+		{
+			TypeModifier typemod;
+			TYPID typidModified;
+		} modTypeData;
 	};
 
-	DynamicArray<TypeModifier> aTypemods;
-	bool isFuncType = false;
-	bool isInferred = false;
+	TYPEK typek;
 
-	// Non-identifying info
-
-	struct TypeInfo
+	struct ComputedInfo
 	{
 		static const u32 s_unset = -1;
 
 		u32 size;			// Bytes
 		u32 alignment;		// Bytes
-	} info;
+	};
+
+
+	ComputedInfo info;
+	bool isInferred = false;
 };
 
-void init(Type * pType, bool isFuncType);
-//void initMove(Type * pType, Type * pTypeSrc);
+void init(Type * pType, TYPEK typek);
 void initCopy(Type * pType, const Type & typeSrc);
 void dispose(Type * pType);
 
 bool isTypeResolved(const Type & type);
-bool isUnmodifiedType(const Type & type);
-bool isPointerType(const Type & type);
-
 bool isFuncTypeResolved(const FuncType & funcType);
-
-inline bool isTypeResolved(TYPID typid)
-{
-	return typid >= TYPID_ActualTypesStart;
-}
+bool isTypeResolved(TYPID typid);
+bool isPointerType(const Type & type);
+bool isArrayType(const Type & type);
 
 Lexeme getDealiasedTypeLexeme(const Lexeme & lexeme);
 
@@ -162,35 +171,45 @@ struct TypeTable
 };
 
 void init(TypeTable * pTable, MeekCtx * pCtx);
-void init(TypeTable::TypePendingResolve * pTypePending, Scope * pScope, bool isFuncType);
+void init(TypeTable::TypePendingResolve * pTypePending, Scope * pScope, TYPEK typek);
 void dispose(TypeTable::TypePendingResolve * pTypePending);
 
 NULLABLE const Type * lookupType(const TypeTable & table, TYPID typid);
-void setTypeInfo(const TypeTable & table, TYPID typid, const Type::TypeInfo & typeInfo);
+void setTypeInfo(const TypeTable & table, TYPID typid, const Type::ComputedInfo & typeInfo);
 
 NULLABLE const FuncType * funcTypeFromDefnStmt(const TypeTable & typeTable, const AstFuncDefnStmt & defnStmt);
 
-PENDINGTYPID registerPendingNonFuncType(
+PENDINGTYPID registerPendingNamedType(
 	TypeTable * pTable,
 	Scope * pScope,
 	Lexeme ident,
-	const DynamicArray<TypeModifier> & aTypemod,
 	NULLABLE TYPID * pTypidUpdateOnResolve=nullptr);
 
 PENDINGTYPID registerPendingFuncType(
 	TypeTable * pTable,
 	Scope * pScope,
-	const DynamicArray<TypeModifier> & aTypemod,
 	const DynamicArray<PENDINGTYPID> & aPendingTypidParam,
 	const DynamicArray<PENDINGTYPID> & aPendingTypidReturn,
 	NULLABLE TYPID * pTypidUpdateOnResolve=nullptr);
 
+PENDINGTYPID registerPendingModType(
+	TypeTable * pTable,
+	Scope * pScope,
+	TypeModifier typemod,
+	PENDINGTYPID pendingTypidModified,
+	NULLABLE TYPID * pTypidUpdateOnResolve=nullptr);
+
 void setPendingTypeUpdateOnResolvePtr(TypeTable * pTable, PENDINGTYPID pendingTypid, TYPID * pTypidUpdateOnResolve);
 
-TYPID ensureInTypeTable(TypeTable * pTable, Type * pType, bool debugAssertIfAlreadyInTable=false);
+struct EnsureInTypeTableResult
+{
+	TYPID typid = TYPID_Unresolved;
+	bool typeInfoComputed = false;
+};
+EnsureInTypeTableResult ensureInTypeTable(TypeTable * pTable, Type * pType, bool debugAssertIfAlreadyInTable=false);
 
-Type::TypeInfo tryComputeTypeInfoAndSetMemberOffsets(const MeekCtx & ctx, SCOPEID scopeid, const DynamicArray<AstNode *> & apVarDeclStmt, bool includeEndPadding=true);
-
+Type::ComputedInfo tryComputeTypeInfoAndSetMemberOffsets(const MeekCtx & ctx, SCOPEID scopeid, const DynamicArray<AstNode *> & apVarDeclStmt, bool includeEndPadding=true);
+bool tryComputeTypeInfo(const TypeTable & typeTable, TYPID typid);
 bool tryResolveAllTypes(TypeTable * pTable);
 
 TYPID typidFromLiteralk(LITERALK literalk);
@@ -199,6 +218,6 @@ bool canCoerce(TYPID typidFrom, TYPID typidTo);
 
 
 #if DEBUG
-void debugPrintType(const Type & type);
-void debugPrintTypeTable(const TypeTable & typeTable);
+// void debugPrintType(const Type & type);
+// void debugPrintTypeTable(const TypeTable & typeTable);
 #endif

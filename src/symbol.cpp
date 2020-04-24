@@ -199,10 +199,10 @@ void computeScopedVariableOffsets(MeekCtx * pCtx, Scope * pScope)
 	Defer(dispose(&apVarDecl));
 
 	bool includeEndPadding = false;
-	Type::TypeInfo fakeTypeInfo = tryComputeTypeInfoAndSetMemberOffsets(*pCtx, pScope->id, apVarDecl, includeEndPadding);
+	Type::ComputedInfo fakeTypeInfo = tryComputeTypeInfoAndSetMemberOffsets(*pCtx, pScope->id, apVarDecl, includeEndPadding);
 
-	Assert(fakeTypeInfo.size != Type::TypeInfo::s_unset);
-	Assert(fakeTypeInfo.alignment != Type::TypeInfo::s_unset);
+	Assert(fakeTypeInfo.size != Type::ComputedInfo::s_unset);
+	Assert(fakeTypeInfo.alignment != Type::ComputedInfo::s_unset);
 
 	pScope->cByteVariables = fakeTypeInfo.size;
 }

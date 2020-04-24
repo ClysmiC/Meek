@@ -113,18 +113,17 @@ void resolveExpr(ResolvePass * pPass, AstNode * pNode)
 
 				case TOKENK_Carat:
 				{
-					const Type * pTypeExpr = lookupType(*pTypeTable, typidExpr);
-					Assert(pTypeExpr);
-
 					Type typePtr;
-					initCopy(&typePtr, *pTypeExpr);
+					init(&typePtr, TYPEK_Mod);
 					Defer(dispose(&typePtr));
 
-					TypeModifier typemodPtr;
-					typemodPtr.typemodk = TYPEMODK_Pointer;
+					typePtr.modTypeData.typemod.typemodk = TYPEMODK_Pointer;
+					typePtr.modTypeData.typidModified = typidExpr;
 
-					prepend(&typePtr.aTypemods, typemodPtr);
-					typidResult = ensureInTypeTable(pTypeTable, &typePtr);
+					auto ensureResult = ensureInTypeTable(pTypeTable, &typePtr);
+					Assert(ensureResult.typeInfoComputed);
+
+					typidResult = ensureResult.typid;
 				} break;
 
 				default:
@@ -241,17 +240,25 @@ void resolveExpr(ResolvePass * pPass, AstNode * pNode)
 					const Type * pOwnerType = lookupType(*pTypeTable, ownerTypid);
 					Assert(pOwnerType);
 
-					if (pOwnerType->isFuncType)
+					if (pOwnerType->typek == TYPEK_Func)
 					{
 						print("Trying to access data member of a function?");
 						typidResult = TYPID_TypeError;
 						goto LEndSetTypidAndReturn;
 					}
+					else if (pOwnerType->typek == TYPEK_Mod)
+					{
+						// We should error if it's an array mod.
+						// I need to figure out what I want to do if it's a pointer mod. Maybe auto-dereference it. Only do 1 level of this though?
+						//	Or should a ^^foo f be allowed to say f.member and double auto-dereference?
+
+						AssertTodo;
+					}
 
 					SymbolInfo symbInfoMember;
 					{
-						Scope * pScopeOwnerOuter = pCtx->mpScopeidPScope[pOwnerType->nonFuncTypeData.ident.scopeid];
-						SymbolInfo symbInfoOwner = lookupTypeSymbol(*pScopeOwnerOuter, pOwnerType->nonFuncTypeData.ident.lexeme);
+						Scope * pScopeOwnerOuter = pCtx->mpScopeidPScope[pOwnerType->namedTypeData.ident.scopeid];
+						SymbolInfo symbInfoOwner = lookupTypeSymbol(*pScopeOwnerOuter, pOwnerType->namedTypeData.ident.lexeme);
 						Assert(symbInfoOwner.symbolk == SYMBOLK_Struct);
 
 						Scope * pScopeOwnerInner = pCtx->mpScopeidPScope[symbInfoOwner.structData.pStructDefnStmt->scopeid];
@@ -376,13 +383,7 @@ void resolveExpr(ResolvePass * pPass, AstNode * pNode)
 				goto LEndSetTypidAndReturn;
 			}
 
-			Type typeDereferenced;
-			initCopy(&typeDereferenced, *pTypePtr);
-			Defer(dispose(&typeDereferenced));
-
-			remove(&typeDereferenced.aTypemods, 0);
-
-			typidResult = ensureInTypeTable(pTypeTable, &typeDereferenced);
+			typidResult = pTypePtr->modTypeData.typidModified;
 		} break;
 
 		case ASTK_ArrayAccessExpr:
@@ -412,7 +413,7 @@ void resolveExpr(ResolvePass * pPass, AstNode * pNode)
 			const Type * pTypeArray = lookupType(*pTypeTable, typidArray);
 			Assert(pTypeArray);
 
-			if (pTypeArray->aTypemods.cItem == 0 || pTypeArray->aTypemods[0].typemodk != TYPEMODK_Array)
+			if (!isArrayType(*pTypeArray))
 			{
 				// TODO: More specific type error. (trying to access non-array <identifier> as if it were an array)
 				//	How am I going to report these errors? Should I just maintain a list separate from the
@@ -423,13 +424,7 @@ void resolveExpr(ResolvePass * pPass, AstNode * pNode)
 				goto LEndSetTypidAndReturn;
 			}
 
-			Type typeElement;
-			initCopy(&typeElement, *pTypeArray);
-			Defer(dispose(&typeElement));
-
-			remove(&typeElement.aTypemods, 0);
-
-			typidResult = ensureInTypeTable(pTypeTable, &typeElement);
+			typidResult = pTypeArray->modTypeData.typidModified;
 		} break;
 
 		case ASTK_FuncCallExpr:
@@ -473,66 +468,75 @@ void resolveExpr(ResolvePass * pPass, AstNode * pNode)
 				const Type * pType = lookupType(*pTypeTable, typidCallingExpr);
 				Assert(pType);
 
-				if (!pType->isFuncType)
+				switch (pType->typek)
 				{
-					// TODO: better messaging
-
-					print("Calling non-function as if it were a function");
-					println();
-
-					typidResult = TYPID_TypeError;
-					goto LEndSetTypidAndReturn;
-				}
-				else
-				{
-					const FuncType * pFuncType = &pType->funcTypeData.funcType;
-
-					if (pFuncType->paramTypids.cItem != aTypidArg.cItem)
+					case TYPEK_Named:
+					case TYPEK_Mod:
 					{
-						// TODO: Might need to adjust aTypidArg.cItem if the candidate
-						//	has default arguments. Or better yet, encode the min/max range
-						//	in the funcType and check if aTypidArg.cItem falls within
-						//	that range
-
 						// TODO: better messaging
 
-						printfmt(
-							"Calling function that expects %d arguments, but only providing %d",
-							pFuncType->paramTypids.cItem,
-							aTypidArg.cItem
-						);
+						print("Calling non-function as if it were a function");
+						println();
 
 						typidResult = TYPID_TypeError;
 						goto LEndSetTypidAndReturn;
-					}
+					} break;
 
-					for (int iParam = 0; iParam < pFuncType->paramTypids.cItem; iParam++)
+					case TYPEK_Func:
 					{
-						TYPID typidParam = pFuncType->paramTypids[iParam];
-						TYPID typidArg = aTypidArg[iParam];
+						const FuncType * pFuncType = &pType->funcTypeData.funcType;
 
-						if (isTypeResolved(typidArg))
+						if (pFuncType->paramTypids.cItem != aTypidArg.cItem)
 						{
-							if (typidArg != typidParam && !canCoerce(typidArg, typidParam))
+							// TODO: Might need to adjust aTypidArg.cItem if the candidate
+							//	has default arguments. Or better yet, encode the min/max range
+							//	in the funcType and check if aTypidArg.cItem falls within
+							//	that range
+
+							// TODO: better messaging
+
+							printfmt(
+								"Calling function that expects %d arguments, but only providing %d",
+								pFuncType->paramTypids.cItem,
+								aTypidArg.cItem
+							);
+
+							typidResult = TYPID_TypeError;
+							goto LEndSetTypidAndReturn;
+						}
+
+						for (int iParam = 0; iParam < pFuncType->paramTypids.cItem; iParam++)
+						{
+							TYPID typidParam = pFuncType->paramTypids[iParam];
+							TYPID typidArg = aTypidArg[iParam];
+
+							if (isTypeResolved(typidArg))
 							{
-								// TODO: better messaging
+								if (typidArg != typidParam && !canCoerce(typidArg, typidParam))
+								{
+									// TODO: better messaging
 
-								print("Function call type mismatch");
+									print("Function call type mismatch");
 
-								typidResult = TYPID_TypeError;
-								goto LEndSetTypidAndReturn;
+									typidResult = TYPID_TypeError;
+									goto LEndSetTypidAndReturn;
+								}
+							}
+							else
+							{
+								Assert(typidArg == TYPID_UnresolvedHasCandidates);
+
+								// TODO: try to find exactly 1 candidate... just like we do if funcexpr is a symbolexpr
+								AssertInfo(false, "TODO");
+
+								// TODO: if exactly 1 is found, change the symbexprk of the underlying arg
 							}
 						}
-						else
-						{
-							Assert(typidArg == TYPID_UnresolvedHasCandidates);
+					} break;
 
-							// TODO: try to find exactly 1 candidate... just like we do if funcexpr is a symbolexpr
-							AssertInfo(false, "TODO");
-
-							// TODO: if exactly 1 is found, change the symbexprk of the underlying arg
-						}
-					}
+					default:
+						AssertNotReached;
+						break;
 				}
 			}
 			else
@@ -595,7 +599,7 @@ void resolveExpr(ResolvePass * pPass, AstNode * pNode)
 						const Type * pTypeCandidate = lookupType(*pTypeTable, typidCandidate);
 						Assert(pTypeCandidate);
 
-						if (!pTypeCandidate->isFuncType)
+						if (pTypeCandidate->typek != TYPEK_Func)
 						{
 							continue;
 						}
@@ -823,7 +827,7 @@ void resolveExpr(ResolvePass * pPass, AstNode * pNode)
 				}
 
 				Assert(pType);
-				Assert(pType->isFuncType);
+				Assert(pType->typek == TYPEK_Func);
 				if (pType->funcTypeData.funcType.returnTypids.cItem == 0)
 				{
 					typidResult = TYPID_Void;

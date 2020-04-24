@@ -133,12 +133,12 @@ void debugPrintType(DebugPrintCtx * pCtx, TYPID typid, int level, bool skipAfter
 	const Type * pType = lookupType(*pCtx->pTypeTable, typid);
 	Assert(pType);
 
-	for (int i = 0; i < pType->aTypemods.cItem; i++)
+	while (pType->typek != TYPEK_Mod)
 	{
 		println();
 		printTabs(pCtx, level, false, false);
 
-		TypeModifier tmod = pType->aTypemods[i];
+		TypeModifier tmod = pType->modTypeData.typemod;
 
 		if (tmod.typemodk == TYPEMODK_Array)
 		{
@@ -150,9 +150,12 @@ void debugPrintType(DebugPrintCtx * pCtx, TYPID typid, int level, bool skipAfter
 			Assert(tmod.typemodk == TYPEMODK_Pointer);
 			print("(pointer to)");
 		}
+
+		pType = lookupType(*pCtx->pTypeTable, pType->modTypeData.typidModified);
+		Assert(pType);
 	}
 
-	if (pType->isFuncType)
+	if (pType->typek == TYPEK_Func)
 	{
 		println();
 		printTabs(pCtx, level, false, false);
@@ -212,9 +215,11 @@ void debugPrintType(DebugPrintCtx * pCtx, TYPID typid, int level, bool skipAfter
 	}
 	else
 	{
+		Assert(pType->typek == TYPEK_Named);
+
 		println();
 		printTabs(pCtx, level, true, skipAfterArrow);
-		print(pType->nonFuncTypeData.ident.lexeme.strv);
+		print(pType->namedTypeData.ident.lexeme.strv);
 	}
 };
 
