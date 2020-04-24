@@ -161,6 +161,11 @@ struct TypeTable
 		static const int s_cTypidUpdateOnResolveMax = 4;
 		TYPID * apTypidUpdateOnResolve[s_cTypidUpdateOnResolveMax];
 		int cPTypidUpdateOnResolve = 0;
+
+		// Are we resolving a type that then has a modifier applied to it? If so, we
+		//	need to update our typid in the pendingtype that has the modifier.
+
+		PENDINGTYPID pendingTypidModifiedBy = PENDINGTYPID_Nil;
 	};
 
 	DynamicArray<TypePendingResolve> typesPendingResolution;

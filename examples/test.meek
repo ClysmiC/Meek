@@ -68,9 +68,9 @@ fn main(int a)
 	v2.fakeAddMethod =
 		fn(^Vector v, float scalar)
 		{
-			v.x = v.x + scalar;		// TODO: Make resolver smart enough to reach thru pointer
-			v.y = v.y + scalar;
-			v.z = v.z + scalar;
+			// v.x = v.x + scalar;		// TODO: Make resolver smart enough to reach thru pointer
+			// v.y = v.y + scalar;
+			// v.z = v.z + scalar;
 		};
 		
 	v2.fakeAddMethod(^v2, 7);

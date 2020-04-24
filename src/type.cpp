@@ -223,17 +223,20 @@ PENDINGTYPID registerPendingModType(
 
 	TypeTable::TypePendingResolve * pTypePending = appendNew(&pTable->typesPendingResolution);
 	init(pTypePending, pScope, TYPEK_Mod);
-
-	// NOTE (andrew) This relies on the fact that the modified type should always get added to the pending list (and thus resolved) first
-
 	pTypePending->type.modTypeData.typemod = typemod;
-	setPendingTypeUpdateOnResolvePtr(pTable, pendingTypidModified, &pTypePending->type.modTypeData.typidModified);
 
 	if (pTypidUpdateOnResolve)
 	{
 		pTypePending->apTypidUpdateOnResolve[0] = pTypidUpdateOnResolve;
 		pTypePending->cPTypidUpdateOnResolve++;
 	}
+
+	// NOTE (andrew) This relies on the fact that the modified type should always get added to the pending list (and thus resolved) first
+	// TODO (andrew) This is a bit too clever. I am tempted to rewrite how types get registered/resolved... all of this poking into a pointer
+	//	is kind of hard to track.
+
+	TypeTable::TypePendingResolve * pTypePendingModified = &pTable->typesPendingResolution[pendingTypidModified];
+	pTypePendingModified->pendingTypidModifiedBy = result;
 
 	return result;
 }
@@ -609,6 +612,7 @@ void init(TypeTable::TypePendingResolve * pTypePending, Scope * pScope, TYPEK ty
 	init(&pTypePending->type, typek);
 	pTypePending->pScope = pScope;
 	pTypePending->cPTypidUpdateOnResolve = 0;
+	pTypePending->pendingTypidModifiedBy = PENDINGTYPID_Nil;
 }
 
 void dispose(TypeTable::TypePendingResolve * pTypePending)
@@ -936,6 +940,23 @@ bool tryResolveAllTypes(TypeTable * pTable)
 					*pTypidUpdate = typid;
 				}
 
+				if (pTypePending->pendingTypidModifiedBy != PENDINGTYPID_Nil)
+				{
+					// NOTE (andrew) This relies on the fact that the modified type should always get added to the pending list (and thus resolved) first
+					// TODO (andrew) This is a bit too clever. I am tempted to rewrite how types get registered/resolved... all of this poking into a pointer
+					//	is kind of hard to track.
+
+					AssertInfo(pTypePending->pendingTypidModifiedBy < pTable->typesPendingResolution.cItem);
+					AssertInfo(pTypePending->pendingTypidModifiedBy > i, "This should be true due to the insertion order into this list");
+
+					TypeTable::TypePendingResolve * pTypePendingModifiedBy = &pTable->typesPendingResolution[pTypePending->pendingTypidModifiedBy];
+
+					Assert(pTypePendingModifiedBy->type.typek == TYPEK_Mod);
+					Assert(!isTypeResolved(pTypePendingModifiedBy->type.modTypeData.typidModified));
+
+					pTypePendingModifiedBy->type.modTypeData.typidModified = typid;
+				}
+
 				if (!ensureResult.typeInfoComputed)
 				{
 					if (!tryComputeTypeInfo(*pTable, typid))
@@ -974,7 +995,9 @@ bool tryResolveAllTypes(TypeTable * pTable)
 			{
 				// NOTE (andrew) This can happen when multiple copies of the same typid are added to
 				//	this list. This makes it kind of @Slow, we should probably use a HashSet instead
-				//	of a DynamicArray for the pending typeinfo typid's...
+				//	of a DynamicArray for the pending typeinfo typid's. But due to the importance
+				//	of the order of elements in that list, and the partial results that it holds, this
+				//	would be a challenge to do.
 
 				unorderedRemove(&aTypidComputePending, i);
 			}
