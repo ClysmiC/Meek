@@ -366,8 +366,7 @@ TOKENK produceNextToken(Scanner * pScanner, Token * poToken)
 				}
 				else if (tryConsumeChar(pScanner, '*'))
 				{
-					pScanner->cNestedBlockComment++;
-					Assert(pScanner->cNestedBlockComment == 1);
+					int cNestedBlockComment = 1;
 
 					GRFERRTOK grferrtok = FERRTOK_UnterminatedBlockComment;
 					while (!checkEndOfFile(pScanner))
@@ -376,16 +375,16 @@ TOKENK produceNextToken(Scanner * pScanner, Token * poToken)
 						{
 							if (tryConsumeChar(pScanner, '*'))
 							{
-								pScanner->cNestedBlockComment++;
+								cNestedBlockComment++;
 							}
 						}
 						else if (tryConsumeChar(pScanner, '*'))
 						{
 							if (tryConsumeChar(pScanner, '/'))
 							{
-								pScanner->cNestedBlockComment--;
+								cNestedBlockComment--;
 
-								if (pScanner->cNestedBlockComment == 0)
+								if (cNestedBlockComment == 0)
 								{
 									grferrtok &= ~FERRTOK_UnterminatedBlockComment;
 									break;

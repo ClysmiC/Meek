@@ -42,9 +42,6 @@ struct FuncType
 	DynamicArray<TYPID> returnTypids;		// A.k.a. output params
 };
 
-// TODO: Split this out into TypeIdentInfo and TypeMetadata?
-//	Then we can use the former while resolving names without
-//	having to lug around this unset type info struct.
 
 enum TYPEK
 {
@@ -78,6 +75,10 @@ struct Type
 
 	TYPEK typek;
 
+	// TODO: Split this out into TypeIdentInfo and TypeMetadata?
+	//	Then we can use the former while resolving names without
+	//	having to lug around this unset type info struct.
+
 	struct ComputedInfo
 	{
 		static const u32 s_unset = -1;
@@ -85,7 +86,6 @@ struct Type
 		u32 size;			// Bytes
 		u32 alignment;		// Bytes
 	};
-
 
 	ComputedInfo info;
 	bool isInferred = false;
@@ -221,6 +221,8 @@ TYPID typidFromLiteralk(LITERALK literalk);
 
 bool canCoerce(TYPID typidFrom, TYPID typidTo);
 
+bool isAnyInt(TYPID typid);
+bool isAnyFloat(TYPID typid);
 
 #if DEBUG
 // void debugPrintType(const Type & type);

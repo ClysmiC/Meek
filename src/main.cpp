@@ -2,8 +2,10 @@
 
 #include "ast.h"
 #include "ast_print.h"
+#include "bytecode.h"
 #include "error.h"
 #include "global_context.h"
+#include "interp.h"
 #include "parse.h"
 #include "print.h"
 #include "resolve.h"
@@ -19,7 +21,8 @@ int main()
 #if 1
 	// Desktop setup
 
-	char * filename = "W:/Meek/examples/test.meek";
+	// char * filename = "W:/Meek/examples/test.meek";
+	char * filename = "W:/Meek/examples/simple.meek";
 #else
 	// Laptop setup
 
@@ -89,18 +92,37 @@ int main()
 	//	return 1;
 	//}
 
+	print("Running resolve pass...\n");
+
 	ResolvePass resolvePass;
 	init(&resolvePass, &ctx);
 	doResolvePass(&resolvePass, pNodeRoot);
 
-	print("Resolve pass all done\n");
+	print("Done\n");
+	println();
 
-	println();
-	println();
-	/*debugPrintSymbolTable(parser.symbTable);*/
+	print("Compiling bytecode...\n");
 
+	BytecodeBuilder bytecodeBuilder;
+	init(&bytecodeBuilder, &ctx);
+
+	compileBytecode(&bytecodeBuilder);
+
+	print("Done\n");
 	println();
-	// debugPrintTypeTable(*ctx.pTypeTable);
+
+	print("Running interpreter...\n");
+	println();
+
+	Interpreter interp;
+	init(&interp, &ctx);
+
+	interpret(&interp, *bytecodeBuilder.pBytecodeFuncMain);
+
+	print("Done\n");
+	println();
+
+	
 
 #if DEBUG && 0
 	DebugPrintCtx debugPrintCtx;

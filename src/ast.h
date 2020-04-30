@@ -62,7 +62,6 @@ enum ASTK : u8
 	ASTK_IllegalDoPseudoStmtErr,
 	ASTK_IllegalTopLevelStmtErr,
 	ASTK_InvokeFuncLiteralErr,
-	ASTK_ArrowAfterFuncSymbolExpr,
 
 	ASTK_ErrMax,
 
@@ -98,6 +97,7 @@ enum ASTK : u8
 	ASTK_ReturnStmt,
 	ASTK_BreakStmt,
 	ASTK_ContinueStmt,
+	ASTK_PrintStmt,		// NOTE: Will eventually remove this. Print statement is simply a useful tool for debugging before I have functions fully working!
 
 	ASTK_StmtMax,		// Illegal value, used to determine ASTCATK
 
@@ -174,8 +174,6 @@ struct AstIllegalTopLevelStmtErr
 
 struct AstInvokeFuncLiteralErr {};
 
-struct AstArrowAfterFuncSymbolExpr {};
-
 struct AstErr
 {
 	// NOTE: Error kind is encoded in ASTK
@@ -228,8 +226,10 @@ struct AstLiteralExpr
 	LITERALK literalk;      // Kind of redundant with pToken->tokenk
 	union
 	{
-		int intValue;
-		float floatValue;
+		// TODO: don't hardcode this to be int32 and f32...
+
+		s32 intValue;
+		f32 floatValue;
 		bool boolValue;
 		char * strValue;	// TODO: Where does this point into... do we strip the quotes in the lexeme buffer?
 	};
@@ -422,6 +422,11 @@ struct AstReturnStmt
 struct AstBreakStmt {};
 struct AstContinueStmt {};
 
+struct AstPrintStmt
+{
+	AstNode * pExpr;
+};
+
 
 
 // Program
@@ -472,6 +477,7 @@ struct AstNode
 				AstReturnStmt			returnStmt;
 				AstBreakStmt			breakStmt;
 				AstContinueStmt			continueStmt;
+				AstPrintStmt			printStmt;
 
 				// GRP
 
@@ -487,11 +493,6 @@ struct AstNode
 			ASTK				astk;
 
 			ASTID			    astid;
-
-			// Indices into source file
-
-			// int					iStart;
-			// int                 iEnd;
 		};
 
 		char _padding[64];
@@ -519,10 +520,11 @@ static constexpr uint s_nodeSizeDebug = sizeof(AstNode);
 enum AWHK
 {
 	AWHK_PostFormalReturnVardecls,
+	AWHK_PostAssignLhs,
 };
 
 typedef bool (* AstWalkVisitPreFn)(AstNode *, void *);
-typedef void (*AstWalkVisitPostFn)(AstNode *, void *);
+typedef void (* AstWalkVisitPostFn)(AstNode *, void *);
 typedef void (* AstWalkHookFn)(AstNode *, AWHK awhk, void *);
 
 inline bool visitPreNoOp(AstNode * pNode, void * pCtx) { return true; }
@@ -540,9 +542,12 @@ void walkAst(
 // TODO: other "value" functions
 // TODO: move to literal.h / literal.cpp ?
 
-int intValue(AstLiteralExpr * pLiteralExpr);
+f32 floatValue(AstLiteralExpr * pLiteralExpr);
+s32 intValue(AstLiteralExpr * pLiteralExpr);
+bool boolValue(AstLiteralExpr * pLiteralExpr);
 
 bool isLValue(ASTK astk);
+bool isAddressable(ASTK astk);
 
 inline ASTCATK category(ASTK astk)
 {
@@ -564,8 +569,6 @@ inline bool isErrorNode(const AstNode & node)
 {
 	return category(node.astk) == ASTCATK_Error;
 }
-
-bool containsErrorNode(const DynamicArray<AstNode *> & apNodes);
 
 const char * displayString(ASTK astk, bool capitalizeFirstLetter=false);
 

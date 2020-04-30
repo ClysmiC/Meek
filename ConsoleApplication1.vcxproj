@@ -69,6 +69,7 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="cpp.hint" />
+    <None Include="examples\simple.meek" />
     <None Include="examples\test.meek" />
   </ItemGroup>
   <PropertyGroup Label="Globals">

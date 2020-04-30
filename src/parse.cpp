@@ -305,6 +305,25 @@ AstNode * parseStmt(Parser * pParser, PARSESTMTK parsestmtk)
 
 		return pNode;
 	}
+	else if (tokenkNext == TOKENK_Print)
+	{
+		// Print
+
+		auto * pNode = parsePrintStmt(pParser);
+
+		if (isErrorNode(*pNode)) return pNode;
+
+		Assert(pNode->astk == ASTK_PrintStmt);
+
+		if (parsestmtk == PARSESTMTK_TopLevelStmt)
+		{
+			auto * pErr = AstNewErr1Child(pParser, IllegalTopLevelStmtErr, getStartEnd(*pAstDecs, pNode->astid), pNode);
+			pErr->astkStmt = pNode->astk;
+			return Up(pErr);
+		}
+
+		return pNode;
+	}
 	else if (parsestmtk == PARSESTMTK_Stmt && tokenkNext == TOKENK_Do)
 	{
 		// NOTE (andrew) Other parsestmtk's will just fall into an "unexpected 'do'" error, which is probably better than trying
@@ -1093,6 +1112,63 @@ AstNode * parseContinueStmt(Parser * pParser)
 	int iEnd = prevTokenStartEnd(pScanner).iEnd;
 
 	auto * pNode = AstNew(pParser, ContinueStmt, makeStartEnd(iStart, iEnd));
+	return Up(pNode);
+}
+
+AstNode * parsePrintStmt(Parser * pParser)
+{
+	Scanner * pScanner = pParser->pCtx->pScanner;
+
+	int iStart = peekTokenStartEnd(pScanner).iStart;
+
+	if (!tryConsumeToken(pScanner, TOKENK_Print))
+	{
+		auto startEndPrev = prevTokenStartEnd(pScanner);
+
+		auto * pErr = AstNewErr0Child(pParser, ExpectedTokenkErr, makeStartEnd(startEndPrev.iEnd + 1));
+		append(&pErr->aTokenkValid, TOKENK_Print);
+		return Up(pErr);
+	}
+
+	if (!tryConsumeToken(pScanner, TOKENK_OpenParen))
+	{
+		auto startEndPrev = prevTokenStartEnd(pScanner);
+
+		auto * pErr = AstNewErr0Child(pParser, ExpectedTokenkErr, makeStartEnd(startEndPrev.iEnd + 1));
+		append(&pErr->aTokenkValid, TOKENK_OpenParen);
+		return Up(pErr);
+	}
+
+	AstNode * pExpr = parseExpr(pParser);
+	if (isErrorNode(*pExpr))
+	{
+		return pExpr;
+	}
+
+	if (!tryConsumeToken(pScanner, TOKENK_CloseParen))
+	{
+		auto startEndPrev = prevTokenStartEnd(pScanner);
+
+		auto * pErr = AstNewErr1Child(pParser, ExpectedTokenkErr, makeStartEnd(startEndPrev.iEnd + 1), pExpr);
+		append(&pErr->aTokenkValid, TOKENK_CloseParen);
+		return Up(pErr);
+	}
+
+	if (!tryConsumeToken(pScanner, TOKENK_Semicolon))
+	{
+		auto startEndPrev = prevTokenStartEnd(pScanner);
+
+		auto * pErr = AstNewErr1Child(pParser, ExpectedTokenkErr, makeStartEnd(startEndPrev.iEnd + 1), pExpr);
+		append(&pErr->aTokenkValid, TOKENK_Semicolon);
+		return Up(pErr);
+	}
+
+	// Success!
+
+	int iEnd = prevTokenStartEnd(pScanner).iEnd;
+
+	auto * pNode = AstNew(pParser, PrintStmt, makeStartEnd(iStart, iEnd));
+	pNode->pExpr = pExpr;
 	return Up(pNode);
 }
 
@@ -2217,9 +2293,10 @@ AstNode * parseFuncDefnStmtOrLiteralExpr(Parser * pParser, FUNCHEADERK funcheade
 {
 	Assert(funcheaderk == FUNCHEADERK_Defn || funcheaderk == FUNCHEADERK_Literal);
 
-	Scanner * pScanner = pParser->pCtx->pScanner;
-	TypeTable * pTypeTable = pParser->pCtx->pTypeTable;
-	AstDecorations * pAstDecs = pParser->pCtx->pAstDecs;
+	MeekCtx * pCtx = pParser->pCtx;
+	Scanner * pScanner = pCtx->pScanner;
+	TypeTable * pTypeTable = pCtx->pTypeTable;
+	AstDecorations * pAstDecs = pCtx->pAstDecs;
 
 	bool isDefn = (funcheaderk == FUNCHEADERK_Defn);
 
@@ -2312,6 +2389,7 @@ AstNode * parseFuncDefnStmtOrLiteralExpr(Parser * pParser, FUNCHEADERK funcheade
 	int iEnd = prevTokenStartEnd(pScanner).iEnd;
 	decorate(&pAstDecs->startEndDecoration, pNodeUnderConstruction->astid, StartEndIndices(iStart, iEnd));
 
+	AstNode * pNodeResult = nullptr;
 	if (isDefn)
 	{
 		AstFuncDefnStmt * pNode = Down(pNodeUnderConstruction, FuncDefnStmt);
@@ -2333,7 +2411,7 @@ AstNode * parseFuncDefnStmtOrLiteralExpr(Parser * pParser, FUNCHEADERK funcheade
 			aPendingTypidReturn,
 			&pNode->typidDefn);
 
-		return Up(pNode);
+		pNodeResult = Up(pNode);
 	}
 	else
 	{
@@ -2348,8 +2426,11 @@ AstNode * parseFuncDefnStmtOrLiteralExpr(Parser * pParser, FUNCHEADERK funcheade
 			aPendingTypidReturn,
 			&UpExpr(pNode)->typidEval);
 
-		return Up(pNode);
+		pNodeResult = Up(pNode);
 	}
+
+	append(&pCtx->apFuncDefnAndLiteral, pNodeResult);
+	return pNodeResult;
 
 LFailCleanup:
 	Assert(pErr);
@@ -2543,12 +2624,6 @@ void reportScanAndParseErrors(const Parser & parser)
 			case ASTK_InvokeFuncLiteralErr:
 			{
 				reportParseError(parser, *pNode, "Function literal can not be directly invoked");
-			}
-			break;
-
-			case ASTK_ArrowAfterFuncSymbolExpr:
-			{
-				reportParseError(parser, *pNode, "Unexpected '->' after function symbol. Only parameter types may be specified.");
 			}
 			break;
 

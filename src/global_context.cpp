@@ -23,6 +23,7 @@ void init(MeekCtx * pMeekCtx, char * pText, uint textSize)
 	init(&g_typeTable, pMeekCtx);
 	init(&g_astDecs);
 
+	init(&pMeekCtx->apFuncDefnAndLiteral);
 	pMeekCtx->pScanner = &g_scanner;
 	pMeekCtx->pParser = &g_parser;
 	pMeekCtx->pTypeTable = &g_typeTable;

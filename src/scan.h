@@ -28,8 +28,6 @@ struct Scanner
 
 	int iToken = 0;						// Becomes tokens id
 
-	int cNestedBlockComment = 0;		/* this style of comment can nest */
-
 	bool madeToken = false;				// Resets at beginning of each call to makeToken
 	bool hadError = false;
 
@@ -53,10 +51,6 @@ struct Scanner
 
 	SCANEXITK	scanexitk = SCANEXITK_Nil;
 };
-
-
-
-// Public
 
 void init(Scanner * pScanner, char * pText, uint textSize);
 bool isFinished(const Scanner & scanner);

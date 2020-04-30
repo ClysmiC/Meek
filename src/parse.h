@@ -126,6 +126,7 @@ AstNode * parseBlockStmt(Parser * pParser, bool pushPopScope = true);
 AstNode * parseReturnStmt(Parser * pParser);
 AstNode * parseBreakStmt(Parser * pParser);
 AstNode * parseContinueStmt(Parser * pParser);
+AstNode * parsePrintStmt(Parser * pParser);
 AstNode * parseFuncDefnStmt(Parser * pParser);
 
 // EXPR

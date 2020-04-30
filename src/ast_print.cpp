@@ -433,25 +433,6 @@ void debugPrintSubAst(DebugPrintCtx * pCtx, const AstNode & node, int level, boo
 			}
 		} break;
 
-		case ASTK_ArrowAfterFuncSymbolExpr:
-		{
-			auto * pErr = DownConst(&node, ArrowAfterFuncSymbolExpr);
-			auto * pErrCasted = UpErrConst(pErr);
-
-			printfmt("%s unexpected '->' after function symbol.Only parameter types may be specified", parseErrorString);
-
-			if (pErrCasted->apChildren.cItem > 0)
-			{
-				// Sloppy... printChildren should probably handle the new line spacing so that if you pass
-				//	it an empty array of children it will still just work.
-
-				println();
-
-				printTabs(pCtx, levelNext, false, false);
-				printErrChildren(pCtx, *pErrCasted, levelNext);
-			}
-		} break;
-
 
 
 		// EXPR

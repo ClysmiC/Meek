@@ -32,6 +32,7 @@ const ReservedWord g_aReservedWord[] = {
 	{ "continue",	TOKENK_Continue },
 	{ "return",		TOKENK_Return },
 	{ "do",			TOKENK_Do },
+	{ "print",		TOKENK_Print },
 	{ "void",		TOKENK_Identifier },
 	{ "bool",		TOKENK_Identifier },
 	// { "byte",		TOKENK_Identifier },
@@ -116,6 +117,7 @@ const char * g_mpTokenkStrDisplay[] = {
 	"'continue'",			// TOKENK_Continue
 	"'return'",				// TOKENK_Return
 	"'do'",					// TOKENK_Do
+	"'print'",				// TOKENK_Print
 	"'struct'",				// TOKENK_Struct
 	"'enum'",				// TOKENK_Enum
 	"'func'",               // TOKENK_Func

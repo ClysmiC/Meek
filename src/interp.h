@@ -4,9 +4,8 @@
 #include "id_def.h"
 
 struct BytecodeFunction;
-
-namespace Interp
-{
+struct MeekCtx;
+struct Scope;
 
 //struct Value
 //{
@@ -35,17 +34,22 @@ namespace Interp
 
 struct Interpreter
 {
+	MeekCtx * pCtx = nullptr;
+
+	u8 * pVirtualAddressSpace;
+
 	u8 * pStack;
 	u8 * pStackBase;
+	u8 * pStackFrame;
 
-	u8 * pBufferGlobals;
+	u8 * pGlobals;
 
 	u8 * ip;
 };
 
-void init(Interpreter * pInterp);
+void init(Interpreter * pInterp, MeekCtx * pCtx);
 void dispose(Interpreter * pInterp);
 
 void interpret(Interpreter * pInterp, const BytecodeFunction & bcf);
 
-}
+uintptr virtualAddressStart(const Scope & scope);

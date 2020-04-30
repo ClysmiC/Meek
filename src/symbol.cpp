@@ -189,6 +189,8 @@ void computeScopedVariableOffsets(MeekCtx * pCtx, Scope * pScope)
 
 	lookupAllVars(*pScope, &aSymbInfo, FSYMBQ_IgnoreParent);
 
+	Assert(Implies(pScope->id == SCOPEID_BuiltIn, aSymbInfo.cItem == 0));
+
 	// For now, I am treating each local scope as if it is a single struct and re-using the struct size/offset
 	//	computation code.
 

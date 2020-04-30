@@ -758,9 +758,6 @@ Type::ComputedInfo tryComputeTypeInfoAndSetMemberOffsets(const MeekCtx & ctx, SC
 
 bool tryComputeTypeInfo(const TypeTable & typeTable, TYPID typid)
 {
-	static const int s_targetWordSize = 64;		// TODO: configurable target
-	static const int s_cBytePtr = (s_targetWordSize + 7) / 8;
-
 	Assert(isTypeResolved(typid));
 
 	const Type * pType = lookupType(typeTable, typid);
@@ -802,8 +799,8 @@ bool tryComputeTypeInfo(const TypeTable & typeTable, TYPID typid)
 
 		case TYPEK_Func:
 		{
-			typeInfoResult.size = s_cBytePtr;
-			typeInfoResult.alignment = s_cBytePtr;
+			typeInfoResult.size = MeekCtx::s_cBytePtr;
+			typeInfoResult.alignment = MeekCtx::s_cBytePtr;
 		} break;
 
 		case TYPEK_Mod:
@@ -843,8 +840,8 @@ bool tryComputeTypeInfo(const TypeTable & typeTable, TYPID typid)
 
 				case TYPEMODK_Pointer:
 				{
-					typeInfoResult.size = s_cBytePtr;
-					typeInfoResult.alignment = s_cBytePtr;
+					typeInfoResult.size = MeekCtx::s_cBytePtr;
+					typeInfoResult.alignment = MeekCtx::s_cBytePtr;
 				} break;
 
 				default:
@@ -1046,6 +1043,16 @@ bool canCoerce(TYPID typidFrom, TYPID typidTo)
 	// TODO
 
 	return false;
+}
+
+bool isAnyInt(TYPID typid)
+{
+	return typid >= TYPID_AnyIntStart && typid <= TYPID_AnyIntEnd;
+}
+
+bool isAnyFloat(TYPID typid)
+{
+	return typid == TYPID_F32 || typid == TYPID_F64;
 }
 
 #if DEBUG

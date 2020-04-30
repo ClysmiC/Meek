@@ -81,6 +81,7 @@ enum TOKENK
 	TOKENK_Continue,
 	TOKENK_Return,
 	TOKENK_Do,
+	TOKENK_Print,
 
 	TOKENK_Struct,
 	TOKENK_Enum,

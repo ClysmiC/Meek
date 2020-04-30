@@ -19,9 +19,6 @@ void init(ResolvePass * pPass, MeekCtx * pCtx)
 	init(&pPass->fnCtxStack);
 	init(&pPass->scopeidStack);
 
-	push(&pPass->scopeidStack, SCOPEID_BuiltIn);
-	push(&pPass->scopeidStack, SCOPEID_Global);
-
 	pPass->hadError = false;
 	pPass->cNestedBreakable = 0;
 }
@@ -322,7 +319,7 @@ void resolveExpr(ResolvePass * pPass, AstNode * pNode)
 							TYPID typidCandidate = pNode->typidDefn;
 							Assert(isTypeResolved(typidCandidate));
 
-							// NOTE (andrews) Don't want any type coercion here. The disambiguating types provided should
+							// NOTE: Don't want any type coercion here. The disambiguating types provided should
 							//	match a function exactly!
 
 							if (typidDisambig != typidCandidate)
@@ -1047,6 +1044,9 @@ void resolveStmt(ResolvePass * pPass, AstNode * pNode)
 			}
 		} break;
 
+		case ASTK_PrintStmt:
+			break;
+
 		default:
 		{
 			reportIceAndExit("Unknown astk in resolveStmt: %d", pNode->astk);
@@ -1056,6 +1056,9 @@ void resolveStmt(ResolvePass * pPass, AstNode * pNode)
 
 void doResolvePass(ResolvePass * pPass, AstNode * pNode)
 {
+	pushAndProcessScope(pPass, SCOPEID_BuiltIn);
+	pushAndProcessScope(pPass, SCOPEID_Global);
+
 	walkAst(pPass->pCtx, pNode, &visitResolvePreorder, visitResolveHook, visitResolvePostorder, pPass);
 }
 
@@ -1126,6 +1129,7 @@ bool visitResolvePreorder(AstNode * pNode, void * pPass_)
 		case ASTK_ReturnStmt:
 		case ASTK_BreakStmt:
 		case ASTK_ContinueStmt:
+		case ASTK_PrintStmt:
 		case ASTK_ParamsReturnsGrp:
 		case ASTK_Program:
 			break;
@@ -1164,9 +1168,7 @@ void visitResolvePostorder(AstNode * pNode, void * pPass_)
 			break;
 
 		default:
-		{
-			reportIceAndExit("Unknown astcatk in doResolvePass: %d", category(pNode->astk));
-		} break;
+			AssertNotReached;
 	}
 }
 

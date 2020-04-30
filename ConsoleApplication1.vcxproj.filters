@@ -165,5 +165,8 @@
     <None Include="cpp.hint">
       <Filter>Misc</Filter>
     </None>
+    <None Include="examples\simple.meek">
+      <Filter>Meek Examples</Filter>
+    </None>
   </ItemGroup>
 </Project>

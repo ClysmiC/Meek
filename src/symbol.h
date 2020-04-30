@@ -34,7 +34,7 @@ struct SymbolInfo
 		struct UVarData
 		{
 			AstVarDeclStmt * pVarDeclStmt;
-			u32 byteOffset;
+			uintptr byteOffset;
 		} varData;
 
 		struct UFuncData

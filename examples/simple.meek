@@ -1,0 +1,26 @@
+fn main()
+{
+	int a = 3;
+	int b = 140;
+	int c;		// Initialized to 0!
+
+	b = b * 10;
+	b += 23;
+
+	print(a * b + c);
+}
+
+// Things to handle:
+//	VarDecl (with initializer)				ENOUGH
+//	VarDecl (without initializer)			ENOUGH
+//	Literal 								DONE
+//	Symbol (var)							DONE
+//	Add										ENOUGH
+//	Multiply								ENOUGH
+//	Assign									ENOUGH
+//	Assign with +=							ENOUGH
+//	Print									ENOUGH
+//	Program
+//	Func Defn
+
+//	Entry point!

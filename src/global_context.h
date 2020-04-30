@@ -22,6 +22,18 @@ struct MeekCtx
 
 	AstNode * pNodeRoot = nullptr;
 	AstDecorations * pAstDecs = nullptr;
+
+	DynamicArray<AstNode *> apFuncDefnAndLiteral;
+
+#ifdef _WIN64
+	static const int s_cBitTargetWord = 64;
+#elif WIN32
+	static const int s_cBitTargetWord = 32;
+#else
+	StaticAssertNotCompiled;
+#endif
+
+	static const int s_cBytePtr = (s_cBitTargetWord + 7) / 8;
 };
 
 void init(MeekCtx * pMeekCtx, char * pText, uint textSize);

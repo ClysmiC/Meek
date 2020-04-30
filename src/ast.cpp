@@ -119,6 +119,7 @@ void walkAst(
 
 			auto * pNode = Down(pNodeSubtreeRoot, AssignStmt);
 			walkAst(pCtx, pNode->pRhsExpr, visitPreorderFn, hookFn, visitPostorderFn, pContext);
+			hookFn(Up(pNode), AWHK_PostAssignLhs, pContext);
 			walkAst(pCtx, pNode->pLhsExpr, visitPreorderFn, hookFn, visitPostorderFn, pContext);
 		} break;
 
@@ -216,7 +217,31 @@ void walkAst(
 	visitPostorderFn(pNodeSubtreeRoot, pContext);
 }
 
-int intValue(AstLiteralExpr * pLiteralExpr)
+f32 floatValue(AstLiteralExpr * pLiteralExpr)
+{
+	Assert(pLiteralExpr->literalk == LITERALK_Float);
+
+	if (!pLiteralExpr->isValueSet)
+	{
+		// God this is so bad...
+
+		char * buffer = new char[u64(pLiteralExpr->pToken->lexeme.strv.cCh) + 1];
+		Defer(delete [] buffer);
+
+		memcpy(buffer, pLiteralExpr->pToken->lexeme.strv.pCh, pLiteralExpr->pToken->lexeme.strv.cCh);
+		buffer[pLiteralExpr->pToken->lexeme.strv.cCh] = '\0';
+
+		// TOOD: Error check this.... in fact just rewrite it....
+
+		pLiteralExpr->floatValue = strtof(buffer, nullptr);
+		pLiteralExpr->isValueSet = true;
+		pLiteralExpr->isValueErroneous = false;
+	}
+
+	return pLiteralExpr->floatValue;
+}
+
+s32 intValue(AstLiteralExpr * pLiteralExpr)
 {
 	Assert(pLiteralExpr->literalk == LITERALK_Int);
 
@@ -344,6 +369,21 @@ LOutOfRangeFail:
 	return 0;
 }
 
+bool boolValue(AstLiteralExpr * pLiteralExpr)
+{
+	// TOOD: This is stupid. This should be set in the parser. I need to come up with a more coherent story
+	//	for exactly when all of these literals get parsed.
+
+	Assert(pLiteralExpr->literalk == LITERALK_Bool);
+
+	if (!pLiteralExpr->isValueSet)
+	{
+		pLiteralExpr->boolValue = (pLiteralExpr->pToken->lexeme.strv.pCh[0] == 't');
+	}
+
+	return pLiteralExpr->boolValue;
+}
+
 bool isLValue(ASTK astk)
 {
 	if (category(astk) != ASTCATK_Expr)
@@ -364,18 +404,31 @@ bool isLValue(ASTK astk)
 	}
 }
 
-bool containsErrorNode(const DynamicArray<AstNode *> & apNodes)
+bool isAddressable(ASTK astk)
 {
-	for (int i = 0; i < apNodes.cItem; i++)
+	if (category(astk) != ASTCATK_Expr)
 	{
-		const AstNode * pNode = apNodes[i];
-		if (category(*pNode) == ASTCATK_Error)
-		{
-			return true;
-		}
+		AssertInfo(false, "Only care about isAddressable when dealing with expressions. Why call this with a non-expr node?");
+		return false;
 	}
 
-	return false;
+	bool result = false;
+	switch (astk)
+	{
+		case ASTK_SymbolExpr:
+		case ASTK_ArrayAccessExpr:
+		{
+			result = true;
+		} break;
+
+		default:
+		{
+			result = false;
+		} break;
+	}
+
+	Assert(Implies(result, isLValue(astk)));
+	return result;
 }
 
 

@@ -57,7 +57,12 @@ enum TYPID : u32
 	TYPID_String,
 
 	TYPID_UserDefinedStart,
-	TYPID_ActualTypesStart = TYPID_Void
+	TYPID_ActualTypesStart = TYPID_Void,
+
+	TYPID_AnyIntStart = TYPID_S8,
+	TYPID_AnyIntEnd = TYPID_U64,
+
+	TYPID_Nil = static_cast<u32>(0xFF'FF'FF'FF)
 };
 
 enum PENDINGTYPID : u32
