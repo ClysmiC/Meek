@@ -25,7 +25,9 @@ void init(Interpreter * pInterp, MeekCtx * pCtx)
 	pInterp->pStack = pInterp->pStackBase;
 	pInterp->pStackFrame = pInterp->pStackBase;
 
-	pInterp->ip = nullptr;	AssertTodo;
+	// NOTE: We set this in interpret(..) ... might make more sense to set it here?
+
+	pInterp->ip = nullptr;
 }
 
 void dispose(Interpreter * pInterp)
@@ -66,7 +68,8 @@ void interpret(Interpreter * pInterp, const BytecodeFunction & bcf)
 	do { \
 		memcpy(&var, pInterp->pStack - sizeof(type), sizeof(type)); } while (0)
 
-	while (true)
+	bool run = true;
+	while (run)
 	{
 #if DEBUG
 		u8 ipPrev = *pInterp->ip;
@@ -487,7 +490,12 @@ void interpret(Interpreter * pInterp, const BytecodeFunction & bcf)
 						AssertTodo;
 						break;
 				}
-			}
+			} break;
+
+			case BCOP_DebugExit:
+			{
+				run = false;
+			} break;
 
 //#define Assign(type) \
 //	do { \

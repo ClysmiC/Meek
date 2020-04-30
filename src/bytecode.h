@@ -244,5 +244,5 @@ void visitBytecodeBuilderPostOrder(AstNode * pNode, void * pBuilder_);
 void visitBytecodeBuilderHook(AstNode * pNode, AWHK awhk, void * pBuilder_);
 
 #ifdef DEBUG
-// void disassemble(const ByteCodeFunction & bcf);
+void disassemble(const BytecodeFunction & bcf);
 #endif

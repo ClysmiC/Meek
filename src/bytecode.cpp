@@ -76,76 +76,65 @@
 //	5,		// BCOP_ReserveX
 //};
 //StaticAssert(ArrayLen(gc_mpBcopCByte) == BCOP_Max);
-//
-//static const char * c_mpBcopStrName[] = {
-//	"Return",
-//	"PushImmediate8",
-//	"PushImmediate16",
-//	"PushImmediate32",
-//	"PushImmediate64",
-//	"PushImmediateTrue",
-//	"PushImmediateFalse",
-//	"PushLocalValue8",
-//	"PushLocalValue16",
-//	"PushLocalValue32",
-//	"PushLocalValue64",
-//	"PushGlobalValue8",
-//	"PushGlobalValue16",
-//	"PushGlobalValue32",
-//	"PushGlobalValue64",
-//	"PushLocalAddr",
-//	"PushGlobalAddr",
-//	"AddToAddr",
-//	"AddInt8",
-//	"AddInt16",
-//	"AddInt32",
-//	"AddInt64",
-//	"SubInt8",
-//	"SubInt16",
-//	"SubInt32",
-//	"SubInt64",
-//	"MulInt8",
-//	"MulInt16",
-//	"MulInt32",
-//	"MulInt64",
-//	"DivS8",
-//	"DivS16",
-//	"DivS32",
-//	"DivS64",
-//	"DivU8",
-//	"DivU16",
-//	"DivU32",
-//	"DivU64",
-//	"AddFloat32",
-//	"AddFloat64",
-//	"SubFloat32",
-//	"SubFloat64",
-//	"MulFloat32",
-//	"MulFloat64",
-//	"DivFloat32",
-//	"DivFloat64",
-//	"NegateS8",
-//	"NegateS16",
-//	"NegateS32",
-//	"NegateS64",
-//	"NegateFloat32",
-//	"NegateFloat64",
-//	"Assign8",
-//	"Assign16",
-//	"Assign32",
-//	"Assign64",
-//	"Pop8",
-//	"Pop16",
-//	"Pop32",
-//	"Pop64",
-//	"PopX",
-//	"Reserve8",
-//	"Reserve16",
-//	"Reserve32",
-//	"Reserve64",
-//	"ReserveX",
-//};
-//StaticAssert(ArrayLen(c_mpBcopStrName) == BCOP_Max);
+
+static const char * c_mpBcopStrName[] = {
+	"Return",
+	"LoadImmediate8",
+	"LoadImmediate16",
+	"LoadImmediate32",
+	"LoadImmediate64",
+	"LoadTrue",
+	"LoadFalse",
+	"Load8",
+	"Load16",
+	"Load32",
+	"Load64",
+	"Store8",
+	"Store16",
+	"Store32",
+	"Store64",
+	"Duplicate8",
+	"Duplicate16",
+	"Duplicate32",
+	"Duplicate64",
+	"AddInt8",
+	"AddInt16",
+	"AddInt32",
+	"AddInt64",
+	"SubInt8",
+	"SubInt16",
+	"SubInt32",
+	"SubInt64",
+	"MulInt8",
+	"MulInt16",
+	"MulInt32",
+	"MulInt64",
+	"DivS8",
+	"DivS16",
+	"DivS32",
+	"DivS64",
+	"DivU8",
+	"DivU16",
+	"DivU32",
+	"DivU64",
+	"AddFloat32",
+	"AddFloat64",
+	"SubFloat32",
+	"SubFloat64",
+	"MulFloat32",
+	"MulFloat64",
+	"DivFloat32",
+	"DivFloat64",
+	"NegateS8",
+	"NegateS16",
+	"NegateS32",
+	"NegateS64",
+	"NegateFloat32",
+	"NegateFloat64",
+	"DebugPrint",
+	"DebugExit",
+};
+StaticAssert(ArrayLen(c_mpBcopStrName) == BCOP_Max);
 
 BCOP bcopSized(SIZEDBCOP sizedBcop, int cBit)
 {
@@ -382,6 +371,7 @@ void compileBytecode(BytecodeBuilder * pBuilder)
 		pBuilder->pBytecodeFuncMain = pBytecodeFunc;		// TODO: Actually detect main
 		pBuilder->pBytecodeFuncCompiling = pBytecodeFunc;
 
+		pBuilder->root = true;
 		walkAst(
 			pCtx,
 			pNode,
@@ -555,9 +545,10 @@ bool visitBytecodeBuilderPreorder(AstNode * pNode, void * pBuilder_)
 		case ASTK_ReturnStmt:
 		case ASTK_BreakStmt:
 		case ASTK_ContinueStmt:
+		case ASTK_PrintStmt:
+		case ASTK_ParamsReturnsGrp:
 			return true;
 
-		case ASTK_ParamsReturnsGrp:
 		case ASTK_Program:
 			AssertNotReached;
 			return false;
@@ -1044,66 +1035,175 @@ void visitBytecodeBuilderPostOrder(AstNode * pNode, void * pBuilder_)
 		} break;
 
 		case ASTK_ParamsReturnsGrp:
+			break;
+
 		case ASTK_Program:
-			AssertTodo;
+			AssertNotReached;
+			break;
 
 		default:
 			AssertNotReached;
+			break;
 	}
 }
 
 #ifdef DEBUG
-//void disassemble(const ByteCodeFunction & bcf)
-//{
-//	int byteOffset = 0;
-//	int linePrev = -1;
-//	
-//	while (byteOffset < bcf.bytes.cItem)
-//	{
-//		printfmt("%08d ", byteOffset);
-//		
-//		u8 bcop = bcf.bytes[byteOffset];
-//		int iStart = bcf.mpIByteIStart[byteOffset];
-//
-//		int line = 1;	// TODO: compute from iStart
-//
-//		if (line == linePrev)
-//		{
-//			print("   | ");
-//		}
-//		else
-//		{
-//			printfmt("%8d", line);
-//		}
-//
-//		print(c_mpBcopStrName[bcop]);
-//
-//		switch (bcop)
-//		{
-//			case BCOP_Return:
-//			case BCOP_PushTrue:
-//			case BCOP_PushFalse:
-//			{
-//				Assert(gc_mpBcopCByte[bcop] == 1);
-//			} break;
-//
-//			case BCOP_Push8:
-//			case BCOP_Push16:
-//			case BCOP_Push32:
-//			case BCOP_Push64:
-//			{
-//				// TODO: print literal value... might be hard since we don't store the type! We would just have to print the binary...
-//			} break;
-//
-//			default:
-//			{
-//				AssertNotReached;
-//			} break;
-//		}
-//
-//		println();
-//
-//		byteOffset += gc_mpBcopCByte[bcop];
-//	}
-//}
+void disassemble(const BytecodeFunction & bcf)
+{
+	int byteOffset = 0;
+	int linePrev = -1;
+	
+	while (byteOffset < bcf.bytes.cItem)
+	{
+		printfmt("%08d ", byteOffset);
+		
+		u8 bcop = bcf.bytes[byteOffset];
+		// int iStart = bcf.mpIByteIStart[byteOffset];
+		byteOffset++;
+
+		int line = 1;	// TODO: compute from iStart
+
+		if (line == linePrev)
+		{
+			print("     |  ");
+		}
+		else
+		{
+			printfmt("%6d  ", line);
+		}
+
+		print(c_mpBcopStrName[bcop]);
+		println();
+
+		switch (bcop)
+		{
+			case BCOP_Return:
+				break;
+
+			case BCOP_LoadImmediate8:
+			{
+				printfmt("%08d ", byteOffset);
+
+				u8 value = bcf.bytes[byteOffset];
+				byteOffset += 1;
+
+				print("     |  ");
+				print(" -> ");
+				printfmt("%#x", value);
+				println();
+			} break;
+
+			case BCOP_LoadImmediate16:
+			{
+				printfmt("%08d ", byteOffset);
+
+				u16 value = *reinterpret_cast<u16 *>(bcf.bytes.pBuffer + byteOffset);
+				byteOffset += sizeof(u16);
+
+				print("     |  ");
+				print(" -> ");
+				printfmt("%#x", value);
+				println();
+			} break;
+
+			case BCOP_LoadImmediate32:
+			{
+				printfmt("%08d ", byteOffset);
+
+				u32 value = *reinterpret_cast<u32 *>(bcf.bytes.pBuffer + byteOffset);
+				byteOffset += sizeof(u32);
+
+				print("     |  ");
+				print(" -> ");
+				printfmt("%#x", value);
+				println();
+			} break;
+
+			case BCOP_LoadImmediate64:
+			{
+				printfmt("%08d ", byteOffset);
+
+				u64 value = *reinterpret_cast<u64 *>(bcf.bytes.pBuffer + byteOffset);
+				byteOffset += sizeof(u64);
+
+				print("     |  ");
+				print(" -> ");
+				printfmt("%#x", value);
+				println();
+			} break;
+
+			case BCOP_LoadTrue:
+			case BCOP_LoadFalse:
+			case BCOP_Load8:
+			case BCOP_Load16:
+			case BCOP_Load32:
+			case BCOP_Load64:
+			case BCOP_Store8:
+			case BCOP_Store16:
+			case BCOP_Store32:
+			case BCOP_Store64:
+			case BCOP_Duplicate8:
+			case BCOP_Duplicate16:
+			case BCOP_Duplicate32:
+			case BCOP_Duplicate64:
+			case BCOP_AddInt8:
+			case BCOP_AddInt16:
+			case BCOP_AddInt32:
+			case BCOP_AddInt64:
+			case BCOP_SubInt8:
+			case BCOP_SubInt16:
+			case BCOP_SubInt32:
+			case BCOP_SubInt64:
+			case BCOP_MulInt8:
+			case BCOP_MulInt16:
+			case BCOP_MulInt32:
+			case BCOP_MulInt64:
+			case BCOP_DivS8:
+			case BCOP_DivS16:
+			case BCOP_DivS32:
+			case BCOP_DivS64:
+			case BCOP_DivU8:
+			case BCOP_DivU16:
+			case BCOP_DivU32:
+			case BCOP_DivU64:
+			case BCOP_AddFloat32:
+			case BCOP_AddFloat64:
+			case BCOP_SubFloat32:
+			case BCOP_SubFloat64:
+			case BCOP_MulFloat32:
+			case BCOP_MulFloat64:
+			case BCOP_DivFloat32:
+			case BCOP_DivFloat64:
+			case BCOP_NegateS8:
+			case BCOP_NegateS16:
+			case BCOP_NegateS32:
+			case BCOP_NegateS64:
+			case BCOP_NegateFloat32:
+			case BCOP_NegateFloat64:
+				break;
+
+			case BCOP_DebugPrint:
+			{
+				printfmt("%08d ", byteOffset);
+
+				TYPID value = *reinterpret_cast<TYPID *>(bcf.bytes.pBuffer + byteOffset);
+				byteOffset += sizeof(TYPID);
+
+				print("     |  ");
+				print(" -> ");
+				printfmt("%#x", value);
+				println();
+			} break;
+
+			case BCOP_DebugExit:
+				break;
+
+			default:
+				AssertNotReached;
+				break;
+		}
+
+		linePrev = line;
+	}
+}
 #endif

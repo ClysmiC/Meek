@@ -111,13 +111,15 @@ int main()
 	print("Done\n");
 	println();
 
-	print("Running interpreter...\n");
+	disassemble(*bytecodeBuilder.pBytecodeFuncMain);
+
+	/*print("Running interpreter...\n");
 	println();
 
 	Interpreter interp;
 	init(&interp, &ctx);
 
-	interpret(&interp, *bytecodeBuilder.pBytecodeFuncMain);
+	interpret(&interp, *bytecodeBuilder.pBytecodeFuncMain);*/
 
 	print("Done\n");
 	println();
