@@ -61,6 +61,8 @@ int main()
 
 	AstNode * pNodeRoot = nullptr;
 	{
+		printfmt("Parsing %s...\n", filename);
+
 		bool success;
 		pNodeRoot = parseProgram(ctx.pParser, &success);
 
@@ -71,10 +73,14 @@ int main()
 			reportScanAndParseErrors(*ctx.pParser);
 			return 1;
 		}
+
+		print("Done\n");
+		println();
 	}
 
 	ctx.pNodeRoot = pNodeRoot;
 
+	print("Running resolve pass...\n");
 	if (!tryResolveAllTypes(ctx.pTypeTable))
 	{
 		print("Unable to resolve some types\n");
@@ -92,7 +98,6 @@ int main()
 	//	return 1;
 	//}
 
-	print("Running resolve pass...\n");
 
 	ResolvePass resolvePass;
 	init(&resolvePass, &ctx);
@@ -111,38 +116,19 @@ int main()
 	print("Done\n");
 	println();
 
-	disassemble(*bytecodeBuilder.pBytecodeFuncMain);
+	// disassemble(*bytecodeBuilder.pBytecodeFuncMain);
 
-	/*print("Running interpreter...\n");
-	println();
+	print("Running interpreter...\n");
 
 	Interpreter interp;
 	init(&interp, &ctx);
 
-	interpret(&interp, *bytecodeBuilder.pBytecodeFuncMain);*/
+	interpret(&interp, *bytecodeBuilder.pBytecodeFuncMain);
 
 	print("Done\n");
 	println();
 
-	
-
-#if DEBUG && 0
-	DebugPrintCtx debugPrintCtx;
-	init(&debugPrintCtx.mpLevelSkip);
-	debugPrintCtx.pTypeTable = &parser.typeTable;
-
-	debugPrintAst(&debugPrintCtx, *pAstRoot);
-
-
-	println();
-	if (parser.apErrorNodes.cItem > 0)
-	{
-		print("Parse had error(s)!\n");
-	}
-	else
-	{
-		print("No parse errors :)\n");
-	}
-
-#endif
+	// DebugPrintCtx dpc;
+	// init(&dpc, &ctx);
+	// debugPrintAst(&dpc, *pNodeRoot);
 }

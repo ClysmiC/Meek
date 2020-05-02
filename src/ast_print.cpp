@@ -1,6 +1,7 @@
 #include "ast_print.h"
 
 #include "ast.h"
+#include "global_context.h"
 #include "print.h"
 #include "type.h"
 
@@ -9,12 +10,14 @@
 
 void debugPrintAst(DebugPrintCtx * pCtx, const AstNode & root)
 {
-	DynamicArray<bool> mpLevelSkip;
-	init(&mpLevelSkip);
-	Defer(dispose(&mpLevelSkip));
-
 	debugPrintSubAst(pCtx, root, 0, false);
 	println();
+}
+
+void init(DebugPrintCtx * pPrintCtx, MeekCtx * pMeekCtx)
+{
+	pPrintCtx->pTypeTable = pMeekCtx->pTypeTable;
+	init(&pPrintCtx->mpLevelSkip);
 }
 
 void setSkip(DebugPrintCtx * pCtx, int level, bool skip) {
@@ -133,7 +136,7 @@ void debugPrintType(DebugPrintCtx * pCtx, TYPID typid, int level, bool skipAfter
 	const Type * pType = lookupType(*pCtx->pTypeTable, typid);
 	Assert(pType);
 
-	while (pType->typek != TYPEK_Mod)
+	while (pType->typek == TYPEK_Mod)
 	{
 		println();
 		printTabs(pCtx, level, false, false);
@@ -640,9 +643,7 @@ void debugPrintSubAst(DebugPrintCtx * pCtx, const AstNode & node, int level, boo
 
 			printTabs(pCtx, levelNext, false, false);
 			print("(rhs):");
-			println();
 
-			printTabs(pCtx, levelNext, false, false);
 			debugPrintSubAst(pCtx, *pStmt->pRhsExpr, levelNext, true);
 		} break;
 
@@ -837,6 +838,17 @@ void debugPrintSubAst(DebugPrintCtx * pCtx, const AstNode & node, int level, boo
 			print("(continue)");
 		} break;
 
+		case ASTK_PrintStmt:
+		{
+			auto * pStmt = DownConst(&node, PrintStmt);
+
+			print("(debug print statement)");
+			println();
+
+			printTabs(pCtx, levelNext, false, false);
+			debugPrintSubAst(pCtx, *pStmt->pExpr, levelNext, true);
+		} break;
+
 
 
 		// PROGRAM
@@ -854,11 +866,8 @@ void debugPrintSubAst(DebugPrintCtx * pCtx, const AstNode & node, int level, boo
 		} break;
 
 		default:
-		{
-			// Not implemented!
-
-			Assert(false);
-		}
+			AssertNotReached;
+			break;
 	}
 }
 

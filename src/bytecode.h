@@ -151,6 +151,18 @@ enum BCOP : u8
 	BCOP_NegateFloat32,
 	BCOP_NegateFloat64,
 
+	// StackAlloc
+	//	- Pops uintptr off the stack
+	//	- Reserves that many bytes on the top of the stack
+
+	BCOP_StackAlloc,
+
+	// StackFree
+	//	- Pops uintptr off the stack
+	//	- Pops that many bytes off the top of the stack
+
+	BCOP_StackFree,
+
 	// Debug Print (debug only, subject to removal!)
 	//	- Reads typid from bytecode
 	//	- Pops n-bit (n determined by typid) value off the stack
@@ -202,7 +214,7 @@ BCOP bcopSized(SIZEDBCOP sizedBcop, int cBit);
 struct BytecodeFunction
 {
 	DynamicArray<u8> bytes;
-	DynamicArray<int> mpIByteIStart;
+	DynamicArray<int> sourceLineNumbers;
 };
 
 void init(BytecodeFunction * pBcf);
@@ -219,25 +231,27 @@ struct BytecodeBuilder
 
 	BytecodeFunction * pBytecodeFuncCompiling;
 	bool root = false;
+	
 	bool wantsAddress = false;
+	bool parentWantsAddress = false;
 };
 
 void init(BytecodeBuilder * pBuilder, MeekCtx * pCtx);
 void dispose(BytecodeBuilder * pBuilder);
 
 void compileBytecode(BytecodeBuilder * pBuilder);
-void emit(DynamicArray<u8> * pBytes, BCOP byteEmit);
-void emit(DynamicArray<u8> * pBytes, u8 byteEmit);
-void emit(DynamicArray<u8> * pBytes, s8 byteEmit);
-void emit(DynamicArray<u8> * pBytes, u16 bytesEmit);
-void emit(DynamicArray<u8> * pBytes, s16 bytesEmit);
-void emit(DynamicArray<u8> * pBytes, u32 bytesEmit);
-void emit(DynamicArray<u8> * pBytes, s32 bytesEmit);
-void emit(DynamicArray<u8> * pBytes, u64 bytesEmit);
-void emit(DynamicArray<u8> * pBytes, s64 bytesEmit);
-void emit(DynamicArray<u8> * pBytes, f32 bytesEmit);
-void emit(DynamicArray<u8> * pBytes, f64 bytesEmit);
-void emit(DynamicArray<u8> * pBytes, void * pBytesEmit, int cBytesEmit);
+void emitOp(BytecodeFunction * bcf, BCOP byteEmit, int lineNumber);
+void emit(BytecodeFunction * bcf, u8 byteEmit);
+void emit(BytecodeFunction * bcf, s8 byteEmit);
+void emit(BytecodeFunction * bcf, u16 bytesEmit);
+void emit(BytecodeFunction * bcf, s16 bytesEmit);
+void emit(BytecodeFunction * bcf, u32 bytesEmit);
+void emit(BytecodeFunction * bcf, s32 bytesEmit);
+void emit(BytecodeFunction * bcf, u64 bytesEmit);
+void emit(BytecodeFunction * bcf, s64 bytesEmit);
+void emit(BytecodeFunction * bcf, f32 bytesEmit);
+void emit(BytecodeFunction * bcf, f64 bytesEmit);
+void emit(BytecodeFunction * bcf, void * pBytesEmit, int cBytesEmit);
 
 bool visitBytecodeBuilderPreorder(AstNode * pNode, void * pBuilder_);
 void visitBytecodeBuilderPostOrder(AstNode * pNode, void * pBuilder_);

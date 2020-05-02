@@ -115,12 +115,12 @@ void walkAst(
 
 		case ASTK_AssignStmt:
 		{
-			// NOTE (andrew) in foo = bar, this evaluates bar, then foo.
+			// NOTE (andrew) in foo = bar, this evaluates foo, then bar.
 
 			auto * pNode = Down(pNodeSubtreeRoot, AssignStmt);
-			walkAst(pCtx, pNode->pRhsExpr, visitPreorderFn, hookFn, visitPostorderFn, pContext);
-			hookFn(Up(pNode), AWHK_PostAssignLhs, pContext);
 			walkAst(pCtx, pNode->pLhsExpr, visitPreorderFn, hookFn, visitPostorderFn, pContext);
+			hookFn(Up(pNode), AWHK_PostAssignLhs, pContext);
+			walkAst(pCtx, pNode->pRhsExpr, visitPreorderFn, hookFn, visitPostorderFn, pContext);
 		} break;
 
 		case ASTK_VarDeclStmt:
@@ -189,6 +189,12 @@ void walkAst(
 
 		case ASTK_ContinueStmt:
 			break;
+
+		case ASTK_PrintStmt:
+		{
+			auto * pNode = Down(pNodeSubtreeRoot, PrintStmt);
+			walkAst(pCtx, pNode->pExpr, visitPreorderFn, hookFn, visitPostorderFn, pContext);
+		} break;
 
 		case ASTK_ParamsReturnsGrp:
 		{

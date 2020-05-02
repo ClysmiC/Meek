@@ -21,6 +21,7 @@ struct DebugPrintCtx
 // Public
 
 void debugPrintAst(DebugPrintCtx * pCtx, const AstNode & root);
+void init(DebugPrintCtx * pPrintCtx, MeekCtx * pMeekCtx);
 
 // Internal
 

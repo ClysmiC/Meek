@@ -1,6 +1,7 @@
 #include "bytecode.h"
 
 #include "ast.h"
+#include "ast_decorate.h"
 #include "error.h"
 #include "global_context.h"
 #include "interp.h"
@@ -131,6 +132,8 @@ static const char * c_mpBcopStrName[] = {
 	"NegateS64",
 	"NegateFloat32",
 	"NegateFloat64",
+	"StackAlloc",
+	"StackFree",
 	"DebugPrint",
 	"DebugExit",
 };
@@ -320,13 +323,13 @@ BCOP bcopSized(SIZEDBCOP sizedBcop, int cBit)
 void init(BytecodeFunction * pBcf)
 {
 	init(&pBcf->bytes);
-	init(&pBcf->mpIByteIStart);
+	init(&pBcf->sourceLineNumbers);
 }
 
 void dispose(BytecodeFunction * pBcf)
 {
 	dispose(&pBcf->bytes);
-	dispose(&pBcf->mpIByteIStart);
+	dispose(&pBcf->sourceLineNumbers);
 }
 
 void init(BytecodeBuilder * pBuilder, MeekCtx * pCtx)
@@ -382,72 +385,74 @@ void compileBytecode(BytecodeBuilder * pBuilder)
 	}
 }
 
-void emit(DynamicArray<u8> * pBytes, BCOP byteEmit)
+void emitOp(BytecodeFunction * bcf, BCOP byteEmit, int lineNumber)
 {
 	StaticAssert(sizeof(BCOP) == sizeof(u8));
 
-	append(pBytes, u8(byteEmit));
+	append(&bcf->bytes, u8(byteEmit));
+	append(&bcf->sourceLineNumbers, lineNumber);
+	
 }
 
-void emit(DynamicArray<u8> * pBytes, u8 byteEmit)
+void emit(BytecodeFunction * bcf, u8 byteEmit)
 {
-	append(pBytes, byteEmit);
+	append(&bcf->bytes, byteEmit);
 }
 
-void emit(DynamicArray<u8> * pBytes, s8 byteEmit)
+void emit(BytecodeFunction * bcf, s8 byteEmit)
 {
-	u8 * pDst = appendNew(pBytes);
+	u8 * pDst = appendNew(&bcf->bytes);
 	memcpy(pDst, &byteEmit, 1);
 }
 
-void emit(DynamicArray<u8> * pBytes, u16 bytesEmit)
+void emit(BytecodeFunction * bcf, u16 bytesEmit)
 {
-	emit(pBytes, &bytesEmit, sizeof(bytesEmit));
+	emit(bcf, &bytesEmit, sizeof(bytesEmit));
 }
 
-void emit(DynamicArray<u8> * pBytes, s16 bytesEmit)
+void emit(BytecodeFunction * bcf, s16 bytesEmit)
 {
-	emit(pBytes, &bytesEmit, sizeof(bytesEmit));
+	emit(bcf, &bytesEmit, sizeof(bytesEmit));
 }
 
-void emit(DynamicArray<u8> * pBytes, u32 bytesEmit)
+void emit(BytecodeFunction * bcf, u32 bytesEmit)
 {
-	emit(pBytes, &bytesEmit, sizeof(bytesEmit));
+	emit(bcf, &bytesEmit, sizeof(bytesEmit));
 }
 
-void emit(DynamicArray<u8> * pBytes, s32 bytesEmit)
+void emit(BytecodeFunction * bcf, s32 bytesEmit)
 {
-	emit(pBytes, &bytesEmit, sizeof(bytesEmit));
+	emit(bcf, &bytesEmit, sizeof(bytesEmit));
 }
 
-void emit(DynamicArray<u8> * pBytes, u64 bytesEmit)
+void emit(BytecodeFunction * bcf, u64 bytesEmit)
 {
-	emit(pBytes, &bytesEmit, sizeof(bytesEmit));
+	emit(bcf, &bytesEmit, sizeof(bytesEmit));
 }
 
-void emit(DynamicArray<u8> * pBytes, s64 bytesEmit)
+void emit(BytecodeFunction * bcf, s64 bytesEmit)
 {
-	emit(pBytes, &bytesEmit, sizeof(bytesEmit));
+	emit(bcf, &bytesEmit, sizeof(bytesEmit));
 }
 
-void emit(DynamicArray<u8> * pBytes, f32 bytesEmit)
+void emit(BytecodeFunction * bcf, f32 bytesEmit)
 {
-	emit(pBytes, &bytesEmit, sizeof(bytesEmit));
+	emit(bcf, &bytesEmit, sizeof(bytesEmit));
 }
 
-void emit(DynamicArray<u8> * pBytes, f64 bytesEmit)
+void emit(BytecodeFunction * bcf, f64 bytesEmit)
 {
-	emit(pBytes, &bytesEmit, sizeof(bytesEmit));
+	emit(bcf, &bytesEmit, sizeof(bytesEmit));
 }
 
-void emit(DynamicArray<u8> * pBytes, void * pBytesEmit, int cBytesEmit)
+void emit(BytecodeFunction * bcf, void * pBytesEmit, int cBytesEmit)
 {
 	for (int i = 0; i < cBytesEmit; i++)
 	{
-		appendNew(pBytes);
+		appendNew(&bcf->bytes);
 	}
 
-	u8 * pDst = &(*pBytes)[pBytes->cItem - cBytesEmit];
+	u8 * pDst = &bcf->bytes[bcf->bytes.cItem - cBytesEmit];
 	memcpy(pDst, pBytesEmit, cBytesEmit);
 }
 
@@ -457,13 +462,16 @@ bool visitBytecodeBuilderPreorder(AstNode * pNode, void * pBuilder_)
 	Assert(!isErrorNode(*pNode));
 
 	BytecodeBuilder * pBuilder = reinterpret_cast<BytecodeBuilder *>(pBuilder_);
+	BytecodeFunction * pBytecodeFunc = pBuilder->pBytecodeFuncCompiling;
 	MeekCtx * pCtx = pBuilder->pCtx;
-	DynamicArray<u8> * paByte = &pBuilder->pBytecodeFuncCompiling->bytes;
 
 	Assert(Implies(pBuilder->root, pNode->astk == ASTK_FuncDefnStmt || pNode->astk == ASTK_FuncLiteralExpr));
 
+	int startLine = getStartLine(*pCtx, pNode->astid);
+
 	// Set defaults
 
+	pBuilder->parentWantsAddress = pBuilder->wantsAddress;
 	pBuilder->wantsAddress = false;
 
 	// Override on case by case basis
@@ -523,8 +531,8 @@ bool visitBytecodeBuilderPreorder(AstNode * pNode, void * pBuilder_)
 
 			uintptr virtualAddress = virtualAddressStart(*pScope) + symbInfo.varData.byteOffset;
 
-			emit(paByte, BCOP_LoadImmediatePtr);
-			emit(paByte, virtualAddress);
+			emitOp(pBytecodeFunc, BCOP_LoadImmediatePtr, startLine);
+			emit(pBytecodeFunc, virtualAddress);
 
 			return true;
 		}
@@ -541,7 +549,25 @@ bool visitBytecodeBuilderPreorder(AstNode * pNode, void * pBuilder_)
 
 		case ASTK_IfStmt:
 		case ASTK_WhileStmt:
+			return true;
+
 		case ASTK_BlockStmt:
+		{
+			auto * pStmt = Down(pNode, BlockStmt);
+
+			// HMM: Maybe this should only alloc/free if we don't inherit parent's scope id?
+
+			Scope * pScope = pCtx->mpScopeidPScope[pStmt->scopeid];
+
+			if (pScope->cByteVariables > 0)
+			{
+				emitOp(pBytecodeFunc, BCOP_StackAlloc, startLine);
+				emit(pBytecodeFunc, pScope->cByteVariables);
+			}
+
+			return true;
+		}
+
 		case ASTK_ReturnStmt:
 		case ASTK_BreakStmt:
 		case ASTK_ContinueStmt:
@@ -565,8 +591,10 @@ void visitBytecodeBuilderHook(AstNode * pNode, AWHK awhk, void * pBuilder_)
 	Assert(!isErrorNode(*pNode));
 
 	BytecodeBuilder * pBuilder = reinterpret_cast<BytecodeBuilder *>(pBuilder_);
+	BytecodeFunction * pBytecodeFunc = pBuilder->pBytecodeFuncCompiling;
 	MeekCtx * pCtx = pBuilder->pCtx;
-	DynamicArray<u8> * paByte = &pBuilder->pBytecodeFuncCompiling->bytes;
+
+	int startLine = getStartLine(*pCtx, pNode->astid);
 
 	switch (awhk)
 	{
@@ -587,12 +615,16 @@ void visitBytecodeBuilderHook(AstNode * pNode, AWHK awhk, void * pBuilder_)
 				case TOKENK_PercentEqual:
 				{
 					int cBitSize = pTypeLhs->info.size * 8;
+					int cBitPtr = MeekCtx::s_cBytePtr * 8;
 
-					BCOP bcopDuplicate = bcopSized(SIZEDBCOP_Duplicate, cBitSize);
+					// TODO: I'm assuming the bytecode for the LHS put an address on the stack... is that
+					//	a safe assumption to make?
+
+					BCOP bcopDuplicate = bcopSized(SIZEDBCOP_Duplicate, cBitPtr);
 					BCOP bcopLoad = bcopSized(SIZEDBCOP_Load, cBitSize);
 
-					emit(paByte, bcopDuplicate);
-					emit(paByte, bcopLoad);
+					emitOp(pBytecodeFunc, bcopDuplicate, startLine);
+					emitOp(pBytecodeFunc, bcopLoad, startLine);
 				} break;
 			}
 		} break;
@@ -605,8 +637,10 @@ void visitBytecodeBuilderPostOrder(AstNode * pNode, void * pBuilder_)
 	Assert(!isErrorNode(*pNode));
 
 	BytecodeBuilder * pBuilder = reinterpret_cast<BytecodeBuilder *>(pBuilder_);
+	BytecodeFunction * pBytecodeFunc = pBuilder->pBytecodeFuncCompiling;
 	MeekCtx * pCtx = pBuilder->pCtx;
-	DynamicArray<u8> * paByte = &pBuilder->pBytecodeFuncCompiling->bytes;
+
+	int startLine = getStartLine(*pCtx, pNode->astid);
 
 	switch (pNode->astk)
 	{
@@ -628,12 +662,12 @@ void visitBytecodeBuilderPostOrder(AstNode * pNode, void * pBuilder_)
 
 					switch (typid)
 					{
-						case TYPID_S8:		emit(paByte, BCOP_NegateS8); break;
-						case TYPID_S16:		emit(paByte, BCOP_NegateS16); break;
-						case TYPID_S32:		emit(paByte, BCOP_NegateS32); break;
-						case TYPID_S64:		emit(paByte, BCOP_NegateS64); break;
-						case TYPID_F32:		emit(paByte, BCOP_NegateFloat32); break;
-						case TYPID_F64:		emit(paByte, BCOP_NegateFloat64); break;
+						case TYPID_S8:		emitOp(pBytecodeFunc, BCOP_NegateS8, startLine); break;
+						case TYPID_S16:		emitOp(pBytecodeFunc, BCOP_NegateS16, startLine); break;
+						case TYPID_S32:		emitOp(pBytecodeFunc, BCOP_NegateS32, startLine); break;
+						case TYPID_S64:		emitOp(pBytecodeFunc, BCOP_NegateS64, startLine); break;
+						case TYPID_F32:		emitOp(pBytecodeFunc, BCOP_NegateFloat32, startLine); break;
+						case TYPID_F64:		emitOp(pBytecodeFunc, BCOP_NegateFloat64, startLine); break;
 						default:
 							AssertNotReached;
 					} break;
@@ -747,12 +781,12 @@ void visitBytecodeBuilderPostOrder(AstNode * pNode, void * pBuilder_)
 			if (cBitSize != 32) AssertTodo;
 
 			BCOP bcop = bcopSized(sizedbcop, cBitSize);
-			emit(paByte, bcop);
+			emitOp(pBytecodeFunc, bcop, startLine);
 		} break;
 
 		case ASTK_LiteralExpr:
 		{
-			Assert(!pBuilder->wantsAddress);
+			Assert(!pBuilder->parentWantsAddress);
 
 			auto * pExpr = Down(pNode, LiteralExpr);
 
@@ -764,25 +798,25 @@ void visitBytecodeBuilderPostOrder(AstNode * pNode, void * pBuilder_)
 			{
 				case LITERALK_Int:
 				{
-					emit(paByte, BCOP_LoadImmediate32);
-					emit(paByte, intValue(pExpr));
+					emitOp(pBytecodeFunc, BCOP_LoadImmediate32, startLine);
+					emit(pBytecodeFunc, intValue(pExpr));
 				} break;
 
 				case LITERALK_Float:
 				{
-					emit(paByte, BCOP_LoadImmediate32);
-					emit(paByte, floatValue(pExpr));
+					emitOp(pBytecodeFunc, BCOP_LoadImmediate32, startLine);
+					emit(pBytecodeFunc, floatValue(pExpr));
 				} break;
 
 				case LITERALK_Bool:
 				{
 					if (boolValue(pExpr))
 					{
-						emit(paByte, BCOP_LoadTrue);
+						emitOp(pBytecodeFunc, BCOP_LoadTrue, startLine);
 					}
 					else
 					{
-						emit(paByte, BCOP_LoadFalse);
+						emitOp(pBytecodeFunc, BCOP_LoadFalse, startLine);
 					}
 				} break;
 
@@ -810,10 +844,10 @@ void visitBytecodeBuilderPostOrder(AstNode * pNode, void * pBuilder_)
 
 					uintptr virtualAddress = virtualAddressStart(*pScope) + symbInfo.varData.byteOffset;
 
-					emit(paByte, BCOP_LoadImmediatePtr);
-					emit(paByte, virtualAddress);
+					emitOp(pBytecodeFunc, BCOP_LoadImmediatePtr, startLine);
+					emit(pBytecodeFunc, virtualAddress);
 
-					if (!pBuilder->wantsAddress)
+					if (!pBuilder->parentWantsAddress)
 					{
 						TYPID typid = DownExpr(pNode)->typidEval;
 						const Type * pType = lookupType(*pCtx->pTypeTable, typid);
@@ -822,10 +856,10 @@ void visitBytecodeBuilderPostOrder(AstNode * pNode, void * pBuilder_)
 
 						AssertInfo(
 							cBitSize == 8 || cBitSize == 16 || cBitSize == 32 || cBitSize == 64,
-							"wantsAddress is not valid for non-primitive types");
+							"!parentWantsAddress is not valid for non-primitive types");
 
 						BCOP bcop = bcopSized(SIZEDBCOP_Load, cBitSize);
-						emit(paByte, bcop);
+						emitOp(pBytecodeFunc, bcop, startLine);
 					}
 				} break;
 
@@ -840,7 +874,7 @@ void visitBytecodeBuilderPostOrder(AstNode * pNode, void * pBuilder_)
 					//const Type * pType = lookupType(*pCtx->pTypeTable, typid);
 					//BCOP bcop = BCOP_Nil;
 
-					//if (pBuilder->wantsAddress)
+					//if (pBuilder->parentwantsAddress)
 					//{
 					//	bcop = BCOP_AddToAddr;
 					//}
@@ -965,7 +999,7 @@ void visitBytecodeBuilderPostOrder(AstNode * pNode, void * pBuilder_)
 					if (cBitSize != 32) AssertTodo;
 
 					BCOP bcop = bcopSized(sizedbcop, cBitSize);
-					emit(paByte, bcop);
+					emitOp(pBytecodeFunc, bcop, startLine);
 
 					typidRhs = typidLhs;
 					pTypeRhs = pTypeLhs;
@@ -980,7 +1014,7 @@ void visitBytecodeBuilderPostOrder(AstNode * pNode, void * pBuilder_)
 					if (cBitSize != 32) AssertTodo;
 
 					BCOP bcop = bcopSized(SIZEDBCOP_Store, cBitSize);
-					emit(paByte, bcop);
+					emitOp(pBytecodeFunc, bcop, startLine);
 				} break;
 			}
 		} break;
@@ -1002,24 +1036,40 @@ void visitBytecodeBuilderPostOrder(AstNode * pNode, void * pBuilder_)
 
 			if (!pStmt->pInitExpr)
 			{
-				emit(paByte, BCOP_LoadImmediate32);
-				emit(paByte, u32(0));
+				emitOp(pBytecodeFunc, BCOP_LoadImmediate32, startLine);
+				emit(pBytecodeFunc, u32(0));
 			}
 
-			emit(paByte, BCOP_Load32);
+			emitOp(pBytecodeFunc, BCOP_Store32, startLine);
 		} break;
 
 		case ASTK_FuncDefnStmt:
 		{
 			// Temporary for testing... in reality we will emit return code here (if necessary)
 
-			emit(paByte, BCOP_DebugExit);
+			emitOp(pBytecodeFunc, BCOP_DebugExit, startLine);
 		}
 
 		case ASTK_StructDefnStmt:
 		case ASTK_IfStmt:
 		case ASTK_WhileStmt:
+			break;
+
 		case ASTK_BlockStmt:
+		{
+			auto * pStmt = Down(pNode, BlockStmt);
+
+			// HMM: Maybe this should only alloc/free if we don't inherit parent's scope id?
+
+			Scope * pScope = pCtx->mpScopeidPScope[pStmt->scopeid];
+
+			if (pScope->cByteVariables > 0)
+			{
+				emitOp(pBytecodeFunc, BCOP_StackFree, startLine);
+				emit(pBytecodeFunc, pScope->cByteVariables);
+			}
+		} break;
+
 		case ASTK_ReturnStmt:
 		case ASTK_BreakStmt:
 		case ASTK_ContinueStmt:
@@ -1030,8 +1080,8 @@ void visitBytecodeBuilderPostOrder(AstNode * pNode, void * pBuilder_)
 			auto * pStmt = Down(pNode, PrintStmt);
 			TYPID typid = DownExpr(pStmt->pExpr)->typidEval;
 
-			emit(paByte, BCOP_DebugPrint);
-			emit(paByte, typid);
+			emitOp(pBytecodeFunc, BCOP_DebugPrint, startLine);
+			emit(pBytecodeFunc, typid);
 		} break;
 
 		case ASTK_ParamsReturnsGrp:
@@ -1052,16 +1102,17 @@ void disassemble(const BytecodeFunction & bcf)
 {
 	int byteOffset = 0;
 	int linePrev = -1;
+	int iOp = 0;
 	
 	while (byteOffset < bcf.bytes.cItem)
 	{
 		printfmt("%08d ", byteOffset);
-		
+
 		u8 bcop = bcf.bytes[byteOffset];
-		// int iStart = bcf.mpIByteIStart[byteOffset];
 		byteOffset++;
 
-		int line = 1;	// TODO: compute from iStart
+		AssertInfo(iOp < bcf.sourceLineNumbers.cItem, "Mismatch between # of ops and # of line numbers. Did we use emit instead of emitOp?");
+		int line = bcf.sourceLineNumbers[iOp];
 
 		if (line == linePrev)
 		{
@@ -1074,6 +1125,8 @@ void disassemble(const BytecodeFunction & bcf)
 
 		print(c_mpBcopStrName[bcop]);
 		println();
+
+		// TODO: Document args for each op in a data-driven way... would eliminate the need for this switch statement.
 
 		switch (bcop)
 		{
@@ -1182,6 +1235,20 @@ void disassemble(const BytecodeFunction & bcf)
 			case BCOP_NegateFloat64:
 				break;
 
+			case BCOP_StackAlloc:
+			case BCOP_StackFree:
+			{
+				printfmt("%08d ", byteOffset);
+
+				uintptr cByte = *reinterpret_cast<uintptr *>(bcf.bytes.pBuffer + byteOffset);
+				byteOffset += sizeof(uintptr);
+
+				print("     |  ");
+				print(" -> ");
+				printfmt("%#x", cByte);
+				println();
+			} break;
+
 			case BCOP_DebugPrint:
 			{
 				printfmt("%08d ", byteOffset);
@@ -1204,6 +1271,9 @@ void disassemble(const BytecodeFunction & bcf)
 		}
 
 		linePrev = line;
+		iOp++;
 	}
+
+	AssertInfo(iOp == bcf.sourceLineNumbers.cItem, "Mismatch between # of ops and # of line numbers. Did we use emit instead of emitOp?");
 }
 #endif

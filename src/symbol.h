@@ -70,7 +70,7 @@ struct Scope
 	SCOPEID id = SCOPEID_Nil;
 	SCOPEK scopek = SCOPEK_Nil;
 
-	u32 cByteVariables = 0;
+	uintptr cByteVariables = 0;
 
 	HashMap<Lexeme, DynamicArray<SymbolInfo>> symbolsDefined;
 };

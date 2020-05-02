@@ -399,6 +399,22 @@ void interpret(Interpreter * pInterp, const BytecodeFunction & bcf)
 
 #undef Negate
 
+			case BCOP_StackAlloc:
+			{
+				uintptr bytesToReserve;
+				ReadVarFromBytecode(uintptr, bytesToReserve);
+
+				pInterp->pStack += bytesToReserve;
+			} break;
+
+			case BCOP_StackFree:
+			{
+				uintptr bytesToFree;
+				ReadVarFromBytecode(uintptr, bytesToFree);
+
+				pInterp->pStack -= bytesToFree;
+			} break;
+
 			case BCOP_DebugPrint:
 			{
 				TYPID typid;
@@ -496,90 +512,6 @@ void interpret(Interpreter * pInterp, const BytecodeFunction & bcf)
 			{
 				run = false;
 			} break;
-
-//#define Assign(type) \
-//	do { \
-//		type _val; \
-//		ReadVarFromStack(type, _val); \
-//		type * _pVar; \
-//		ReadVarFromBytecode(type *, _pVar); \
-//		*_pVar = _val; } while (0)
-//
-//			case BCOP_Assign8:
-//			{
-//				Assign(u8);
-//			} break;
-//
-//			case BCOP_Assign16:
-//			{
-//				Assign(u16);
-//			} break;
-//
-//			case BCOP_Assign32:
-//			{
-//				Assign(u32);
-//			} break;
-//
-//			case BCOP_Assign64:
-//			{
-//				Assign(u64);
-//			} break;
-//
-//#undef Assign
-//
-//			case BCOP_Pop8:
-//			{
-//				pInterp->pStack -= sizeof(u8);
-//			} break;
-//
-//			case BCOP_Pop16:
-//			{
-//				pInterp->pStack -= sizeof(u16);
-//			} break;
-//
-//			case BCOP_Pop32:
-//			{
-//				pInterp->pStack -= sizeof(u32);
-//			} break;
-//
-//			case BCOP_Pop64:
-//			{
-//				pInterp->pStack -= sizeof(u64);
-//			} break;
-//
-//			case BCOP_PopX:
-//			{
-//				u32 cByte;
-//				ReadVarFromBytecode(u32, cByte);
-//				pInterp->pStack -= cByte;
-//			} break;
-//
-//			case BCOP_Reserve8:
-//			{
-//				pInterp->pStack += sizeof(u8);
-//			} break;
-//
-//			case BCOP_Reserve16:
-//			{
-//				pInterp->pStack += sizeof(u16);
-//			} break;
-//
-//			case BCOP_Reserve32:
-//			{
-//				pInterp->pStack += sizeof(u32);
-//			} break;
-//
-//			case BCOP_Reserve64:
-//			{
-//				pInterp->pStack += sizeof(u64);
-//			} break;
-//
-//			case BCOP_ReserveX:
-//			{
-//				u32 cByte;
-//				ReadVarFromBytecode(u32, cByte);
-//				pInterp->pStack += cByte;
-//			} break;
 
 			default:
 			{
