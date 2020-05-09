@@ -1174,7 +1174,7 @@ void visitResolvePostorder(AstNode * pNode, void * pPass_)
 
 void visitResolveHook(AstNode * pNode, AWHK awhk, void * pPass_)
 {
-	if (awhk != AWHK_PostFormalReturnVardecls)
+	if (awhk != AWHK_FuncPostFormalReturnVardecls)
 		return;
 
 	ResolvePass * pPass = reinterpret_cast<ResolvePass *>(pPass_);

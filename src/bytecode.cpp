@@ -7,6 +7,8 @@
 #include "interp.h"
 #include "print.h"
 
+#include <inttypes.h>
+
 //const int gc_mpBcopCByte[] = {
 //	1,		// BCOP_Return
 //	2,		// BCOP_PushImmediate8
@@ -577,18 +579,6 @@ bool visitBytecodeBuilderPreorder(AstNode * pNode, void * pBuilder_)
 			return false;
 
 		case ASTK_IfStmt:
-		{
-			s16 placeholder = 0;
-			emitOp(pBytecodeFunc, BCOP_JumpIfFalse, startLine);
-
-			pNodeCtx->ifStmtData.iJumpArgPlaceholder = pBytecodeFunc->bytes.cItem;
-			emit(pBytecodeFunc, placeholder);
-
-			pNodeCtx->ifStmtData.ipZero = pBytecodeFunc->bytes.cItem;
-
-			return true;
-		}
-
 		case ASTK_WhileStmt:
 			return true;
 
@@ -641,7 +631,7 @@ void visitBytecodeBuilderHook(AstNode * pNode, AWHK awhk, void * pBuilder_)
 
 	switch (awhk)
 	{
-		case AWHK_PostAssignLhs:
+		case AWHK_AssignPostLhs:
 		{
 			Assert(pNode->astk == ASTK_AssignStmt);
 			
@@ -674,7 +664,20 @@ void visitBytecodeBuilderHook(AstNode * pNode, AWHK awhk, void * pBuilder_)
 			}
 		} break;
 
-		case AWHK_PreElseBody:
+		case AWHK_IfPostCondition:
+		{
+			Assert(pNode->astk == ASTK_IfStmt);
+
+			s16 placeholder = 0;
+			emitOp(pBytecodeFunc, BCOP_JumpIfFalse, startLine);
+
+			pNodeCtx->ifStmtData.iJumpArgPlaceholder = pBytecodeFunc->bytes.cItem;
+			emit(pBytecodeFunc, placeholder);
+
+			pNodeCtx->ifStmtData.ipZero = pBytecodeFunc->bytes.cItem;
+		} break;
+
+		case AWHK_IfPreElse:
 		{
 			Assert(pNode->astk == ASTK_IfStmt);
 
@@ -1219,6 +1222,7 @@ void disassemble(const BytecodeFunction & bcf)
 		u8 bcop = bcf.bytes[byteOffset];
 		byteOffset++;
 
+		Assert(bcop < BCOP_Max);
 		AssertInfo(iOp < bcf.sourceLineNumbers.cItem, "Mismatch between # of ops and # of line numbers. Did we use emit instead of emitOp?");
 		int line = bcf.sourceLineNumbers[iOp];
 
@@ -1343,6 +1347,20 @@ void disassemble(const BytecodeFunction & bcf)
 			case BCOP_NegateFloat64:
 				break;
 
+			case BCOP_Jump:
+			case BCOP_JumpIfFalse:
+			{
+				printfmt("%08d ", byteOffset);
+
+				s16 bytesToJump = *reinterpret_cast<s16 *>(bcf.bytes.pBuffer + byteOffset);
+				byteOffset += sizeof(s16);
+
+				print("     |  ");
+				print(" -> ");
+				printfmt("%d", bytesToJump);
+				println();
+			} break;
+
 			case BCOP_StackAlloc:
 			case BCOP_StackFree:
 			{
@@ -1353,7 +1371,7 @@ void disassemble(const BytecodeFunction & bcf)
 
 				print("     |  ");
 				print(" -> ");
-				printfmt("%#x", cByte);
+				printfmt("%" PRIuPTR, cByte);
 				println();
 			} break;
 

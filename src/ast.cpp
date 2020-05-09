@@ -103,7 +103,7 @@ void walkAst(
 		{
 			auto * pNode = Down(pNodeSubtreeRoot, FuncLiteralExpr);
 			walkAst(pCtx, Up(pNode->pParamsReturnsGrp), visitPreorderFn, hookFn, visitPostorderFn, pContext);
-			hookFn(Up(pNode), AWHK_PostFormalReturnVardecls, pContext);
+			hookFn(Up(pNode), AWHK_FuncPostFormalReturnVardecls, pContext);
 			walkAst(pCtx, pNode->pBodyStmt, visitPreorderFn, hookFn, visitPostorderFn, pContext);
 		} break;
 
@@ -119,7 +119,7 @@ void walkAst(
 
 			auto * pNode = Down(pNodeSubtreeRoot, AssignStmt);
 			walkAst(pCtx, pNode->pLhsExpr, visitPreorderFn, hookFn, visitPostorderFn, pContext);
-			hookFn(Up(pNode), AWHK_PostAssignLhs, pContext);
+			hookFn(Up(pNode), AWHK_AssignPostLhs, pContext);
 			walkAst(pCtx, pNode->pRhsExpr, visitPreorderFn, hookFn, visitPostorderFn, pContext);
 		} break;
 
@@ -136,7 +136,7 @@ void walkAst(
 		{
 			auto * pNode = Down(pNodeSubtreeRoot, FuncDefnStmt);
 			walkAst(pCtx, Up(pNode->pParamsReturnsGrp), visitPreorderFn, hookFn, visitPostorderFn, pContext);
-			hookFn(Up(pNode), AWHK_PostFormalReturnVardecls, pContext);
+			hookFn(Up(pNode), AWHK_FuncPostFormalReturnVardecls, pContext);
 			walkAst(pCtx, pNode->pBodyStmt, visitPreorderFn, hookFn, visitPostorderFn, pContext);
 		} break;
 
@@ -153,11 +153,12 @@ void walkAst(
 		{
 			auto * pNode = Down(pNodeSubtreeRoot, IfStmt);
 			walkAst(pCtx, pNode->pCondExpr, visitPreorderFn, hookFn, visitPostorderFn, pContext);
+			hookFn(Up(pNode), AWHK_IfPostCondition, pContext);
 			walkAst(pCtx, pNode->pThenStmt, visitPreorderFn, hookFn, visitPostorderFn, pContext);
 
 			if (pNode->pElseStmt)
 			{
-				hookFn(Up(pNode), AWHK_PreElseBody, pContext);
+				hookFn(Up(pNode), AWHK_IfPreElse, pContext);
 				walkAst(pCtx, pNode->pElseStmt, visitPreorderFn, hookFn, visitPostorderFn, pContext);
 			}
 		} break;

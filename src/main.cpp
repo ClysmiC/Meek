@@ -116,7 +116,9 @@ int main()
 	print("Done\n");
 	println();
 
-	// disassemble(*bytecodeBuilder.pBytecodeFuncMain);
+#if 0
+	disassemble(*bytecodeBuilder.pBytecodeFuncMain);
+#else
 
 	print("Running interpreter...\n");
 
@@ -124,6 +126,7 @@ int main()
 	init(&interp, &ctx);
 
 	interpret(&interp, *bytecodeBuilder.pBytecodeFuncMain);
+#endif
 
 	print("Done\n");
 	println();

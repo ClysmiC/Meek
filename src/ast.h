@@ -519,9 +519,10 @@ static constexpr uint s_nodeSizeDebug = sizeof(AstNode);
 
 enum AWHK
 {
-	AWHK_PostFormalReturnVardecls,
-	AWHK_PostAssignLhs,
-	AWHK_PreElseBody,
+	AWHK_FuncPostFormalReturnVardecls,
+	AWHK_AssignPostLhs,
+	AWHK_IfPostCondition,
+	AWHK_IfPreElse
 };
 
 typedef bool (* AstWalkVisitPreFn)(AstNode *, void *);

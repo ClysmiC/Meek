@@ -8,20 +8,25 @@ fn main()
 	b += 23;
 
 	print(a * b + c);
-	print(12);
 	
 	if true
 	{
-		print(13);
+		print(80085);
+	}
+	else
+	{
+		print(666);
+	}
+	
+	if false
+	{
+		print(1111);
+	}
+	else
+	{
+		print(2222);
 	}
 }
-
-
-
-
-
-
-
 
 
 
