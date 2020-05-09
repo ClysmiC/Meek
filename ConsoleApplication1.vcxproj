@@ -24,6 +24,7 @@
     <ClInclude Include="src\als\common_alloc.h" />
     <ClInclude Include="src\als\common_array.h" />
     <ClInclude Include="src\als\common_hash.h" />
+    <ClInclude Include="src\als\common_sort.h" />
     <ClInclude Include="src\als\common_string.h" />
     <ClInclude Include="src\als\common_type.h" />
     <ClInclude Include="src\als\macro.h" />

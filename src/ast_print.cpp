@@ -842,7 +842,7 @@ void debugPrintSubAst(DebugPrintCtx * pCtx, const AstNode & node, int level, boo
 		{
 			auto * pStmt = DownConst(&node, PrintStmt);
 
-			print("(debug print statement)");
+			print("(debug print stmt)");
 			println();
 
 			printTabs(pCtx, levelNext, false, false);

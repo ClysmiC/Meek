@@ -93,6 +93,7 @@ enum FSYMBQ : u16
 	FSYMBQ_IgnoreFuncs		= 0x1 << 2,
 
 	FSYMBQ_IgnoreParent		= 0x1 << 3,
+	FSYMBQ_SortVarseqid		= 0x1 << 4,
 
 	GRFSYMBQ_None			= 0
 };
@@ -104,6 +105,7 @@ void defineSymbol(Scope * pScope, const Lexeme & lexeme, const SymbolInfo & symb
 bool auditDuplicateSymbols(Scope * pScope);
 void computeScopedVariableOffsets(MeekCtx * pCtx, Scope * pScope);
 
+int compareVarseqid(const SymbolInfo & s0, const SymbolInfo & s1);
 SCOPEID scopeidFromSymbolInfo(const SymbolInfo & symbInfo);
 SymbolInfo lookupVarSymbol(const Scope & scope, const Lexeme & lexeme, GRFSYMBQ grfsymbq = GRFSYMBQ_None);
 SymbolInfo lookupTypeSymbol(const Scope & scope, const Lexeme & lexeme, GRFSYMBQ grfsymbq = GRFSYMBQ_None);

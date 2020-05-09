@@ -365,10 +365,10 @@ void release(DynamicPoolAllocator<T, CapacityPerBucket> * pAlloc, T * pItem, boo
         {
             bool didSwap = false;
 
-            for (int j = i + 1; j < pAlloc->cRecentlyReleased; j++)
+            for (int j = 0; j < pAlloc->cRecentlyReleased - 1 - i; j++)
             {
-                T ** pp0 = &pAlloc->aRecentlyReleased[j - 1];
-                T ** pp1 = &pAlloc->aRecentlyReleased[j];
+                T ** pp0 = &pAlloc->aRecentlyReleased[j];
+                T ** pp1 = &pAlloc->aRecentlyReleased[j + 1];
 
                 if (*pp0 > *pp1)
                 {

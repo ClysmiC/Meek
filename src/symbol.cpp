@@ -187,7 +187,7 @@ void computeScopedVariableOffsets(MeekCtx * pCtx, Scope * pScope)
 	init(&aSymbInfo);
 	Defer(dispose(&aSymbInfo));
 
-	lookupAllVars(*pScope, &aSymbInfo, FSYMBQ_IgnoreParent);
+	lookupAllVars(*pScope, &aSymbInfo, FSYMBQ_IgnoreParent | FSYMBQ_SortVarseqid);
 
 	Assert(Implies(pScope->id == SCOPEID_BuiltIn, aSymbInfo.cItem == 0));
 
@@ -207,6 +207,14 @@ void computeScopedVariableOffsets(MeekCtx * pCtx, Scope * pScope)
 	Assert(fakeTypeInfo.alignment != Type::ComputedInfo::s_unset);
 
 	pScope->cByteVariables = fakeTypeInfo.size;
+}
+
+int compareVarseqid(const SymbolInfo & s0, const SymbolInfo & s1)
+{
+	Assert(s0.symbolk == SYMBOLK_Var);
+	Assert(s1.symbolk == SYMBOLK_Var);
+
+	return s0.varData.pVarDeclStmt->varseqid - s1.varData.pVarDeclStmt->varseqid;
 }
 
 SCOPEID scopeidFromSymbolInfo(const SymbolInfo & symbInfo)
@@ -369,6 +377,11 @@ void lookupAllVars(const Scope & scope, DynamicArray<SymbolInfo> * poResult, GRF
 	if ((grfsymbq & FSYMBQ_IgnoreParent) == 0)
 	{
 		lookupAllVars(*scope.pScopeParent, poResult, grfsymbq);
+	}
+
+	if (grfsymbq & FSYMBQ_SortVarseqid)
+	{
+		bubbleSort(poResult->pBuffer, poResult->cItem, &compareVarseqid);
 	}
 }
 
