@@ -15,7 +15,7 @@ void init(Interpreter * pInterp, MeekCtx * pCtx)
 	Scope * pScopeGlobal = pCtx->pParser->pScopeGlobal;		// TODO: put this somewhere other than parser...
 
 	constexpr u64 cByteStack = c_MiB;
-	int cByteGlobal = pScopeGlobal->cByteVariables;
+	uintptr cByteGlobal = pScopeGlobal->cByteVariables;
 
 	pInterp->pVirtualAddressSpace = new u8[cByteGlobal + cByteStack];
 
@@ -398,6 +398,27 @@ void interpret(Interpreter * pInterp, const BytecodeFunction & bcf)
 			} break;
 
 #undef Negate
+
+			case BCOP_Jump:
+			{
+				s16 bytesToJump;
+				ReadVarFromBytecode(s16, bytesToJump);
+				pInterp->ip += bytesToJump;
+			} break;
+
+			case BCOP_JumpIfFalse:
+			{
+				s16 bytesToJump;
+				ReadVarFromBytecode(s16, bytesToJump);
+
+				u8 boolVal;
+				ReadVarFromStack(u8, boolVal);
+
+				if (!boolVal)
+				{
+					pInterp->ip += bytesToJump;
+				}
+			} break;
 
 			case BCOP_StackAlloc:
 			{

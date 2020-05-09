@@ -18,9 +18,12 @@ typedef double			f64;
 
 typedef unsigned int	uint;
 typedef uintptr_t		uintptr;
+typedef intptr_t		intptr;
 
-#define S32_MAX  2147483647
+#define S16_MAX		32767
+#define S32_MAX		2147483647
 
 // Tricky -1 is necessary because -2147483648 gets treated as an unsigned long literal with a unary operator...
 
+#define S16_MIN (-32767 - 1)
 #define S32_MIN (-2147483647 - 1)

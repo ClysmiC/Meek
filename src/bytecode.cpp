@@ -132,6 +132,8 @@ static const char * c_mpBcopStrName[] = {
 	"NegateS64",
 	"NegateFloat32",
 	"NegateFloat64",
+	"Jump",
+	"JumpIfFalse",
 	"StackAlloc",
 	"StackFree",
 	"DebugPrint",
@@ -336,11 +338,27 @@ void init(BytecodeBuilder * pBuilder, MeekCtx * pCtx)
 {
 	pBuilder->pCtx = pCtx;
 	init(&pBuilder->aBytecodeFunc);
+	init(&pBuilder->nodeCtxStack);
 }
 
 void dispose(BytecodeBuilder * pBuilder)
 {
 	dispose(&pBuilder->aBytecodeFunc);
+}
+
+void init(BytecodeBuilder::NodeCtx * pNodeCtx, AstNode * pNode)
+{
+	pNodeCtx->pNode = pNode;
+	pNodeCtx->wantsChildExprAddr = false;
+
+	switch (pNode->astk)
+	{
+		case ASTK_IfStmt:
+		{
+			pNodeCtx->ifStmtData.iJumpArgPlaceholder = 0;
+			pNodeCtx->ifStmtData.ipZero = 0;
+		} break;
+	}
 }
 
 void compileBytecode(BytecodeBuilder * pBuilder)
@@ -456,6 +474,19 @@ void emit(BytecodeFunction * bcf, void * pBytesEmit, int cBytesEmit)
 	memcpy(pDst, pBytesEmit, cBytesEmit);
 }
 
+void backpatch(BytecodeFunction * bcf, int iByte, s16 bytesUpdate)
+{
+	backpatch(bcf, iByte, &bytesUpdate, sizeof(bytesUpdate));
+}
+
+void backpatch(BytecodeFunction * bcf, int iByte, void * pBytesUpdate, int cBytesUpdate)
+{
+	Assert(iByte <= bcf->bytes.cItem - sizeof(cBytesUpdate));
+
+	u8 * pDst = &bcf->bytes[iByte];
+	memcpy(pDst, pBytesUpdate, cBytesUpdate);
+}
+
 bool visitBytecodeBuilderPreorder(AstNode * pNode, void * pBuilder_)
 {
 	Assert(pNode);
@@ -469,10 +500,8 @@ bool visitBytecodeBuilderPreorder(AstNode * pNode, void * pBuilder_)
 
 	int startLine = getStartLine(*pCtx, pNode->astid);
 
-	// Set defaults
-
-	pBuilder->parentWantsAddress = pBuilder->wantsAddress;
-	pBuilder->wantsAddress = false;
+	BytecodeBuilder::NodeCtx * pNodeCtx = pushNew(&pBuilder->nodeCtxStack);
+	init(pNodeCtx, pNode);
 
 	// Override on case by case basis
 
@@ -495,7 +524,7 @@ bool visitBytecodeBuilderPreorder(AstNode * pNode, void * pBuilder_)
 			auto * pExpr = Down(pNode, SymbolExpr);
 			if (pExpr->symbexprk == SYMBEXPRK_MemberVar)
 			{
-				pBuilder->wantsAddress = true;
+				pNodeCtx->wantsChildExprAddr = true;
 			}
 			return true;
 		} break;
@@ -517,7 +546,7 @@ bool visitBytecodeBuilderPreorder(AstNode * pNode, void * pBuilder_)
 
 		case ASTK_AssignStmt:
 		{
-			pBuilder->wantsAddress = true;
+			pNodeCtx->wantsChildExprAddr = true;
 			return true;
 		}
 
@@ -548,6 +577,18 @@ bool visitBytecodeBuilderPreorder(AstNode * pNode, void * pBuilder_)
 			return false;
 
 		case ASTK_IfStmt:
+		{
+			s16 placeholder = 0;
+			emitOp(pBytecodeFunc, BCOP_JumpIfFalse, startLine);
+
+			pNodeCtx->ifStmtData.iJumpArgPlaceholder = pBytecodeFunc->bytes.cItem;
+			emit(pBytecodeFunc, placeholder);
+
+			pNodeCtx->ifStmtData.ipZero = pBytecodeFunc->bytes.cItem;
+
+			return true;
+		}
+
 		case ASTK_WhileStmt:
 			return true;
 
@@ -596,6 +637,8 @@ void visitBytecodeBuilderHook(AstNode * pNode, AWHK awhk, void * pBuilder_)
 
 	int startLine = getStartLine(*pCtx, pNode->astid);
 
+	BytecodeBuilder::NodeCtx * pNodeCtx = peekPtr(pBuilder->nodeCtxStack);
+
 	switch (awhk)
 	{
 		case AWHK_PostAssignLhs:
@@ -605,6 +648,8 @@ void visitBytecodeBuilderHook(AstNode * pNode, AWHK awhk, void * pBuilder_)
 			auto * pStmt = Down(pNode, AssignStmt);
 			TYPID typidLhs = DownExpr(pStmt->pLhsExpr)->typidEval;
 			const Type * pTypeLhs = lookupType(*pCtx->pTypeTable, typidLhs);
+
+			pNodeCtx->wantsChildExprAddr = false;
 
 			switch (pStmt->pAssignToken->tokenk)
 			{
@@ -628,6 +673,38 @@ void visitBytecodeBuilderHook(AstNode * pNode, AWHK awhk, void * pBuilder_)
 				} break;
 			}
 		} break;
+
+		case AWHK_PreElseBody:
+		{
+			Assert(pNode->astk == ASTK_IfStmt);
+
+			auto * pStmt = Down(pNode, IfStmt);
+			Assert(pStmt->pElseStmt);
+
+			// Emit jump over else
+
+			s16 placeholder = 0;
+			emitOp(pBytecodeFunc, BCOP_Jump, startLine);	// Would be better if line mapped to the line of the "else" token
+
+			int iJumpOverElseBackpatch = pBytecodeFunc->bytes.cItem;
+			emit(pBytecodeFunc, placeholder);
+
+			// Backpatch jump over if
+
+			int ipJumpOverIfTarget = pBytecodeFunc->bytes.cItem;
+			int bytesToJump = ipJumpOverIfTarget - pNodeCtx->ifStmtData.ipZero;
+			if (bytesToJump > S16_MAX || bytesToJump < S16_MIN)
+			{
+				reportIceAndExit("Cannot store %d in jump argument");
+			}
+
+			backpatch(pBytecodeFunc, pNodeCtx->ifStmtData.iJumpArgPlaceholder, s16(bytesToJump));
+
+			// Setup jump over else
+
+			pNodeCtx->ifStmtData.iJumpArgPlaceholder = iJumpOverElseBackpatch;
+			pNodeCtx->ifStmtData.ipZero = pBytecodeFunc->bytes.cItem;
+		} break;
 	}
 }
 
@@ -639,6 +716,15 @@ void visitBytecodeBuilderPostOrder(AstNode * pNode, void * pBuilder_)
 	BytecodeBuilder * pBuilder = reinterpret_cast<BytecodeBuilder *>(pBuilder_);
 	BytecodeFunction * pBytecodeFunc = pBuilder->pBytecodeFuncCompiling;
 	MeekCtx * pCtx = pBuilder->pCtx;
+
+	Assert(count(pBuilder->nodeCtxStack) > 0);
+	BytecodeBuilder::NodeCtx * pNodeCtx = peekPtr(pBuilder->nodeCtxStack);
+
+	NULLABLE BytecodeBuilder::NodeCtx * pNodeCtxParent = nullptr;
+	if (count(pBuilder->nodeCtxStack) > 1)
+	{
+		pNodeCtxParent = peekFarPtr(pBuilder->nodeCtxStack, 1);
+	}
 
 	int startLine = getStartLine(*pCtx, pNode->astid);
 
@@ -786,7 +872,8 @@ void visitBytecodeBuilderPostOrder(AstNode * pNode, void * pBuilder_)
 
 		case ASTK_LiteralExpr:
 		{
-			Assert(!pBuilder->parentWantsAddress);
+			Assert(pNodeCtxParent);
+			Assert(!pNodeCtxParent->wantsChildExprAddr);
 
 			auto * pExpr = Down(pNode, LiteralExpr);
 
@@ -838,6 +925,8 @@ void visitBytecodeBuilderPostOrder(AstNode * pNode, void * pBuilder_)
 			{
 				case SYMBEXPRK_Var:
 				{
+					Assert(pNodeCtxParent);
+
 					Scope * pScope = pCtx->mpScopeidPScope[pExpr->varData.pDeclCached->ident.scopeid];
 					SymbolInfo symbInfo = lookupVarSymbol(*pScope, pExpr->ident, FSYMBQ_IgnoreParent);
 					Assert(symbInfo.symbolk == SYMBOLK_Var);
@@ -847,7 +936,7 @@ void visitBytecodeBuilderPostOrder(AstNode * pNode, void * pBuilder_)
 					emitOp(pBytecodeFunc, BCOP_LoadImmediatePtr, startLine);
 					emit(pBytecodeFunc, virtualAddress);
 
-					if (!pBuilder->parentWantsAddress)
+					if (!pNodeCtxParent->wantsChildExprAddr)
 					{
 						TYPID typid = DownExpr(pNode)->typidEval;
 						const Type * pType = lookupType(*pCtx->pTypeTable, typid);
@@ -856,7 +945,7 @@ void visitBytecodeBuilderPostOrder(AstNode * pNode, void * pBuilder_)
 
 						AssertInfo(
 							cBitSize == 8 || cBitSize == 16 || cBitSize == 32 || cBitSize == 64,
-							"!parentWantsAddress is not valid for non-primitive types");
+							"not wanting address is not valid for non-primitive types");
 
 						BCOP bcop = bcopSized(SIZEDBCOP_Load, cBitSize);
 						emitOp(pBytecodeFunc, bcop, startLine);
@@ -1051,7 +1140,24 @@ void visitBytecodeBuilderPostOrder(AstNode * pNode, void * pBuilder_)
 		}
 
 		case ASTK_StructDefnStmt:
+			break;
+
 		case ASTK_IfStmt:
+		{
+			auto * pStmt = Down(pNode, IfStmt);
+
+			// Backpatch jump over if (or else)
+
+			int ipJumpTarget = pBytecodeFunc->bytes.cItem;
+			int bytesToJump = ipJumpTarget - pNodeCtx->ifStmtData.ipZero;
+			if (bytesToJump > S16_MAX || bytesToJump < S16_MIN)
+			{
+				reportIceAndExit("Cannot store %d in jump argument");
+			}
+
+			backpatch(pBytecodeFunc, pNodeCtx->ifStmtData.iJumpArgPlaceholder, s16(bytesToJump));
+		} break;
+
 		case ASTK_WhileStmt:
 			break;
 
@@ -1095,6 +1201,8 @@ void visitBytecodeBuilderPostOrder(AstNode * pNode, void * pBuilder_)
 			AssertNotReached;
 			break;
 	}
+
+	pop(&pBuilder->nodeCtxStack);
 }
 
 #ifdef DEBUG

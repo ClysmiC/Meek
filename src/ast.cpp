@@ -157,6 +157,7 @@ void walkAst(
 
 			if (pNode->pElseStmt)
 			{
+				hookFn(Up(pNode), AWHK_PreElseBody, pContext);
 				walkAst(pCtx, pNode->pElseStmt, visitPreorderFn, hookFn, visitPostorderFn, pContext);
 			}
 		} break;

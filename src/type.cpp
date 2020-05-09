@@ -216,7 +216,7 @@ PENDINGTYPID registerPendingModType(
 	PENDINGTYPID pendingTypidModified,
 	NULLABLE TYPID * pTypidUpdateOnResolve)
 {
-	Assert(pendingTypidModified <  pTable->typesPendingResolution.cItem);
+	Assert(pendingTypidModified <  PENDINGTYPID(pTable->typesPendingResolution.cItem));
 	AssertInfo(pendingTypidModified == pTable->typesPendingResolution.cItem - 1, "I think this should be true if we register them in the order I think we do");
 
 	PENDINGTYPID result = PENDINGTYPID(pTable->typesPendingResolution.cItem);
@@ -277,8 +277,8 @@ Lexeme getDealiasedTypeLexeme(const Lexeme & lexeme)
 
 bool typeEq(const Type & t0, const Type & t1)
 {
-	Assert(isTypeResolved(t0), "Asking if these types are equal is an ill-formed question if they aren't fully resolved");
-	Assert(isTypeResolved(t1), "Asking if these types are equal is an ill-formed question if they aren't fully resolved");
+	AssertInfo(isTypeResolved(t0), "Asking if these types are equal is an ill-formed question if they aren't fully resolved");
+	AssertInfo(isTypeResolved(t1), "Asking if these types are equal is an ill-formed question if they aren't fully resolved");
 
 	if (t0.typek != t1.typek)
 		return false;
@@ -943,8 +943,8 @@ bool tryResolveAllTypes(TypeTable * pTable)
 					// TODO (andrew) This is a bit too clever. I am tempted to rewrite how types get registered/resolved... all of this poking into a pointer
 					//	is kind of hard to track.
 
-					AssertInfo(pTypePending->pendingTypidModifiedBy < pTable->typesPendingResolution.cItem);
-					AssertInfo(pTypePending->pendingTypidModifiedBy > i, "This should be true due to the insertion order into this list");
+					Assert(pTypePending->pendingTypidModifiedBy < PENDINGTYPID(pTable->typesPendingResolution.cItem));
+					AssertInfo(pTypePending->pendingTypidModifiedBy > PENDINGTYPID(i), "This should be true due to the insertion order into this list");
 
 					TypeTable::TypePendingResolve * pTypePendingModifiedBy = &pTable->typesPendingResolution[pTypePending->pendingTypidModifiedBy];
 

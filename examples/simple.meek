@@ -8,7 +8,30 @@ fn main()
 	b += 23;
 
 	print(a * b + c);
+	print(12);
+	
+	if true
+	{
+		print(13);
+	}
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 // Things to handle:
 //	VarDecl (with initializer)				ENOUGH

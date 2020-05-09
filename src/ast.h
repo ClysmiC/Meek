@@ -405,7 +405,7 @@ struct AstIfStmt
 {
 	AstNode * pCondExpr;
 	AstNode * pThenStmt;
-	AstNode * pElseStmt;
+	NULLABLE AstNode * pElseStmt;
 };
 
 struct AstWhileStmt
@@ -521,6 +521,7 @@ enum AWHK
 {
 	AWHK_PostFormalReturnVardecls,
 	AWHK_PostAssignLhs,
+	AWHK_PreElseBody,
 };
 
 typedef bool (* AstWalkVisitPreFn)(AstNode *, void *);

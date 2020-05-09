@@ -151,14 +151,27 @@ enum BCOP : u8
 	BCOP_NegateFloat32,
 	BCOP_NegateFloat64,
 
+	// Jump
+	//	- Reads s16 from bytecode
+	//	- Advances IP that many bytes
+
+	BCOP_Jump,
+
+	// Jump
+	//	- Reads 8 bit bool off the stack
+	//	- Reads s16 from bytecode
+	//	- Advances IP that many bytes if the bool is false
+
+	BCOP_JumpIfFalse,
+
 	// StackAlloc
-	//	- Pops uintptr off the stack
+	//	- Reads uintptr from bytecode
 	//	- Reserves that many bytes on the top of the stack
 
 	BCOP_StackAlloc,
 
 	// StackFree
-	//	- Pops uintptr off the stack
+	//	- Reads uintptr from bytecode
 	//	- Pops that many bytes off the top of the stack
 
 	BCOP_StackFree,
@@ -231,13 +244,31 @@ struct BytecodeBuilder
 
 	BytecodeFunction * pBytecodeFuncCompiling;
 	bool root = false;
-	
-	bool wantsAddress = false;
-	bool parentWantsAddress = false;
+
+	struct NodeCtx
+	{
+		AstNode * pNode;
+		bool wantsChildExprAddr;
+
+		// Tag implied by pNode->astk
+
+		union
+		{
+			struct UIfStmtCtx
+			{
+				int iJumpArgPlaceholder;	// Byte index of jump arg that needs to be backpatched
+				int ipZero;					// Resulting IP if we were to jump with argument of 0
+			} ifStmtData;
+		};
+	};
+
+	Stack<NodeCtx> nodeCtxStack;
 };
 
 void init(BytecodeBuilder * pBuilder, MeekCtx * pCtx);
 void dispose(BytecodeBuilder * pBuilder);
+
+void init(BytecodeBuilder::NodeCtx * pNodeCtx, AstNode * pNode);
 
 void compileBytecode(BytecodeBuilder * pBuilder);
 void emitOp(BytecodeFunction * bcf, BCOP byteEmit, int lineNumber);
@@ -252,6 +283,9 @@ void emit(BytecodeFunction * bcf, s64 bytesEmit);
 void emit(BytecodeFunction * bcf, f32 bytesEmit);
 void emit(BytecodeFunction * bcf, f64 bytesEmit);
 void emit(BytecodeFunction * bcf, void * pBytesEmit, int cBytesEmit);
+
+void backpatch(BytecodeFunction * bcf, int iByte, s16 bytesUpdate);
+void backpatch(BytecodeFunction * bcf, int iByte, void * pBytesUpdate, int cBytesUpdate);
 
 bool visitBytecodeBuilderPreorder(AstNode * pNode, void * pBuilder_);
 void visitBytecodeBuilderPostOrder(AstNode * pNode, void * pBuilder_);
