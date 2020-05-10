@@ -879,7 +879,7 @@ AstNode * parseDoPseudoStmtOrBlockStmt(Parser * pParser, bool pushPopScopeBlock)
 	}
 	else
 	{
-		Assert(tokenk == TOKENK_Do);
+		Verify(consumeToken(pScanner) == TOKENK_Do);
 		pStmt = parseStmt(pParser, PARSESTMTK_DoPseudoStmt);
 	}
 

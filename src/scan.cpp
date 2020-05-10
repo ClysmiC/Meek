@@ -454,7 +454,7 @@ TOKENK produceNextToken(Scanner * pScanner, Token * poToken)
 
 			case '&':
 			{
-				if (tryConsumeChar(pScanner, '|'))
+				if (tryConsumeChar(pScanner, '&'))
 				{
 					if (tryConsumeChar(pScanner, '=')) makeToken(pScanner, TOKENK_AmpAmpEqual, poToken);
 					else makeToken(pScanner, TOKENK_AmpAmp, poToken);

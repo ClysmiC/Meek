@@ -224,11 +224,13 @@ enum BCOP : u8
 	BCOP_Jump,
 
 	// Jump
-	//	- Reads 8 bit bool off the stack
+	//	- Reads (or peeks) 8 bit bool off the stack
 	//	- Reads s16 from bytecode
 	//	- Advances IP that many bytes if the bool is false
 
 	BCOP_JumpIfFalse,
+	BCOP_JumpIfPeekFalse,
+	BCOP_JumpIfPeekTrue,
 
 	// StackAlloc
 	//	- Reads uintptr from bytecode
@@ -333,6 +335,12 @@ struct BytecodeBuilder
 				int iJumpArgPlaceholder;	// Byte index of jump arg that needs to be backpatched
 				int ipZero;					// Resulting IP if we were to jump with argument of 0
 			} ifStmtData;
+
+			struct UBinopExprCtx
+			{
+				int iJumpArgPlaceholder;	// For binops that short circuit evaluate
+				int ipZero;					// "
+			} binopExprData;
 		};
 	};
 
@@ -358,8 +366,8 @@ void emit(BytecodeFunction * bcf, f32 bytesEmit);
 void emit(BytecodeFunction * bcf, f64 bytesEmit);
 void emit(BytecodeFunction * bcf, void * pBytesEmit, int cBytesEmit);
 
-void backpatch(BytecodeFunction * bcf, int iByte, s16 bytesUpdate);
-void backpatch(BytecodeFunction * bcf, int iByte, void * pBytesUpdate, int cBytesUpdate);
+void backpatchJumpArg(BytecodeFunction * bcf, int iBytePatch, int ipZero, int ipTarget);
+void backpatch(BytecodeFunction * bcf, int iBytePatch, void * pBytesNew, int cBytesNew);
 
 bool visitBytecodeBuilderPreorder(AstNode * pNode, void * pBuilder_);
 void visitBytecodeBuilderPostOrder(AstNode * pNode, void * pBuilder_);

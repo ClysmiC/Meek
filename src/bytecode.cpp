@@ -163,6 +163,8 @@ static const char * c_mpBcopStrName[] = {
 	"NegateFloat64",
 	"Jump",
 	"JumpIfFalse",
+	"JumpIfPeekFalse",
+	"JumpIfPeekTrue",
 	"StackAlloc",
 	"StackFree",
 	"DebugPrint",
@@ -477,6 +479,12 @@ void init(BytecodeBuilder::NodeCtx * pNodeCtx, AstNode * pNode)
 			pNodeCtx->ifStmtData.iJumpArgPlaceholder = 0;
 			pNodeCtx->ifStmtData.ipZero = 0;
 		} break;
+
+		case ASTK_BinopExpr:
+		{
+			pNodeCtx->binopExprData.iJumpArgPlaceholder = 0;
+			pNodeCtx->binopExprData.ipZero = 0;
+		} break;
 	}
 }
 
@@ -593,17 +601,23 @@ void emit(BytecodeFunction * bcf, void * pBytesEmit, int cBytesEmit)
 	memcpy(pDst, pBytesEmit, cBytesEmit);
 }
 
-void backpatch(BytecodeFunction * bcf, int iByte, s16 bytesUpdate)
+void backpatchJumpArg(BytecodeFunction * bcf, int iBytePatch, int ipZero, int ipTarget)
 {
-	backpatch(bcf, iByte, &bytesUpdate, sizeof(bytesUpdate));
+	if (ipTarget - ipZero > S16_MAX || ipTarget - ipZero < S16_MIN)
+	{
+		reportIceAndExit("Cannot store %d in jump argument");
+	}
+
+	s16 bytesNew = ipTarget - ipZero;
+	backpatch(bcf, iBytePatch, &bytesNew, sizeof(bytesNew));
 }
 
-void backpatch(BytecodeFunction * bcf, int iByte, void * pBytesUpdate, int cBytesUpdate)
+void backpatch(BytecodeFunction * bcf, int iBytePatch, void * pBytesNew, int cBytesNew)
 {
-	Assert(iByte <= bcf->bytes.cItem - sizeof(cBytesUpdate));
+	Assert(iBytePatch <= bcf->bytes.cItem - sizeof(cBytesNew));
 
-	u8 * pDst = &bcf->bytes[iByte];
-	memcpy(pDst, pBytesUpdate, cBytesUpdate);
+	u8 * pDst = &bcf->bytes[iBytePatch];
+	memcpy(pDst, pBytesNew, cBytesNew);
 }
 
 bool visitBytecodeBuilderPreorder(AstNode * pNode, void * pBuilder_)
@@ -811,19 +825,57 @@ void visitBytecodeBuilderHook(AstNode * pNode, AWHK awhk, void * pBuilder_)
 
 			// Backpatch jump over if
 
-			int ipJumpOverIfTarget = pBytecodeFunc->bytes.cItem;
-			int bytesToJump = ipJumpOverIfTarget - pNodeCtx->ifStmtData.ipZero;
-			if (bytesToJump > S16_MAX || bytesToJump < S16_MIN)
-			{
-				reportIceAndExit("Cannot store %d in jump argument");
-			}
-
-			backpatch(pBytecodeFunc, pNodeCtx->ifStmtData.iJumpArgPlaceholder, s16(bytesToJump));
+			backpatchJumpArg(
+				pBytecodeFunc,
+				pNodeCtx->ifStmtData.iJumpArgPlaceholder,
+				pNodeCtx->ifStmtData.ipZero,
+				pBytecodeFunc->bytes.cItem);
 
 			// Setup jump over else
 
 			pNodeCtx->ifStmtData.iJumpArgPlaceholder = iJumpOverElseBackpatch;
 			pNodeCtx->ifStmtData.ipZero = pBytecodeFunc->bytes.cItem;
+		} break;
+
+		case AWHK_BinopPostFirstOperand:
+		{
+			Assert(pNode->astk == ASTK_BinopExpr);
+
+			auto * pExpr = Down(pNode, BinopExpr);
+
+			// Set up jump for short circuit evaluation
+
+			BCOP bcopJump = BCOP_Nil;
+			switch (pExpr->pOp->tokenk)
+			{
+				case TOKENK_AmpAmp:
+				{
+					bcopJump = BCOP_JumpIfPeekFalse;
+				} break;
+
+				case TOKENK_PipePipe:
+				{
+					bcopJump = BCOP_JumpIfPeekTrue;
+				} break;
+			}
+
+			if (bcopJump != BCOP_Nil)
+			{
+				emitOp(pBytecodeFunc, bcopJump, startLine);
+				pNodeCtx->binopExprData.iJumpArgPlaceholder = pBytecodeFunc->bytes.cItem;
+
+				s16 placeholder = 0;
+				emit(pBytecodeFunc, placeholder);
+				pNodeCtx->binopExprData.ipZero = pBytecodeFunc->bytes.cItem;
+
+				// If we take the jump, we leave the eager result on the stack as the result of the entire
+				//	expression. If we don't take the jump, we pop the first value off the stack and the
+				//	second value (once evaluated) will become the result of the entire expression.
+
+				uintptr bytesToPop = sizeof(bool);
+				emitOp(pBytecodeFunc, BCOP_StackFree, startLine);
+				emit(pBytecodeFunc, bytesToPop);
+			}
 		} break;
 	}
 }
@@ -899,24 +951,27 @@ void visitBytecodeBuilderPostOrder(AstNode * pNode, void * pBuilder_)
 		{
 			auto * pExpr = Down(pNode, BinopExpr);
 
-			const Type * pTypeLhs = nullptr;
-			const Type * pTypeRhs = nullptr;
+			// Backpatch short circuit evaluation
 
+			if (pExpr->pOp->tokenk == TOKENK_AmpAmp || pExpr->pOp->tokenk == TOKENK_PipePipe)
 			{
-				TYPID typidLhs = DownExpr(pExpr->pLhsExpr)->typidEval;
-				TYPID typidRhs = DownExpr(pExpr->pRhsExpr)->typidEval;
-				pTypeLhs = lookupType(*pCtx->pTypeTable, typidLhs);
-				pTypeRhs = lookupType(*pCtx->pTypeTable, typidRhs);
+				backpatchJumpArg(
+					pBytecodeFunc,
+					pNodeCtx->binopExprData.iJumpArgPlaceholder,
+					pNodeCtx->binopExprData.ipZero,
+					pBytecodeFunc->bytes.cItem);
+			}
 
-				if (typidLhs != typidRhs)
-				{
-					AssertTodo;
-				}
+			// Determine if widening is needed
 
-				if (typidLhs != TYPID_S32)
-				{
-					AssertTodo;
-				}
+			TYPID typidLhs = DownExpr(pExpr->pLhsExpr)->typidEval;
+			TYPID typidRhs = DownExpr(pExpr->pRhsExpr)->typidEval;
+			const Type * pTypeLhs = lookupType(*pCtx->pTypeTable, typidLhs);
+			const Type * pTypeRhs = lookupType(*pCtx->pTypeTable, typidRhs);
+
+			if (typidLhs != typidRhs)
+			{
+				AssertTodo;
 			}
 
 			const Type * pTypeBig = (pTypeLhs->info.size > pTypeRhs->info.size) ? pTypeLhs : pTypeRhs;
@@ -1013,20 +1068,33 @@ void visitBytecodeBuilderPostOrder(AstNode * pNode, void * pBuilder_)
 					shouldEmitNotAtEnd = true;
 				} break;
 
+				case TOKENK_AmpAmp:
+				case TOKENK_PipePipe:
+				{
+					// Simply leave the value on the stack. The actual logic is handled by the
+					//	short-circuit jump that we already emitted.
+
+					Assert(typidLhs == TYPID_Bool);
+					Assert(typidRhs == TYPID_Bool);
+				} break;
+
 				default:
 					AssertNotReached;
 					break;
 			}
 
-			int cBitSize = pTypeBig->info.size * 8;
-			if (cBitSize != 32) AssertTodo;
-
-			BCOP bcop = bcopSized(sizedbcop, cBitSize);
-			emitOp(pBytecodeFunc, bcop, startLine);
-
-			if (shouldEmitNotAtEnd)
+			if (sizedbcop != SIZEDBCOP_Nil)
 			{
-				emitOp(pBytecodeFunc, BCOP_Not, startLine);
+				int cBitSize = pTypeBig->info.size * 8;
+				if (cBitSize != 32) AssertTodo;
+
+				BCOP bcop = bcopSized(sizedbcop, cBitSize);
+				emitOp(pBytecodeFunc, bcop, startLine);
+
+				if (shouldEmitNotAtEnd)
+				{
+					emitOp(pBytecodeFunc, BCOP_Not, startLine);
+				}
 			}
 		} break;
 
@@ -1315,7 +1383,11 @@ void visitBytecodeBuilderPostOrder(AstNode * pNode, void * pBuilder_)
 				reportIceAndExit("Cannot store %d in jump argument");
 			}
 
-			backpatch(pBytecodeFunc, pNodeCtx->ifStmtData.iJumpArgPlaceholder, s16(bytesToJump));
+			backpatchJumpArg(
+				pBytecodeFunc,
+				pNodeCtx->ifStmtData.iJumpArgPlaceholder,
+				pNodeCtx->ifStmtData.ipZero,
+				pBytecodeFunc->bytes.cItem);
 		} break;
 
 		case ASTK_WhileStmt:
@@ -1533,6 +1605,8 @@ void disassemble(const BytecodeFunction & bcf)
 
 			case BCOP_Jump:
 			case BCOP_JumpIfFalse:
+			case BCOP_JumpIfPeekFalse:
+			case BCOP_JumpIfPeekTrue:
 			{
 				printfmt("%08d ", byteOffset);
 

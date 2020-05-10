@@ -50,6 +50,7 @@ void walkAst(
 		{
 			auto * pNode = Down(pNodeSubtreeRoot, BinopExpr);
 			walkAst(pCtx, pNode->pLhsExpr, visitPreorderFn, hookFn, visitPostorderFn, pContext);
+			hookFn(Up(pNode), AWHK_BinopPostFirstOperand, pContext);
 			walkAst(pCtx, pNode->pRhsExpr, visitPreorderFn, hookFn, visitPostorderFn, pContext);
 		} break;
 

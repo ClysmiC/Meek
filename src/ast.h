@@ -522,7 +522,8 @@ enum AWHK
 	AWHK_FuncPostFormalReturnVardecls,
 	AWHK_AssignPostLhs,
 	AWHK_IfPostCondition,
-	AWHK_IfPreElse
+	AWHK_IfPreElse,
+	AWHK_BinopPostFirstOperand,
 };
 
 typedef bool (* AstWalkVisitPreFn)(AstNode *, void *);

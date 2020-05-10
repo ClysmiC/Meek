@@ -1,46 +1,34 @@
 fn main()
 {
-	int a = 3;
-	int b = 140;
-	int c;		// Implicitly initialized to 0
+	bool t = true;
+	bool f = false;
 
-	b = b * 100;
-	b += 23;
-
-	print(a * b + c);
+	if t || t do		print("Success 0");
+	else do				print("Fail 0");
 	
-	if true
-	{
-		print(1);
-	}
-	else
-	{
-		print(100);
-	}
+	if t || f do		print("Success 1");
+	else do				print("Fail 1");
 	
-	print(2);
+	if f || t do		print("Success 2");
+	else do				print("Fail 2");
 	
-	int d = 47;
+	if f || f do		print("Fail 3");
+	else do				print("Success 3");
 	
-	if d == 47
-	{
-		print(3);
-	}
-	else
-	{
-		print(300);
-	}
 	
-	if d > 55
-	{
-		print(400);
-	}
-	else
-	{
-		print(4);
-	}
 	
-	print(5);
+	
+	if t && t do		print("Success 4");
+	else do				print("Fail 4");
+	
+	if t && f do		print("Fail 5");
+	else do				print("Success 5");
+	
+	if f && t do		print("Fail 6");
+	else do				print("Success 6");
+	
+	if f && f do		print("Fail 7");
+	else do				print("Success 7");
 }
 
 

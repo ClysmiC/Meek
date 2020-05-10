@@ -567,6 +567,34 @@ void interpret(Interpreter * pInterp, const BytecodeFunction & bcf)
 				}
 			} break;
 
+			case BCOP_JumpIfPeekFalse:
+			{
+				s16 bytesToJump;
+				ReadVarFromBytecode(s16, bytesToJump);
+
+				u8 boolVal;
+				PeekVarFromStack(u8, boolVal);
+
+				if (!boolVal)
+				{
+					pInterp->ip += bytesToJump;
+				}
+			} break;
+
+			case BCOP_JumpIfPeekTrue:
+			{
+				s16 bytesToJump;
+				ReadVarFromBytecode(s16, bytesToJump);
+
+				u8 boolVal;
+				PeekVarFromStack(u8, boolVal);
+
+				if (boolVal)
+				{
+					pInterp->ip += bytesToJump;
+				}
+			} break;
+
 			case BCOP_StackAlloc:
 			{
 				uintptr bytesToReserve;
