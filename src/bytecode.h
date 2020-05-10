@@ -12,7 +12,7 @@ enum BCOP : u8
 	BCOP_Return,
 
 	// Load Immediate
-	//	- Pushes 1 n-bit value from bytecode to stack
+	//	- Pushes 1 n-bit value from bytecode onto the stack
 
 	BCOP_LoadImmediate8,
 	BCOP_LoadImmediate16,
@@ -22,9 +22,9 @@ enum BCOP : u8
 	BCOP_LoadFalse,
 
 	// Load
-	//	- Pops address from stack
+	//	- Pops uintptr address off the stack
 	//	- Dereferences it
-	//	- Pushes dereferenced n-bit value to the stack
+	//	- Pushes dereferenced n-bit value onto the stack
 
 	// HMM: Version of load address that reads the uintptr from bytecode? I suspect I will have lots of
 	//	LoadImmediate followed by LoadAddress as a way to read values out of variables...
@@ -35,8 +35,8 @@ enum BCOP : u8
 	BCOP_Load64,
 
 	// Store
-	//	- Pops n-bit value from stack
-	//	- Pops address from stack
+	//	- Pops n-bit value off the stack
+	//	- Pops uintptr address off the stack
 	//	- Stores value at address
 
 	BCOP_Store8,
@@ -45,7 +45,7 @@ enum BCOP : u8
 	BCOP_Store64,
 
 	// Duplicate
-	//	- Peeks n-bit value at top of stack
+	//	- Peeks n-bit value at top of the stack
 	//	- Pushes a copy of it
 
 	BCOP_Duplicate8,
@@ -54,9 +54,9 @@ enum BCOP : u8
 	BCOP_Duplicate64,
 
 	// Add Int
-	//	- Pops 2 n-bit int values from stack
+	//	- Pops 2 n-bit int values off the stack
 	//	- Adds them
-	//	- Pushes n-bit int result onto stack
+	//	- Pushes n-bit int result onto the stack
 
 	BCOP_AddInt8,
 	BCOP_AddInt16,
@@ -64,10 +64,10 @@ enum BCOP : u8
 	BCOP_AddInt64,
 
 	// Sub Int
-	//	- Pops n-bit int subtrahend from the stack
-	//	- Pops n-bit int minuend from the stack
+	//	- Pops n-bit int subtrahend off the stack
+	//	- Pops n-bit int minuend off the stack
 	//	- Subtracts them (minuend - subtrahend)
-	//	- Pushes n-bit int result onto stack
+	//	- Pushes n-bit int result onto the stack
 
 	BCOP_SubInt8,
 	BCOP_SubInt16,
@@ -75,9 +75,9 @@ enum BCOP : u8
 	BCOP_SubInt64,
 
 	// Mul Int
-	//	- Pops 2 n-bit int values from stack
+	//	- Pops 2 n-bit int values off the stack
 	//	- Multiplies them
-	//	- Pushes n-bit int result onto stack
+	//	- Pushes n-bit int result onto the stack
 
 	BCOP_MulInt8,
 	BCOP_MulInt16,
@@ -85,10 +85,10 @@ enum BCOP : u8
 	BCOP_MulInt64,
 
 	// Div Int
-	//	- Pops n-bit int divisor from the stack
-	//	- Pops n-bit int dividend from the stack
+	//	- Pops n-bit int divisor off the stack
+	//	- Pops n-bit int dividend off the stack
 	//	- Divides them (dividend / divisor) ; Integer division is performed
-	//	- Pushes n-bit int result onto stack
+	//	- Pushes n-bit int result onto the stack
 	//	* Use S instructions for signed division, and U instructions for unsigned
 
 	BCOP_DivS8,
@@ -102,16 +102,16 @@ enum BCOP : u8
 	BCOP_DivU64,
 
 	// Add Float
-	//	- Pops 2 n-bit float values from stack
+	//	- Pops 2 n-bit float values off the stack
 	//	- Adds them
-	//	- Pushes n-bit float result onto stack
+	//	- Pushes n-bit float result onto the stack
 
 	BCOP_AddFloat32,
 	BCOP_AddFloat64,
 
 	// Sub Float
-	//	- Pops n-bit float subtrahend from the stack
-	//	- Pops n-bit float minuend from the stack
+	//	- Pops n-bit float subtrahend off the stack
+	//	- Pops n-bit float minuend off the stack
 	//	- Subtracts them (minuend - subtrahend)
 	//	- Pushes n-bit float result onto stack
 
@@ -119,7 +119,7 @@ enum BCOP : u8
 	BCOP_SubFloat64,
 
 	// Mul Float
-	//	- Pops 2 n-bit float values from stack
+	//	- Pops 2 n-bit float values off the stack
 	//	- Multiplies them
 	//	- Pushes n-bit float result onto stack
 
@@ -134,6 +134,72 @@ enum BCOP : u8
 
 	BCOP_DivFloat32,
 	BCOP_DivFloat64,
+
+	// Test Equal Int
+	//	- Pops 2 n-bit int values off the stack
+	//	- Pushes bool onto the stack. True if the values are equal, false otherwise.
+
+	BCOP_TestEqInt8,
+	BCOP_TestEqInt16,
+	BCOP_TestEqInt32,
+	BCOP_TestEqInt64,
+
+	// Test Less Than Signed/Unsigned Int
+	//	- Pops n-bit int value (b) off the stack
+	//	- Pops n-bit int value (a) off the stack
+	//	- Pushes bool onto the stack. True if the a < b, false otherwise.
+
+	BCOP_TestLtS8,
+	BCOP_TestLtS16,
+	BCOP_TestLtS32,
+	BCOP_TestLtS64,
+	BCOP_TestLtU8,
+	BCOP_TestLtU16,
+	BCOP_TestLtU32,
+	BCOP_TestLtU64,
+
+	// Test Less Than or Equal Signed/Unsigned Int
+	//	- Pops n-bit int value (b) off the stack
+	//	- Pops n-bit int value (a) off the stack
+	//	- Pushes bool onto the stack. True if the a <= b, false otherwise.
+
+	BCOP_TestLteS8,
+	BCOP_TestLteS16,
+	BCOP_TestLteS32,
+	BCOP_TestLteS64,
+	BCOP_TestLteU8,
+	BCOP_TestLteU16,
+	BCOP_TestLteU32,
+	BCOP_TestLteU64,
+
+	// Test Equal Float
+	//	- Pops 2 n-bit float values off the stack
+	//	- Pushes bool onto the stack. True if the values are equal, false otherwise.
+
+	BCOP_TestEqFloat32,
+	BCOP_TestEqFloat64,
+
+	// Test Less Than Float
+	//	- Pops n-bit float value (b) off the stack
+	//	- Pops n-bit float value (a) off the stack
+	//	- Pushes bool onto the stack. True if the a < b, false otherwise.
+
+	BCOP_TestLtFloat32,
+	BCOP_TestLtFloat64,
+
+	// Test Less Than or Equal Float
+	//	- Pops n-bit float value (b) off the stack
+	//	- Pops n-bit float value (a) off the stack
+	//	- Pushes bool onto the stack. True if the a <= b, false otherwise.
+
+	BCOP_TestLteFloat32,
+	BCOP_TestLteFloat64,
+
+	// Not
+	//	- Pops bool off the stack
+	//	- Performs logical not, then pushes it on the stack
+
+	BCOP_Not,
 
 	// Negate Signed Int
 	//	- Pops n-bit int off the stack
@@ -216,6 +282,14 @@ enum SIZEDBCOP
 	SIZEDBCOP_SubFloat,
 	SIZEDBCOP_MulFloat,
 	SIZEDBCOP_DivFloat,
+	SIZEDBCOP_TestEqInt,
+	SIZEDBCOP_TestLtSignedInt,
+	SIZEDBCOP_TestLtUnsignedInt,
+	SIZEDBCOP_TestLteSignedInt,
+	SIZEDBCOP_TestLteUnsignedInt,
+	SIZEDBCOP_TestEqFloat,
+	SIZEDBCOP_TestLtFloat,
+	SIZEDBCOP_TestLteFloat,
 	SIZEDBCOP_NegateSigned,
 	SIZEDBCOP_NegateFloat,
 

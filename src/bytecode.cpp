@@ -128,6 +128,33 @@ static const char * c_mpBcopStrName[] = {
 	"MulFloat64",
 	"DivFloat32",
 	"DivFloat64",
+	"TestEqInt8",
+	"TestEqInt16",
+	"TestEqInt32",
+	"TestEqInt64",
+	"TestLtS8",
+	"TestLtS16",
+	"TestLtS32",
+	"TestLtS64",
+	"TestLtU8",
+	"TestLtU16",
+	"TestLtU32",
+	"TestLtU64",
+	"TestLteS8",
+	"TestLteS16",
+	"TestLteS32",
+	"TestLteS64",
+	"TestLteU8",
+	"TestLteU16",
+	"TestLteU32",
+	"TestLteU64",
+	"TestEqFloat32",
+	"TestEqFloat64",
+	"TestLtFloat32",
+	"TestLtFloat64",
+	"TestLteFloat32",
+	"TestLteFloat64",
+	"Not",
 	"NegateS8",
 	"NegateS16",
 	"NegateS32",
@@ -315,6 +342,96 @@ BCOP bcopSized(SIZEDBCOP sizedBcop, int cBit)
 			{
 				case 32:	return BCOP_NegateFloat32;
 				case 64:	return BCOP_NegateFloat64;
+				default:	AssertNotReached;		return BCOP_Nil;
+			}
+		} break;
+
+		case SIZEDBCOP_TestEqInt:
+		{
+			switch (cBit)
+			{
+				case 8:		return BCOP_TestEqInt8;
+				case 16:	return BCOP_TestEqInt16;
+				case 32:	return BCOP_TestEqInt32;
+				case 64:	return BCOP_TestEqInt64;
+				default:	AssertNotReached;		return BCOP_Nil;
+			}
+		} break;
+
+		case SIZEDBCOP_TestLtSignedInt:
+		{
+			switch (cBit)
+			{
+				case 8:		return BCOP_TestLtS8;
+				case 16:	return BCOP_TestLtS16;
+				case 32:	return BCOP_TestLtS32;
+				case 64:	return BCOP_TestLtS64;
+				default:	AssertNotReached;		return BCOP_Nil;
+			}
+		} break;
+
+		case SIZEDBCOP_TestLtUnsignedInt:
+		{
+			switch (cBit)
+			{
+				case 8:		return BCOP_TestLtU8;
+				case 16:	return BCOP_TestLtU16;
+				case 32:	return BCOP_TestLtU32;
+				case 64:	return BCOP_TestLtU64;
+				default:	AssertNotReached;		return BCOP_Nil;
+			}
+		} break;
+
+		case SIZEDBCOP_TestLteSignedInt:
+		{
+			switch (cBit)
+			{
+				case 8:		return BCOP_TestLteS8;
+				case 16:	return BCOP_TestLteS16;
+				case 32:	return BCOP_TestLteS32;
+				case 64:	return BCOP_TestLteS64;
+				default:	AssertNotReached;		return BCOP_Nil;
+			}
+		} break;
+
+		case SIZEDBCOP_TestLteUnsignedInt:
+		{
+			switch (cBit)
+			{
+				case 8:		return BCOP_TestLteU8;
+				case 16:	return BCOP_TestLteU16;
+				case 32:	return BCOP_TestLteU32;
+				case 64:	return BCOP_TestLteU64;
+				default:	AssertNotReached;		return BCOP_Nil;
+			}
+		} break;
+
+		case SIZEDBCOP_TestEqFloat:
+		{
+			switch (cBit)
+			{
+				case 32:	return BCOP_TestEqFloat32;
+				case 64:	return BCOP_TestEqFloat64;
+				default:	AssertNotReached;		return BCOP_Nil;
+			}
+		} break;
+
+		case SIZEDBCOP_TestLtFloat:
+		{
+			switch (cBit)
+			{
+				case 32:	return BCOP_TestLtFloat32;
+				case 64:	return BCOP_TestLtFloat64;
+				default:	AssertNotReached;		return BCOP_Nil;
+			}
+		} break;
+
+		case SIZEDBCOP_TestLteFloat:
+		{
+			switch (cBit)
+			{
+				case 32:	return BCOP_TestLteFloat32;
+				case 64:	return BCOP_TestLteFloat64;
 				default:	AssertNotReached;		return BCOP_Nil;
 			}
 		} break;
@@ -838,27 +955,62 @@ void visitBytecodeBuilderPostOrder(AstNode * pNode, void * pBuilder_)
 
 			// TODO: Emit float operations, unsigned vs signed div operations, etc.
 
+			bool shouldEmitNotAtEnd = false;
+
 			SIZEDBCOP sizedbcop = SIZEDBCOP_Nil;
-			switch (pExpr->pOp->lexeme.strv.pCh[0])
+			switch (pExpr->pOp->tokenk)
 			{
-				case '+':
+				case TOKENK_Plus:
 				{
 					sizedbcop = SIZEDBCOP_AddInt;
 				} break;
 
-				case '-':
+				case TOKENK_Minus:
 				{
 					sizedbcop = SIZEDBCOP_SubInt;
 				} break;
 
-				case '*':
+				case TOKENK_Star:
 				{
 					sizedbcop = SIZEDBCOP_MulInt;
 				} break;
 
-				case '/':
+				case TOKENK_Slash:
 				{
 					sizedbcop = SIZEDBCOP_DivSignedInt;
+				} break;
+
+				case TOKENK_EqualEqual:
+				{
+					sizedbcop = SIZEDBCOP_TestEqInt;
+				} break;
+
+				case TOKENK_BangEqual:
+				{
+					sizedbcop = SIZEDBCOP_TestEqInt;
+					shouldEmitNotAtEnd = true;
+				} break;
+
+				case TOKENK_Lesser:
+				{
+					sizedbcop = SIZEDBCOP_TestLtSignedInt;
+				} break;
+
+				case TOKENK_LesserEqual:
+				{
+					sizedbcop = SIZEDBCOP_TestLteSignedInt;
+				} break;
+
+				case TOKENK_Greater:
+				{
+					sizedbcop = SIZEDBCOP_TestLteSignedInt;
+					shouldEmitNotAtEnd = true;
+				} break;
+
+				case TOKENK_GreaterEqual:
+				{
+					sizedbcop = SIZEDBCOP_TestLtSignedInt;
+					shouldEmitNotAtEnd = true;
 				} break;
 
 				default:
@@ -871,6 +1023,11 @@ void visitBytecodeBuilderPostOrder(AstNode * pNode, void * pBuilder_)
 
 			BCOP bcop = bcopSized(sizedbcop, cBitSize);
 			emitOp(pBytecodeFunc, bcop, startLine);
+
+			if (shouldEmitNotAtEnd)
+			{
+				emitOp(pBytecodeFunc, BCOP_Not, startLine);
+			}
 		} break;
 
 		case ASTK_LiteralExpr:
@@ -1339,6 +1496,33 @@ void disassemble(const BytecodeFunction & bcf)
 			case BCOP_MulFloat64:
 			case BCOP_DivFloat32:
 			case BCOP_DivFloat64:
+			case BCOP_TestEqInt8:
+			case BCOP_TestEqInt16:
+			case BCOP_TestEqInt32:
+			case BCOP_TestEqInt64:
+			case BCOP_TestLtS8:
+			case BCOP_TestLtS16:
+			case BCOP_TestLtS32:
+			case BCOP_TestLtS64:
+			case BCOP_TestLtU8:
+			case BCOP_TestLtU16:
+			case BCOP_TestLtU32:
+			case BCOP_TestLtU64:
+			case BCOP_TestLteS8:
+			case BCOP_TestLteS16:
+			case BCOP_TestLteS32:
+			case BCOP_TestLteS64:
+			case BCOP_TestLteU8:
+			case BCOP_TestLteU16:
+			case BCOP_TestLteU32:
+			case BCOP_TestLteU64:
+			case BCOP_TestEqFloat32:
+			case BCOP_TestEqFloat64:
+			case BCOP_TestLtFloat32:
+			case BCOP_TestLtFloat64:
+			case BCOP_TestLteFloat32:
+			case BCOP_TestLteFloat64:
+			case BCOP_Not:
 			case BCOP_NegateS8:
 			case BCOP_NegateS16:
 			case BCOP_NegateS32:

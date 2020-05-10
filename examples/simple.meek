@@ -11,21 +11,36 @@ fn main()
 	
 	if true
 	{
-		print(80085);
+		print(1);
 	}
 	else
 	{
-		print(666);
+		print(100);
 	}
 	
-	if false
+	print(2);
+	
+	int d = 47;
+	
+	if d == 47
 	{
-		print(1111);
+		print(3);
 	}
 	else
 	{
-		print(2222);
+		print(300);
 	}
+	
+	if d > 55
+	{
+		print(400);
+	}
+	else
+	{
+		print(4);
+	}
+	
+	print(5);
 }
 
 

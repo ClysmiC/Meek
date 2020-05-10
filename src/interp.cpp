@@ -205,14 +205,12 @@ void interpret(Interpreter * pInterp, const BytecodeFunction & bcf)
 
 #undef Duplicate
 
-// TODO: make sure the lhs/rhs aren't backwards... I think they are...
-
 #define Binop(type, op) \
 	do { \
-		type _lhs; \
 		type _rhs; \
-		ReadVarFromStack(type, _lhs); \
+		type _lhs; \
 		ReadVarFromStack(type, _rhs); \
+		ReadVarFromStack(type, _lhs); \
 		type _result = _lhs op _rhs; \
 		WriteVarToStack(type, _result); } while (0)
 
@@ -357,6 +355,155 @@ void interpret(Interpreter * pInterp, const BytecodeFunction & bcf)
 			} break;
 
 #undef Binop
+
+#define CompareOp(type, op) \
+	do { \
+		type _rhs; \
+		type _lhs; \
+		ReadVarFromStack(type, _rhs); \
+		ReadVarFromStack(type, _lhs); \
+		bool _result = _lhs op _rhs; \
+		WriteVarToStack(bool, _result); } while (0)
+
+			case BCOP_TestEqInt8:
+			{
+				CompareOp(u8, ==);
+			} break;
+
+			case BCOP_TestEqInt16:
+			{
+				CompareOp(u16, ==);
+			} break;
+
+			case BCOP_TestEqInt32:
+			{
+				CompareOp(u32, ==);
+			} break;
+
+			case BCOP_TestEqInt64:
+			{
+				CompareOp(u64, ==);
+			} break;
+
+			case BCOP_TestLtS8:
+			{
+				CompareOp(s8, <);
+			} break;
+
+			case BCOP_TestLtS16:
+			{
+				CompareOp(s16, <);
+			} break;
+
+			case BCOP_TestLtS32:
+			{
+				CompareOp(s32, <);
+			} break;
+
+			case BCOP_TestLtS64:
+			{
+				CompareOp(s64, <);
+			} break;
+
+			case BCOP_TestLtU8:
+			{
+				CompareOp(u8, < );
+			} break;
+
+			case BCOP_TestLtU16:
+			{
+				CompareOp(u16, < );
+			} break;
+
+			case BCOP_TestLtU32:
+			{
+				CompareOp(u32, < );
+			} break;
+
+			case BCOP_TestLtU64:
+			{
+				CompareOp(u64, < );
+			} break;
+
+			case BCOP_TestLteS8:
+			{
+				CompareOp(s8, <=);
+			} break;
+
+			case BCOP_TestLteS16:
+			{
+				CompareOp(s16, <=);
+			} break;
+
+			case BCOP_TestLteS32:
+			{
+				CompareOp(s32, <=);
+			} break;
+
+			case BCOP_TestLteS64:
+			{
+				CompareOp(s64, <=);
+			} break;
+
+			case BCOP_TestLteU8:
+			{
+				CompareOp(u8, <=);
+			} break;
+
+			case BCOP_TestLteU16:
+			{
+				CompareOp(u16, <=);
+			} break;
+
+			case BCOP_TestLteU32:
+			{
+				CompareOp(u32, <=);
+			} break;
+
+			case BCOP_TestLteU64:
+			{
+				CompareOp(u64, <=);
+			} break;
+
+			case BCOP_TestEqFloat32:
+			{
+				CompareOp(f32, ==);
+			} break;
+
+			case BCOP_TestEqFloat64:
+			{
+				CompareOp(f64, ==);
+			} break;
+
+			case BCOP_TestLtFloat32:
+			{
+				CompareOp(f32, <);
+			} break;
+
+			case BCOP_TestLtFloat64:
+			{
+				CompareOp(f64, <);
+			} break;
+
+			case BCOP_TestLteFloat32:
+			{
+				CompareOp(f32, <=);
+			} break;
+
+			case BCOP_TestLteFloat64:
+			{
+				CompareOp(f64, <= );
+			} break;
+
+#undef CompareOp
+
+			case BCOP_Not:
+			{
+				bool val;
+				ReadVarFromStack(bool, val);
+				val = !val;
+				WriteVarToStack(bool, val);
+			} break;
 
 #define Negate(type) \
 	do { \
