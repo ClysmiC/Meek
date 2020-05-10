@@ -3,32 +3,32 @@ fn main()
 	bool t = true;
 	bool f = false;
 
-	if t || t do		print("Success 0");
-	else do				print("Fail 0");
+	if t || t do		print(1);
+	else do				print(100);
 	
-	if t || f do		print("Success 1");
-	else do				print("Fail 1");
+	if t || f do		print(2);
+	else do				print(200);
 	
-	if f || t do		print("Success 2");
-	else do				print("Fail 2");
+	if f || t do		print(3);
+	else do				print(300);
 	
-	if f || f do		print("Fail 3");
-	else do				print("Success 3");
-	
-	
+	if f || f do		print(400);
+	else do				print(4);
 	
 	
-	if t && t do		print("Success 4");
-	else do				print("Fail 4");
 	
-	if t && f do		print("Fail 5");
-	else do				print("Success 5");
 	
-	if f && t do		print("Fail 6");
-	else do				print("Success 6");
+	if t && t do		print(5);
+	else do				print(500);
 	
-	if f && f do		print("Fail 7");
-	else do				print("Success 7");
+	if t && f do		print(600);
+	else do				print(6);
+	
+	if f && t do		print(700);
+	else do				print(7);
+	
+	if f && f do		print(800);
+	else do				print(8);
 }
 
 

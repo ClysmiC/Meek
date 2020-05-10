@@ -68,13 +68,10 @@ void interpret(Interpreter * pInterp, const BytecodeFunction & bcf)
 	do { \
 		memcpy(&var, pInterp->pStack - sizeof(type), sizeof(type)); } while (0)
 
+
 	bool run = true;
 	while (run)
 	{
-#if DEBUG
-		u8 ipPrev = *pInterp->ip;
-#endif
-
 		BCOP bcop = BCOP(*pInterp->ip);
 		pInterp->ip++;
 
@@ -714,11 +711,6 @@ void interpret(Interpreter * pInterp, const BytecodeFunction & bcf)
 				AssertNotReached;
 			} break;
 		}
-
-#if DEBUG
-		// Assert(*pInterp->ip == ipPrev + gc_mpBcopCByte[bcop]);
-		Assert(pInterp->pStack >= pInterp->pStackBase);
-#endif
 
 #undef ReadVarFromBytecode
 #undef WriteBytecodeBytesToStack

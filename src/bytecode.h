@@ -365,6 +365,7 @@ void emit(BytecodeFunction * bcf, s64 bytesEmit);
 void emit(BytecodeFunction * bcf, f32 bytesEmit);
 void emit(BytecodeFunction * bcf, f64 bytesEmit);
 void emit(BytecodeFunction * bcf, void * pBytesEmit, int cBytesEmit);
+void emitByteRepeat(BytecodeFunction * bcf, u8 byteEmit, int cRepeat);
 
 void backpatchJumpArg(BytecodeFunction * bcf, int iBytePatch, int ipZero, int ipTarget);
 void backpatch(BytecodeFunction * bcf, int iBytePatch, void * pBytesNew, int cBytesNew);

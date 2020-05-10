@@ -601,6 +601,14 @@ void emit(BytecodeFunction * bcf, void * pBytesEmit, int cBytesEmit)
 	memcpy(pDst, pBytesEmit, cBytesEmit);
 }
 
+void emitByteRepeat(BytecodeFunction * bcf, u8 byteEmit, int cRepeat)
+{
+	for (int i = 0; i < cRepeat; i++)
+	{
+		emit(bcf, byteEmit);
+	}
+}
+
 void backpatchJumpArg(BytecodeFunction * bcf, int iBytePatch, int ipZero, int ipTarget)
 {
 	if (ipTarget - ipZero > S16_MAX || ipTarget - ipZero < S16_MIN)
@@ -1346,18 +1354,24 @@ void visitBytecodeBuilderPostOrder(AstNode * pNode, void * pBuilder_)
 
 			TYPID typid = pStmt->typidDefn;
 			const Type * pType = lookupType(*pCtx->pTypeTable, typid);
-
-			if (typid != TYPID_S32) AssertTodo;
+			int cByteSize = pType->info.size;
+			int cBitSize = cByteSize * 8;
 
 			uintptr virtualAddress = virtualAddressStart(*pScope) + symbInfo.varData.byteOffset;
-
 			if (!pStmt->pInitExpr)
 			{
-				emitOp(pBytecodeFunc, BCOP_LoadImmediate32, startLine);
-				emit(pBytecodeFunc, u32(0));
+				emitOp(
+					pBytecodeFunc,
+					bcopSized(SIZEDBCOP_LoadImmediate, cBitSize),
+					startLine);
+
+				emitByteRepeat(pBytecodeFunc, 0, cByteSize);
 			}
 
-			emitOp(pBytecodeFunc, BCOP_Store32, startLine);
+			emitOp(
+				pBytecodeFunc,
+				bcopSized(SIZEDBCOP_Store, cBitSize),
+				startLine);
 		} break;
 
 		case ASTK_FuncDefnStmt:
