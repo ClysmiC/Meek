@@ -46,8 +46,8 @@ void resolveExpr(ResolvePass * pPass, AstNode * pNode)
 		case ASTK_BinopExpr:
 		{
 			// NOTE: Assume that binops can only happen between
-			//	exact type matches, and the result becomes that type.
-			//	Will change later?
+			//	exact type matches, and the result becomes that type
+			//	(or a boolean). Will change later?
 
 			auto * pExpr = Down(pNode, BinopExpr);
 
@@ -69,7 +69,27 @@ void resolveExpr(ResolvePass * pPass, AstNode * pNode)
 				goto LEndSetTypidAndReturn;
 			}
 
-			typidResult = typidLhs;
+			// TODO: AmpAmp and PipePipe should only be allowed to have boolean operands
+
+			switch (pExpr->pOp->tokenk)
+			{
+				case TOKENK_EqualEqual:
+				case TOKENK_BangEqual:
+				case TOKENK_Lesser:
+				case TOKENK_LesserEqual:
+				case TOKENK_Greater:
+				case TOKENK_GreaterEqual:
+				case TOKENK_AmpAmp:
+				case TOKENK_PipePipe:
+				{
+					typidResult = TYPID_Bool;
+				} break;
+
+				default:
+				{
+					typidResult = typidLhs;
+				} break;
+			}
 		} break;
 
 		case ASTK_GroupExpr:
@@ -985,11 +1005,25 @@ void resolveStmt(ResolvePass * pPass, AstNode * pNode)
 
 		case ASTK_WhileStmt:
 		{
+			auto * pStmt = Down(pNode, WhileStmt);
+
+			if (DownExpr(pStmt->pCondExpr)->typidEval != TYPID_Bool)
+			{
+				print("Expression in while condition must be a bool");
+			}
+
 			pPass->cNestedBreakable--;
 		} break;
 
 		case ASTK_IfStmt:
-			break;
+		{
+			auto * pStmt = Down(pNode, IfStmt);
+
+			if (DownExpr(pStmt->pCondExpr)->typidEval != TYPID_Bool)
+			{
+				print("Expression in if condition must be a bool");
+			}
+		} break;
 
 		case ASTK_ReturnStmt:
 		{

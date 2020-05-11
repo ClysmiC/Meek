@@ -469,23 +469,10 @@ void dispose(BytecodeBuilder * pBuilder)
 
 void init(BytecodeBuilder::NodeCtx * pNodeCtx, AstNode * pNode)
 {
+	ClearStruct(pNodeCtx);
+
 	pNodeCtx->pNode = pNode;
 	pNodeCtx->wantsChildExprAddr = false;
-
-	switch (pNode->astk)
-	{
-		case ASTK_IfStmt:
-		{
-			pNodeCtx->ifStmtData.iJumpArgPlaceholder = 0;
-			pNodeCtx->ifStmtData.ipZero = 0;
-		} break;
-
-		case ASTK_BinopExpr:
-		{
-			pNodeCtx->binopExprData.iJumpArgPlaceholder = 0;
-			pNodeCtx->binopExprData.ipZero = 0;
-		} break;
-	}
 }
 
 void compileBytecode(BytecodeBuilder * pBuilder)
@@ -622,7 +609,7 @@ void backpatchJumpArg(BytecodeFunction * bcf, int iBytePatch, int ipZero, int ip
 
 void backpatch(BytecodeFunction * bcf, int iBytePatch, void * pBytesNew, int cBytesNew)
 {
-	Assert(iBytePatch <= bcf->bytes.cItem - sizeof(cBytesNew));
+	Assert(iBytePatch <= bcf->bytes.cItem - cBytesNew);
 
 	u8 * pDst = &bcf->bytes[iBytePatch];
 	memcpy(pDst, pBytesNew, cBytesNew);
@@ -718,8 +705,13 @@ bool visitBytecodeBuilderPreorder(AstNode * pNode, void * pBuilder_)
 			return false;
 
 		case ASTK_IfStmt:
-		case ASTK_WhileStmt:
 			return true;
+
+		case ASTK_WhileStmt:
+		{
+			pNodeCtx->whileStmtData.ipJumpToTopOfLoop = pBytecodeFunc->bytes.cItem;
+			return true;
+		}
 
 		case ASTK_BlockStmt:
 		{
@@ -773,7 +765,7 @@ void visitBytecodeBuilderHook(AstNode * pNode, AWHK awhk, void * pBuilder_)
 		case AWHK_AssignPostLhs:
 		{
 			Assert(pNode->astk == ASTK_AssignStmt);
-			
+
 			auto * pStmt = Down(pNode, AssignStmt);
 			TYPID typidLhs = DownExpr(pStmt->pLhsExpr)->typidEval;
 			const Type * pTypeLhs = lookupType(*pCtx->pTypeTable, typidLhs);
@@ -843,6 +835,19 @@ void visitBytecodeBuilderHook(AstNode * pNode, AWHK awhk, void * pBuilder_)
 
 			pNodeCtx->ifStmtData.iJumpArgPlaceholder = iJumpOverElseBackpatch;
 			pNodeCtx->ifStmtData.ipZero = pBytecodeFunc->bytes.cItem;
+		} break;
+
+		case AWHK_WhilePostCondition:
+		{
+			Assert(pNode->astk == ASTK_WhileStmt);
+
+			s16 placeholder = 0;
+			emitOp(pBytecodeFunc, BCOP_JumpIfFalse, startLine);
+
+			pNodeCtx->whileStmtData.iJumpPastLoopArgPlaceholder = pBytecodeFunc->bytes.cItem;
+			emit(pBytecodeFunc, placeholder);
+
+			pNodeCtx->whileStmtData.ipZeroJumpPastLoop = pBytecodeFunc->bytes.cItem;
 		} break;
 
 		case AWHK_BinopPostFirstOperand:
@@ -1390,13 +1395,6 @@ void visitBytecodeBuilderPostOrder(AstNode * pNode, void * pBuilder_)
 
 			// Backpatch jump over if (or else)
 
-			int ipJumpTarget = pBytecodeFunc->bytes.cItem;
-			int bytesToJump = ipJumpTarget - pNodeCtx->ifStmtData.ipZero;
-			if (bytesToJump > S16_MAX || bytesToJump < S16_MIN)
-			{
-				reportIceAndExit("Cannot store %d in jump argument");
-			}
-
 			backpatchJumpArg(
 				pBytecodeFunc,
 				pNodeCtx->ifStmtData.iJumpArgPlaceholder,
@@ -1405,7 +1403,35 @@ void visitBytecodeBuilderPostOrder(AstNode * pNode, void * pBuilder_)
 		} break;
 
 		case ASTK_WhileStmt:
-			break;
+		{
+			auto * pStmt = Down(pNode, WhileStmt);
+
+			// Emit jump back to top of loop
+			// Placeholder/backpatch isn't strictly necessary here, but backpatchJumpArg handles the math/validation
+
+			s16 placeholder = 0;
+			emitOp(pBytecodeFunc, BCOP_Jump, startLine);
+
+			int iPlaceholder = pBytecodeFunc->bytes.cItem;
+			emit(pBytecodeFunc, placeholder);
+
+			int ipZero = pBytecodeFunc->bytes.cItem;
+			backpatchJumpArg(
+				pBytecodeFunc,
+				iPlaceholder,
+				ipZero,
+				pNodeCtx->whileStmtData.ipJumpToTopOfLoop
+			);
+
+			// Backpatch jump over loop
+
+			backpatchJumpArg(
+				pBytecodeFunc,
+				pNodeCtx->whileStmtData.iJumpPastLoopArgPlaceholder,
+				pNodeCtx->whileStmtData.ipZeroJumpPastLoop,
+				pBytecodeFunc->bytes.cItem
+			);
+		} break;
 
 		case ASTK_BlockStmt:
 		{

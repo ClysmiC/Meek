@@ -523,6 +523,7 @@ enum AWHK
 	AWHK_AssignPostLhs,
 	AWHK_IfPostCondition,
 	AWHK_IfPreElse,
+	AWHK_WhilePostCondition,
 	AWHK_BinopPostFirstOperand,
 };
 

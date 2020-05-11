@@ -166,7 +166,10 @@ void walkAst(
 
 		case ASTK_WhileStmt:
 		{
-			AssertTodo;
+			auto * pNode = Down(pNodeSubtreeRoot, WhileStmt);
+			walkAst(pCtx, pNode->pCondExpr, visitPreorderFn, hookFn, visitPostorderFn, pContext);
+			hookFn(Up(pNode), AWHK_WhilePostCondition, pContext);
+			walkAst(pCtx, pNode->pBodyStmt, visitPreorderFn, hookFn, visitPostorderFn, pContext);
 		} break;
 
 		case ASTK_BlockStmt:

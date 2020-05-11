@@ -336,6 +336,14 @@ struct BytecodeBuilder
 				int ipZero;					// Resulting IP if we were to jump with argument of 0
 			} ifStmtData;
 
+			struct UWhileStmtCtx
+			{
+				int iJumpPastLoopArgPlaceholder;
+				int ipZeroJumpPastLoop;
+
+				int ipJumpToTopOfLoop;
+			} whileStmtData;
+
 			struct UBinopExprCtx
 			{
 				int iJumpArgPlaceholder;	// For binops that short circuit evaluate
