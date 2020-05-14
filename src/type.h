@@ -213,7 +213,11 @@ struct EnsureInTypeTableResult
 };
 EnsureInTypeTableResult ensureInTypeTable(TypeTable * pTable, Type * pType, bool debugAssertIfAlreadyInTable=false);
 
-Type::ComputedInfo tryComputeTypeInfoAndSetMemberOffsets(const MeekCtx & ctx, SCOPEID scopeid, const DynamicArray<AstNode *> & apVarDeclStmt, bool includeEndPadding=true);
+Type::ComputedInfo tryComputeTypeInfoAndSetMemberOffsets(
+	const MeekCtx & ctx,
+	SCOPEID scopeid,
+	const DynamicArray<AstNode *> & apVarDeclStmt,
+	bool includeEndPadding = true);
 bool tryComputeTypeInfo(const TypeTable & typeTable, TYPID typid);
 bool tryResolveAllTypes(TypeTable * pTable);
 

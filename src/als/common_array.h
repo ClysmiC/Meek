@@ -194,28 +194,42 @@ void reinitCopy(DynamicArray<T> * pArray, const DynamicArray<T> & arraySrc)
 // These extract functions feel a bit too clever/unsafe... if they bite me once or twice I might just delete them.
 
 template <typename T, typename E>
-void initExtract(DynamicArray<T> * pArray, const DynamicArray<E> & arrayExtractee, int byteOffset)
+void initExtract(DynamicArray<T> * pArray, E * arrayExtractee, int cExtractee, int byteOffset)
 {
 	init(pArray);
-	for (int i = 0; i < arrayExtractee.cItem; i++)
+	for (int i = 0; i < cExtractee; i++)
 	{
-		T * pItem = reinterpret_cast<T *>(reinterpret_cast<char *>(arrayExtractee.pBuffer + i) + byteOffset);
+		T * pItem = reinterpret_cast<T *>(reinterpret_cast<char *>(arrayExtractee + i) + byteOffset);
 		append(pArray, *pItem);
 	}
 }
 
+template <typename T, typename E>
+void initExtract(DynamicArray<T> * pArray, const DynamicArray<E> & arrayExtractee, int byteOffset)
+{
+	initExtract(pArray, arrayExtractee.pBuffer, arrayExtractee.cItem, byteOffset);
+}
+
 // This version dereferences the pointer then applies the byte offset...
 
- template <typename T, typename E>
- void initExtract(DynamicArray<T> * pArray, const DynamicArray<E *> & arrayExtractee, int byteOffset)
- {
- 	init(pArray);
- 	for (int i = 0; i < arrayExtractee.cItem; i++)
- 	{
- 		T * pItem = reinterpret_cast<T *>(reinterpret_cast<char *>(*(arrayExtractee.pBuffer + i)) + byteOffset);
- 		append(pArray, *pItem);
- 	}
- }
+template <typename T, typename E>
+void initExtract(DynamicArray<T> * pArray, E ** arrayPtrExtractee, int cExtractee, int byteOffset)
+{
+	init(pArray);
+	for (int i = 0; i < cExtractee; i++)
+	{
+		T * pItem = reinterpret_cast<T *>(reinterpret_cast<char *>(*(arrayPtrExtractee + i)) + byteOffset);
+		append(pArray, *pItem);
+	}
+}
+
+template <typename T, typename E>
+void initExtract(DynamicArray<T> * pArray, const DynamicArray<E *> & arrayExtractee, int byteOffset)
+{
+	initExtract(pArray, arrayExtractee.pBuffer, arrayExtractee.cItem, byteOffset);
+}
+
+
 
 template <typename T>
 void dispose(DynamicArray<T> * pArray)

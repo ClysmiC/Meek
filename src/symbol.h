@@ -59,7 +59,9 @@ enum SCOPEK : s8
 	SCOPEK_BuiltIn,
 	SCOPEK_Global,
 	SCOPEK_StructDefn,
-	SCOPEK_CodeBlock,
+
+	SCOPEK_FunctionTopLevel,	// Outermost scope of func. Owns parameters.
+	SCOPEK_FunctionInner,		// Control flow, user-introduced scopes, etc.
 
 	SCOPEK_Nil = -1
 };
@@ -70,7 +72,7 @@ struct Scope
 	SCOPEID id = SCOPEID_Nil;
 	SCOPEK scopek = SCOPEK_Nil;
 
-	uintptr cByteVariables = 0;
+	uintptr cByteLocalVariables = 0;	// NOTE: Excludes params!
 
 	HashMap<Lexeme, DynamicArray<SymbolInfo>> symbolsDefined;
 };
@@ -94,6 +96,7 @@ enum FSYMBQ : u16
 
 	FSYMBQ_IgnoreParent		= 0x1 << 3,
 	FSYMBQ_SortVarseqid		= 0x1 << 4,
+	FSYMBQ_IgnoreParamVars	= 0x1 << 5,
 
 	GRFSYMBQ_None			= 0
 };

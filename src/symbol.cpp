@@ -181,23 +181,57 @@ bool auditDuplicateSymbols(Scope * pScope)
 
 void computeScopedVariableOffsets(MeekCtx * pCtx, Scope * pScope)
 {
-	// Gather vardecls
+	// @Slow - Between gathering and extracting, there are lots of dynamic arrays flying around here. Could
+	//	probably be improved.
+
+	// NOTE - For now, I am treating each local scope as if it is a single struct and re-using the struct size/offset
+	//	computation code.
+
+	// Gather all vardecls
 
 	DynamicArray<SymbolInfo> aSymbInfo;
 	init(&aSymbInfo);
 	Defer(dispose(&aSymbInfo));
 
 	lookupAllVars(*pScope, &aSymbInfo, FSYMBQ_IgnoreParent | FSYMBQ_SortVarseqid);
-
 	Assert(Implies(pScope->id == SCOPEID_BuiltIn, aSymbInfo.cItem == 0));
 
-	// For now, I am treating each local scope as if it is a single struct and re-using the struct size/offset
-	//	computation code.
+	int cParam = 0;
+	if (pScope->scopek == SCOPEK_FunctionTopLevel)
+	{
+		for (int iSymbInfo = 0; iSymbInfo < aSymbInfo.cItem; iSymbInfo++)
+		{
+			VARDECLK vardeclk = aSymbInfo[iSymbInfo].varData.pVarDeclStmt->vardeclk;
+			if (vardeclk == VARDECLK_Local)
+				break;
 
-	// @Slow
+			Assert(vardeclk == VARDECLK_Param);
+			cParam++;
+		}
+	}
 
+	if (cParam > 0)
+	{
+		// Compute param offsets
+
+		// If the scope is a function, all parameters get treated as if they are in their own struct (separate from the locals).
+		//	This is to make things agree with how these byte offsets get interpreted by the VM.
+
+		DynamicArray<AstNode *> apVarDeclParam;
+		initExtract(&apVarDeclParam, aSymbInfo.pBuffer, cParam, offsetof(SymbolInfo, varData.pVarDeclStmt));
+		Defer(dispose(&apVarDeclParam));
+
+		const bool c_includeEndPadding = false;
+		Type::ComputedInfo fakeTypeInfo = tryComputeTypeInfoAndSetMemberOffsets(*pCtx, pScope->id, apVarDeclParam, c_includeEndPadding);
+		Assert(fakeTypeInfo.size != Type::ComputedInfo::s_unset);
+		Assert(fakeTypeInfo.alignment != Type::ComputedInfo::s_unset);
+	}
+
+	// Compute local var offsets
+
+	int cLocal = aSymbInfo.cItem - cParam;
 	DynamicArray<AstNode *> apVarDecl;
-	initExtract(&apVarDecl, aSymbInfo, offsetof(SymbolInfo, varData.pVarDeclStmt));
+	initExtract(&apVarDecl, aSymbInfo.pBuffer + cParam, cLocal, offsetof(SymbolInfo, varData.pVarDeclStmt));
 	Defer(dispose(&apVarDecl));
 
 	bool includeEndPadding = false;
@@ -206,7 +240,7 @@ void computeScopedVariableOffsets(MeekCtx * pCtx, Scope * pScope)
 	Assert(fakeTypeInfo.size != Type::ComputedInfo::s_unset);
 	Assert(fakeTypeInfo.alignment != Type::ComputedInfo::s_unset);
 
-	pScope->cByteVariables = fakeTypeInfo.size;
+	pScope->cByteLocalVariables = fakeTypeInfo.size;
 }
 
 int compareVarseqid(const SymbolInfo & s0, const SymbolInfo & s1)
@@ -267,14 +301,19 @@ SymbolInfo lookupVarSymbol(const Scope & scope, const Lexeme & lexeme, GRFSYMBQ 
 
 	if (aSymbInfo.cItem == 1)
 	{
-		return aSymbInfo[0];
+		const SymbolInfo & symbInfo = aSymbInfo[0];
+		Assert(symbInfo.symbolk == SYMBOLK_Var);
+
+		bool ignoreResult = (grfsymbq & FSYMBQ_IgnoreParamVars) && symbInfo.varData.pVarDeclStmt->vardeclk == VARDECLK_Param;
+		if (!ignoreResult)
+		{
+			return symbInfo;
+		}
 	}
-	else
-	{
-		SymbolInfo resultNil;
-		resultNil.symbolk = SYMBOLK_Nil;
-		return resultNil;
-	}
+
+	SymbolInfo resultNil;
+	resultNil.symbolk = SYMBOLK_Nil;
+	return resultNil;
 }
 
 SymbolInfo lookupTypeSymbol(const Scope & scope, const Lexeme & lexeme, GRFSYMBQ grfsymbq)
@@ -362,6 +401,10 @@ void lookupSymbol(const Scope & scope, const Lexeme & lexeme, DynamicArray<Symbo
 
 void lookupAllVars(const Scope & scope, DynamicArray<SymbolInfo> * poResult, GRFSYMBQ grfsymbq)
 {
+	bool shouldIgnoreParams = grfsymbq & FSYMBQ_IgnoreParamVars;
+	bool shouldIgnoreParent = grfsymbq & FSYMBQ_IgnoreParent;
+	bool shouldSortByVarseqid = grfsymbq & FSYMBQ_SortVarseqid;
+
 	for (auto it = iter(scope.symbolsDefined); it.pKey; iterNext(&it))
 	{
 		for (int iSymb = 0; iSymb < it.pValue->cItem; iSymb++)
@@ -370,16 +413,19 @@ void lookupAllVars(const Scope & scope, DynamicArray<SymbolInfo> * poResult, GRF
 			if (symbInfo.symbolk != SYMBOLK_Var)
 				continue;
 
+			if (shouldIgnoreParams && symbInfo.varData.pVarDeclStmt->vardeclk == VARDECLK_Param)
+				continue;
+
 			append(poResult, symbInfo);
 		}
 	}
 
-	if ((grfsymbq & FSYMBQ_IgnoreParent) == 0)
+	if (!shouldIgnoreParent)
 	{
 		lookupAllVars(*scope.pScopeParent, poResult, grfsymbq);
 	}
 
-	if (grfsymbq & FSYMBQ_SortVarseqid)
+	if (shouldSortByVarseqid)
 	{
 		bubbleSort(poResult->pBuffer, poResult->cItem, &compareVarseqid);
 	}

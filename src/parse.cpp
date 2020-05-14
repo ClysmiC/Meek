@@ -233,7 +233,7 @@ AstNode * parseStmt(Parser * pParser, PARSESTMTK parsestmtk)
 
 		Assert(Implies(tokenkNext == TOKENK_Fn, parsestmtk != PARSESTMTK_DoPseudoStmt));
 
-		bool isGlobal = parsestmtk == PARSESTMTK_TopLevelStmt;
+		bool isGlobal = (parsestmtk == PARSESTMTK_TopLevelStmt);
 		auto * pNode = parseVarDeclStmt(pParser, isGlobal ? VARDECLK_Global : VARDECLK_Local);
 
 		if (isErrorNode(*pNode)) return pNode;
@@ -729,6 +729,7 @@ AstNode * parseVarDeclStmt(
 		pNode->ident.scopeid = SCOPEID_Nil;
 	}
 	pNode->pInitExpr = pInitExpr;
+	pNode->vardeclk = vardeclk;
 
 	// Remember to poke in the typid once this type is resolved
 
@@ -959,7 +960,10 @@ AstNode * parseBlockStmt(Parser * pParser, bool pushPopScope)
 		return Up(pErr);
 	}
 
-	if (pushPopScope) pushScope(pParser, SCOPEK_CodeBlock);
+	// Assumption: any block stmt that pushes its own scope is of kind "FunctionInner"
+	//	This assumption holds for the current spec, but may change in the future.
+
+	if (pushPopScope) pushScope(pParser, SCOPEK_FunctionInner);
 	Defer(if (pushPopScope) popScope(pParser));
 
 	// Parse statements until }
@@ -2311,7 +2315,7 @@ AstNode * parseFuncDefnStmtOrLiteralExpr(Parser * pParser, FUNCHEADERK funcheade
 	//	are subsumed by the function's scope.
 	
 	Scope * pScopeOuter = pParser->pScopeCurrent;
-	Scope * pScopeInner = pushScope(pParser, SCOPEK_CodeBlock);
+	Scope * pScopeInner = pushScope(pParser, SCOPEK_FunctionTopLevel);
 
 	Defer(popScope(pParser));
 

@@ -721,10 +721,10 @@ bool visitBytecodeBuilderPreorder(AstNode * pNode, void * pBuilder_)
 
 			Scope * pScope = pCtx->mpScopeidPScope[pStmt->scopeid];
 
-			if (pScope->cByteVariables > 0)
+			if (pScope->cByteLocalVariables > 0)
 			{
 				emitOp(pBytecodeFunc, BCOP_StackAlloc, startLine);
-				emit(pBytecodeFunc, pScope->cByteVariables);
+				emit(pBytecodeFunc, pScope->cByteLocalVariables);
 			}
 
 			return true;
@@ -1441,10 +1441,10 @@ void visitBytecodeBuilderPostOrder(AstNode * pNode, void * pBuilder_)
 
 			Scope * pScope = pCtx->mpScopeidPScope[pStmt->scopeid];
 
-			if (pScope->cByteVariables > 0)
+			if (pScope->cByteLocalVariables > 0)
 			{
 				emitOp(pBytecodeFunc, BCOP_StackFree, startLine);
-				emit(pBytecodeFunc, pScope->cByteVariables);
+				emit(pBytecodeFunc, pScope->cByteLocalVariables);
 			}
 		} break;
 
