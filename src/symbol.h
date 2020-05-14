@@ -60,8 +60,8 @@ enum SCOPEK : s8
 	SCOPEK_Global,
 	SCOPEK_StructDefn,
 
-	SCOPEK_FunctionTopLevel,	// Outermost scope of func. Owns parameters.
-	SCOPEK_FunctionInner,		// Control flow, user-introduced scopes, etc.
+	SCOPEK_FuncTopLevel,	// Outermost scope of func. Owns parameters.
+	SCOPEK_FuncInner,		// Control flow, user-introduced scopes, etc.
 
 	SCOPEK_Nil = -1
 };
@@ -72,7 +72,34 @@ struct Scope
 	SCOPEID id = SCOPEID_Nil;
 	SCOPEK scopek = SCOPEK_Nil;
 
-	uintptr cByteLocalVariables = 0;	// NOTE: Excludes params!
+	union
+	{
+		struct UBuiltInData
+		{
+
+		} builtInData;
+
+		struct UGlobalData
+		{
+			uintptr cByteGlobalVariable;
+		} globalData;
+
+		struct UStructDefnData
+		{
+			uintptr cByteMember;
+		} structDefnData;
+
+		struct UFuncTopLevelData
+		{
+			uintptr cByteLocalVariable;
+			uintptr cByteParam;
+		} funcTopLevelData;
+
+		struct UFuncInnerData
+		{
+			uintptr cByteLocalVariable;
+		} funcInnerData;
+	};
 
 	HashMap<Lexeme, DynamicArray<SymbolInfo>> symbolsDefined;
 };
@@ -118,6 +145,7 @@ void lookupSymbol(const Scope & scope, const Lexeme & lexeme, DynamicArray<Symbo
 void lookupAllVars(const Scope & scope, DynamicArray<SymbolInfo> * poResult, GRFSYMBQ grfsymbq = GRFSYMBQ_None);
 
 void updateVarSymbolOffset(const Scope & scope, const Lexeme & lexeme, u32 cByteOffset);
+uintptr cByteLocalVars(const Scope & scope);
 
 bool isDeclarationOrderIndependent(SYMBOLK symbolk);
 bool isDeclarationOrderIndependent(const SymbolInfo & info);

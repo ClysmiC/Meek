@@ -15,7 +15,7 @@ void init(Interpreter * pInterp, MeekCtx * pCtx)
 	Scope * pScopeGlobal = pCtx->pParser->pScopeGlobal;		// TODO: put this somewhere other than parser...
 
 	constexpr u64 cByteStack = c_MiB;
-	uintptr cByteGlobal = pScopeGlobal->cByteLocalVariables;
+	uintptr cByteGlobal = pScopeGlobal->globalData.cByteGlobalVariable;
 
 	pInterp->pVirtualAddressSpace = new u8[cByteGlobal + cByteStack];
 
@@ -727,7 +727,10 @@ uintptr virtualAddressStart(const Scope & scope)
 
 	while (pScopeParent)
 	{
-		offset += pScopeParent->cByteLocalVariables;
+		// FIXME: This will break. Need to consider params, return values, return address, etc. all
+		//	on the stack.
+
+		offset += cByteLocalVars(*pScopeParent);
 		pScopeParent = pScopeParent->pScopeParent;
 	}
 

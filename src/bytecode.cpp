@@ -81,7 +81,6 @@
 //StaticAssert(ArrayLen(gc_mpBcopCByte) == BCOP_Max);
 
 static const char * c_mpBcopStrName[] = {
-	"Return",
 	"LoadImmediate8",
 	"LoadImmediate16",
 	"LoadImmediate32",
@@ -167,6 +166,8 @@ static const char * c_mpBcopStrName[] = {
 	"JumpIfPeekTrue",
 	"StackAlloc",
 	"StackFree",
+	"Call",
+	"Return",
 	"DebugPrint",
 	"DebugExit",
 };
@@ -721,10 +722,11 @@ bool visitBytecodeBuilderPreorder(AstNode * pNode, void * pBuilder_)
 
 			Scope * pScope = pCtx->mpScopeidPScope[pStmt->scopeid];
 
-			if (pScope->cByteLocalVariables > 0)
+			uintptr cByteLocal = cByteLocalVars(*pScope);
+			if (cByteLocal > 0)
 			{
 				emitOp(pBytecodeFunc, BCOP_StackAlloc, startLine);
-				emit(pBytecodeFunc, pScope->cByteLocalVariables);
+				emit(pBytecodeFunc, cByteLocal);
 			}
 
 			return true;
@@ -1441,10 +1443,11 @@ void visitBytecodeBuilderPostOrder(AstNode * pNode, void * pBuilder_)
 
 			Scope * pScope = pCtx->mpScopeidPScope[pStmt->scopeid];
 
-			if (pScope->cByteLocalVariables > 0)
+			uintptr cByteLocal = cByteLocalVars(*pScope);
+			if (cByteLocal > 0)
 			{
 				emitOp(pBytecodeFunc, BCOP_StackFree, startLine);
-				emit(pBytecodeFunc, pScope->cByteLocalVariables);
+				emit(pBytecodeFunc, cByteLocal);
 			}
 		} break;
 

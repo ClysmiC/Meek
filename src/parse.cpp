@@ -963,7 +963,7 @@ AstNode * parseBlockStmt(Parser * pParser, bool pushPopScope)
 	// Assumption: any block stmt that pushes its own scope is of kind "FunctionInner"
 	//	This assumption holds for the current spec, but may change in the future.
 
-	if (pushPopScope) pushScope(pParser, SCOPEK_FunctionInner);
+	if (pushPopScope) pushScope(pParser, SCOPEK_FuncInner);
 	Defer(if (pushPopScope) popScope(pParser));
 
 	// Parse statements until }
@@ -2315,7 +2315,7 @@ AstNode * parseFuncDefnStmtOrLiteralExpr(Parser * pParser, FUNCHEADERK funcheade
 	//	are subsumed by the function's scope.
 	
 	Scope * pScopeOuter = pParser->pScopeCurrent;
-	Scope * pScopeInner = pushScope(pParser, SCOPEK_FunctionTopLevel);
+	Scope * pScopeInner = pushScope(pParser, SCOPEK_FuncTopLevel);
 
 	Defer(popScope(pParser));
 

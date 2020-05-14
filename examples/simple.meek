@@ -1,4 +1,4 @@
-fn main(int foo)
+fn main()
 {
 	int a = 0;
 	

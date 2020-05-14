@@ -197,8 +197,13 @@ void computeScopedVariableOffsets(MeekCtx * pCtx, Scope * pScope)
 	Assert(Implies(pScope->id == SCOPEID_BuiltIn, aSymbInfo.cItem == 0));
 
 	int cParam = 0;
-	if (pScope->scopek == SCOPEK_FunctionTopLevel)
+	if (pScope->scopek == SCOPEK_FuncTopLevel)
 	{
+		// Compute param offsets
+
+		// If the scope is a function, all parameters get treated as if they are in their own struct (separate from the locals).
+		//	This is to make things agree with how these byte offsets get interpreted by the VM.
+
 		for (int iSymbInfo = 0; iSymbInfo < aSymbInfo.cItem; iSymbInfo++)
 		{
 			VARDECLK vardeclk = aSymbInfo[iSymbInfo].varData.pVarDeclStmt->vardeclk;
@@ -208,24 +213,27 @@ void computeScopedVariableOffsets(MeekCtx * pCtx, Scope * pScope)
 			Assert(vardeclk == VARDECLK_Param);
 			cParam++;
 		}
+
+		if (cParam > 0)
+		{
+
+			DynamicArray<AstNode *> apVarDeclParam;
+			initExtract(&apVarDeclParam, aSymbInfo.pBuffer, cParam, offsetof(SymbolInfo, varData.pVarDeclStmt));
+			Defer(dispose(&apVarDeclParam));
+
+			const bool c_includeEndPadding = false;
+			Type::ComputedInfo fakeTypeInfo = tryComputeTypeInfoAndSetMemberOffsets(*pCtx, pScope->id, apVarDeclParam, c_includeEndPadding);
+			Assert(fakeTypeInfo.size != Type::ComputedInfo::s_unset);
+			Assert(fakeTypeInfo.alignment != Type::ComputedInfo::s_unset);
+
+			pScope->funcTopLevelData.cByteParam = fakeTypeInfo.size;
+		}
+		else
+		{
+			pScope->funcTopLevelData.cByteParam = 0;
+		}
 	}
 
-	if (cParam > 0)
-	{
-		// Compute param offsets
-
-		// If the scope is a function, all parameters get treated as if they are in their own struct (separate from the locals).
-		//	This is to make things agree with how these byte offsets get interpreted by the VM.
-
-		DynamicArray<AstNode *> apVarDeclParam;
-		initExtract(&apVarDeclParam, aSymbInfo.pBuffer, cParam, offsetof(SymbolInfo, varData.pVarDeclStmt));
-		Defer(dispose(&apVarDeclParam));
-
-		const bool c_includeEndPadding = false;
-		Type::ComputedInfo fakeTypeInfo = tryComputeTypeInfoAndSetMemberOffsets(*pCtx, pScope->id, apVarDeclParam, c_includeEndPadding);
-		Assert(fakeTypeInfo.size != Type::ComputedInfo::s_unset);
-		Assert(fakeTypeInfo.alignment != Type::ComputedInfo::s_unset);
-	}
 
 	// Compute local var offsets
 
@@ -240,7 +248,41 @@ void computeScopedVariableOffsets(MeekCtx * pCtx, Scope * pScope)
 	Assert(fakeTypeInfo.size != Type::ComputedInfo::s_unset);
 	Assert(fakeTypeInfo.alignment != Type::ComputedInfo::s_unset);
 
-	pScope->cByteLocalVariables = fakeTypeInfo.size;
+	switch (pScope->scopek)
+	{
+		case SCOPEK_Global:
+		{
+			pScope->globalData.cByteGlobalVariable = fakeTypeInfo.size;
+		} break;
+
+		case SCOPEK_BuiltIn:
+		{
+			Assert(fakeTypeInfo.size == 0);
+		} break;
+
+		case SCOPEK_StructDefn:
+		{
+			// @Slow - pretty sure this is redundant, since we are already computing
+			//	the size info for the type itself in an earlier phase?
+
+			AssertInfo(false, "Debugging... do I reach this case?");
+			pScope->structDefnData.cByteMember = fakeTypeInfo.size;
+		} break;
+
+		case SCOPEK_FuncTopLevel:
+		{
+			pScope->funcTopLevelData.cByteLocalVariable = fakeTypeInfo.size;
+		} break;
+
+		case SCOPEK_FuncInner:
+		{
+			pScope->funcInnerData.cByteLocalVariable = fakeTypeInfo.size;
+		} break;
+
+		default:
+			AssertNotReached;
+			break;
+	}
 }
 
 int compareVarseqid(const SymbolInfo & s0, const SymbolInfo & s1)
@@ -448,6 +490,16 @@ void updateVarSymbolOffset(const Scope & scope, const Lexeme & lexeme, u32 cByte
 	}
 
 	Assert(updated);
+}
+
+uintptr cByteLocalVars(const Scope & scope)
+{
+	switch (scope.scopek)
+	{
+		case SCOPEK_FuncTopLevel:		return scope.funcTopLevelData.cByteLocalVariable;
+		case SCOPEK_FuncInner:			return scope.funcInnerData.cByteLocalVariable;
+		default:						return 0;
+	}
 }
 
 bool isDeclarationOrderIndependent(const SymbolInfo & info)

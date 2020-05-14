@@ -9,8 +9,6 @@ struct MeekCtx;
 
 enum BCOP : u8
 {
-	BCOP_Return,
-
 	// Load Immediate
 	//	- Pushes 1 n-bit value from bytecode onto the stack
 
@@ -243,6 +241,16 @@ enum BCOP : u8
 	//	- Pops that many bytes off the top of the stack
 
 	BCOP_StackFree,
+
+	// Call
+	//	- (semantics TBD)
+
+	BCOP_Call,
+
+	// Return
+	//	- (semantics TBD)
+
+	BCOP_Return,
 
 	// Debug Print (debug only, subject to removal!)
 	//	- Reads typid from bytecode
