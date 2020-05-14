@@ -113,9 +113,7 @@ AstNode * parseExprStmtOrAssignStmt(Parser * pParser);
 AstNode * parseStructDefnStmt(Parser * pParser);
 AstNode * parseVarDeclStmt(
 	Parser * pParser,
-	EXPECTK expectkName = EXPECTK_Required,
-	EXPECTK expectkInit = EXPECTK_Optional,
-	EXPECTK expectkSemicolon = EXPECTK_Required,
+	VARDECLK vardeclk,
 	NULLABLE PENDINGTYPID * poPendingTypid = nullptr);
 
 AstNode * parseIfStmt(Parser * pParser);

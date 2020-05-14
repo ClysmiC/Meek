@@ -233,7 +233,8 @@ AstNode * parseStmt(Parser * pParser, PARSESTMTK parsestmtk)
 
 		Assert(Implies(tokenkNext == TOKENK_Fn, parsestmtk != PARSESTMTK_DoPseudoStmt));
 
-		auto * pNode = parseVarDeclStmt(pParser);
+		bool isGlobal = parsestmtk == PARSESTMTK_TopLevelStmt;
+		auto * pNode = parseVarDeclStmt(pParser, isGlobal ? VARDECLK_Global : VARDECLK_Local);
 
 		if (isErrorNode(*pNode)) return pNode;
 
@@ -521,7 +522,7 @@ AstNode * parseStructDefnStmt(Parser * pParser)
 	{
 		// Parse member var decls
 
-		AstNode * pVarDeclStmt = parseVarDeclStmt(pParser);
+		AstNode * pVarDeclStmt = parseVarDeclStmt(pParser, VARDECLK_Member);
 		append(&apVarDeclStmt, pVarDeclStmt);
 
 		if (isErrorNode(*pVarDeclStmt))
@@ -579,13 +580,26 @@ AstNode * parseStructDefnStmt(Parser * pParser)
 
 AstNode * parseVarDeclStmt(
 	Parser * pParser,
-	EXPECTK expectkName,
-	EXPECTK expectkInit,
-	EXPECTK expectkSemicolon,
+	VARDECLK vardeclk,
 	NULLABLE PENDINGTYPID * poTypidPending)
 {
-	AssertInfo(expectkName != EXPECTK_Forbidden, "Function does not support being called with expectkName forbidden. Variables usually require names, but are optional for return values");
-	AssertInfo(expectkSemicolon != EXPECTK_Optional, "Semicolon should either be required or forbidden");
+	struct Expectations
+	{
+		EXPECTK name;
+		EXPECTK semicolon;
+	};
+
+	const Expectations c_mpVardeclkExpectations[] =
+	{
+		//	name					semicolon
+
+		{	EXPECTK_Required,		EXPECTK_Required	},		// VARDECLK_Global
+		{	EXPECTK_Required,		EXPECTK_Required	},		// VARDECLK_Local
+		{	EXPECTK_Optional,		EXPECTK_Forbidden	},		// VARDECLK_Param
+		{	EXPECTK_Required,		EXPECTK_Required	},		// VARDECLK_Member
+	};
+
+	const Expectations & expectations = c_mpVardeclkExpectations[vardeclk];
 
 	Scanner * pScanner = pParser->pCtx->pScanner;
 	TypeTable * pTypeTable = pParser->pCtx->pTypeTable;
@@ -618,14 +632,14 @@ AstNode * parseVarDeclStmt(
 
 	// Parse name
 
-	if (expectkName == EXPECTK_Optional || expectkName == EXPECTK_Required)
+	if (expectations.name == EXPECTK_Optional || expectations.name == EXPECTK_Required)
 	{
 		if (tryConsumeToken(pScanner, TOKENK_Identifier, ensurePendingToken(pParser)))
 		{
 			pTokenIdent = claimPendingToken(pParser);
 			Assert(pTokenIdent->tokenk == TOKENK_Identifier);
 		}
-		else if (expectkName == EXPECTK_Required)
+		else if (expectations.name == EXPECTK_Required)
 		{
 			auto startEndPrev = prevTokenStartEnd(pScanner);
 
@@ -685,7 +699,7 @@ AstNode * parseVarDeclStmt(
 
 	// Parse semicolon
 
-	if (expectkSemicolon == EXPECTK_Required)
+	if (expectations.semicolon == EXPECTK_Required)
 	{
 		if (!tryConsumeToken(pScanner, TOKENK_Semicolon, ensurePendingToken(pParser)))
 		{
@@ -1878,19 +1892,8 @@ NULLABLE AstErr * tryParseFuncHeader(Parser * pParser, const ParseFuncHeaderPara
 
 			if (param.funcheaderk == FUNCHEADERK_Defn || param.funcheaderk == FUNCHEADERK_Literal)
 			{
-				// Var decl
-
-				static const EXPECTK s_expectkName = EXPECTK_Optional;
-				static const EXPECTK s_expectkSemicolon = EXPECTK_Forbidden;
-
-				EXPECTK expectkInit = EXPECTK_Optional;
-				if (param.funcheaderk == FUNCHEADERK_Type)
-				{
-					expectkInit = EXPECTK_Forbidden;
-				}
-
 				PENDINGTYPID pendingTypid;
-				AstNode * pNode = parseVarDeclStmt(pParser, s_expectkName, expectkInit, s_expectkSemicolon, &pendingTypid);
+				AstNode * pNode = parseVarDeclStmt(pParser, VARDECLK_Param, &pendingTypid);
 				if (isErrorNode(*pNode))
 				{
 					return DownErr(pNode);

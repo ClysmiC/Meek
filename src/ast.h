@@ -111,6 +111,16 @@ enum ASTK : u8
 	ASTK_Program,
 };
 
+enum VARDECLK
+{
+	// @Sync - used in map array
+
+	VARDECLK_Global,
+	VARDECLK_Local,
+	VARDECLK_Param,
+	VARDECLK_Member
+};
+
 // IMPORTANT: All AstNodes in the tree are the exact same struct (AstNode). Switch on the ASTK to
 //	get the kind of node, and then switch on the exprk or stmtk to get further details.
 //	It is important that these unions are the first member in each struct, so that if you have
@@ -367,6 +377,7 @@ struct AstVarDeclStmt
 
 	VARSEQID varseqid;
 	TYPID typidDefn;
+	VARDECLK vardeclk;
 };
 
 struct AstStructDefnStmt
