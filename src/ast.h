@@ -324,6 +324,7 @@ struct AstFuncLiteralExpr
 	AstNode * pBodyStmt;
 
 	SCOPEID scopeid;		// Scope introduced by this func defn
+	FUNCID funcid;
 
 #if 0
 	static constexpr uint s_nodeSizeDebug = sizeof(AstFuncLiteralExpr);
@@ -400,6 +401,7 @@ struct AstFuncDefnStmt
 	AstNode * pBodyStmt;
 	SCOPEID scopeid;        // Scope introduced by this func defn
 	TYPID typidDefn;
+	FUNCID funcid;
 };
 #if 0
 	static constexpr uint s_nodeSizeDebug = sizeof(AstFuncDefnStmt);
@@ -502,7 +504,6 @@ struct AstNode
 			// NOTE: These fields MUST be after the above union in the struct
 
 			ASTK				astk;
-
 			ASTID			    astid;
 		};
 
@@ -522,6 +523,9 @@ struct AstNode
 static constexpr uint s_nodeSizeDebug = sizeof(AstNode);
 #endif
 
+
+FUNCID funcid(const AstNode & node);
+int compareFuncid(AstNode * const & node0, AstNode * const & node1);
 
 
 // Walking AST

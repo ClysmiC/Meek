@@ -3,6 +3,30 @@
 #include "ast_decorate.h"
 #include "error.h"
 
+FUNCID funcid(const AstNode & node)
+{
+	if (node.astk == ASTK_FuncDefnStmt)
+	{
+		return DownConst(&node, FuncDefnStmt)->funcid;
+	}
+	else if (node.astk == ASTK_FuncLiteralExpr)
+	{
+		return DownConst(&node, FuncLiteralExpr)->funcid;
+	}
+	else
+	{
+		return FUNCID_Nil;
+	}
+}
+
+int compareFuncid(AstNode * const& node0, AstNode * const& node1)
+{
+	FUNCID id0 = funcid(*node0);
+	FUNCID id1 = funcid(*node1);
+
+	return id0 - id1; 
+}
+
 void walkAst(
 	MeekCtx * pCtx,
 	AstNode * pNodeSubtreeRoot,

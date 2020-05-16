@@ -2,6 +2,8 @@
 
 #include "als.h"
 
+#include "id_def.h"
+
 struct AstDecorations;
 struct AstNode;
 struct Scanner;
@@ -14,16 +16,21 @@ struct TypeTable;
 
 struct MeekCtx
 {
-	Scanner * pScanner = nullptr;
-	Parser * pParser = nullptr;
-	TypeTable * pTypeTable = nullptr;
+	Scanner * pScanner;
+	Parser * pParser;
+	TypeTable * pTypeTable;
 
 	DynamicArray<Scope *> mpScopeidPScope;
 
-	AstNode * pNodeRoot = nullptr;
-	AstDecorations * pAstDecs = nullptr;
+	AstNode * pNodeRoot;
+	AstDecorations * pAstDecs;
+
+	// All functions
 
 	DynamicArray<AstNode *> apFuncDefnAndLiteral;
+	bool isMainAssignedFuncid;
+	bool areFuncsSortedByFuncid;
+	FUNCID funcidNext;
 
 #ifdef _WIN64
 	static const int s_cBitTargetWord = 64;
@@ -37,3 +44,4 @@ struct MeekCtx
 };
 
 void init(MeekCtx * pMeekCtx, char * pText, uint textSize);
+AstNode * funcNodeFromFuncid(MeekCtx * pCtx, FUNCID funcid);

@@ -30,4 +30,22 @@ void init(MeekCtx * pMeekCtx, char * pText, uint textSize)
 	pMeekCtx->pAstDecs = &g_astDecs;
 
 	pMeekCtx->pNodeRoot = nullptr;
+
+	pMeekCtx->isMainAssignedFuncid = false;
+	pMeekCtx->areFuncsSortedByFuncid = false;
+	pMeekCtx->funcidNext = FUNCID_NonMainStart;
+}
+
+AstNode * funcNodeFromFuncid(MeekCtx * pCtx, FUNCID funcid)
+{
+	Assert(pCtx->areFuncsSortedByFuncid);
+
+	int iFunc = funcid;
+	if (!pCtx->isMainAssignedFuncid)
+	{
+		iFunc -= 1;
+	}
+
+	Assert(iFunc < pCtx->apFuncDefnAndLiteral.cItem);
+	return pCtx->apFuncDefnAndLiteral[iFunc];
 }

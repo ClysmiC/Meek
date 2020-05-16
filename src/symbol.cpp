@@ -94,9 +94,9 @@ void defineSymbol(Scope * pScope, const Lexeme & lexeme, const SymbolInfo & symb
 	append(paSymbInfo, symbInfo);
 }
 
-bool auditDuplicateSymbols(Scope * pScope)
+bool auditSymbolsAndSetFuncids(MeekCtx * pCtx, Scope * pScope)
 {
-	bool duplicateFound = false;
+	bool success = false;
 	for (auto it = iter(pScope->symbolsDefined); it.pValue; iterNext(&it))
 	{
 		Lexeme lexeme = *it.pKey;
@@ -123,7 +123,7 @@ bool auditDuplicateSymbols(Scope * pScope)
 						print(lexeme.strv);
 						println();
 
-						duplicateFound = true;
+						success = false;
 
 						remove(paSymbInfo, iSymbInfo);
 						iSymbInfo--;
@@ -140,7 +140,7 @@ bool auditDuplicateSymbols(Scope * pScope)
 						print(lexeme.strv);
 						println();
 
-						duplicateFound = true;
+						success = false;
 
 						remove(paSymbInfo, iSymbInfo);
 						iSymbInfo--;
@@ -149,34 +149,66 @@ bool auditDuplicateSymbols(Scope * pScope)
 
 				case SYMBOLK_Func:
 				{
-					// @Slow
-
-					for (int iSymbInfoOther = iSymbInfo + 1; iSymbInfoOther < paSymbInfo->cItem; iSymbInfoOther++)
+					if (symbInfo.funcData.pFuncDefnStmt->ident.lexeme.strv == "main")
 					{
-						SymbolInfo symbInfoOther = (*paSymbInfo)[iSymbInfoOther];
-						if (symbInfoOther.symbolk != SYMBOLK_Func)
-							continue;
-
-						if (symbInfo.funcData.pFuncDefnStmt->typidDefn == symbInfoOther.funcData.pFuncDefnStmt->typidDefn)
+						bool mainError = false;
+						if (pScope->id != SCOPEID_Global)
 						{
-							// TODO: better error story
-
-							print("Duplicate function with same signature ");
-							print(lexeme.strv);
-							println();
-
-							duplicateFound = true;
-
-							remove(paSymbInfo, iSymbInfo);
-							iSymbInfo--;
+							print("'main' function must be defined in global scope");
+							success = false;
+							mainError = true;
 						}
+						else if (pCtx->isMainAssignedFuncid)
+						{
+							print("Only one 'main' function may be defined");
+							success = false;
+							mainError = true;
+						}
+						
+						if (!mainError)
+						{
+							symbInfo.funcData.pFuncDefnStmt->funcid = FUNCID_Main;
+							pCtx->isMainAssignedFuncid = true;
+						}
+						else
+						{
+							symbInfo.funcData.pFuncDefnStmt->funcid = FUNCID_Nil;
+						}
+					}
+					else
+					{
+						// @Slow
+
+						for (int iSymbInfoOther = iSymbInfo + 1; iSymbInfoOther < paSymbInfo->cItem; iSymbInfoOther++)
+						{
+							SymbolInfo symbInfoOther = (*paSymbInfo)[iSymbInfoOther];
+							if (symbInfoOther.symbolk != SYMBOLK_Func)
+								continue;
+
+							if (symbInfo.funcData.pFuncDefnStmt->typidDefn == symbInfoOther.funcData.pFuncDefnStmt->typidDefn)
+							{
+								// TODO: better error story
+
+								print("Duplicate function with same signature ");
+								print(lexeme.strv);
+								println();
+
+								success = false;
+
+								remove(paSymbInfo, iSymbInfo);
+								iSymbInfo--;
+							}
+						}
+
+						symbInfo.funcData.pFuncDefnStmt->funcid = pCtx->funcidNext;
+						pCtx->funcidNext = FUNCID(pCtx->funcidNext + 1);
 					}
 				}
 			}
 		}
 	}
 
-	return !duplicateFound;
+	return success;
 }
 
 void computeScopedVariableOffsets(MeekCtx * pCtx, Scope * pScope)

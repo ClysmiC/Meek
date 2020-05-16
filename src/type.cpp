@@ -665,7 +665,7 @@ EnsureInTypeTableResult ensureInTypeTable(TypeTable * pTable, Type * pType, bool
 	initCopy(pTypeCopy, *pType);
 
 	TYPID typidInsert = pTable->typidNext;
-	pTable->typidNext = static_cast<TYPID>(pTable->typidNext + 1);
+	pTable->typidNext = TYPID(pTable->typidNext + 1);
 
 	Verify(insert(&pTable->table, typidInsert, pTypeCopy));
 

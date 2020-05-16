@@ -132,7 +132,7 @@ typedef u16 GRFSYMBQ;
 void init(Scope * pScope, SCOPEID scopeid, SCOPEK scopek, Scope * pScopeParent);
 void defineSymbol(Scope * pScope, const Lexeme & lexeme, const SymbolInfo & symbInfo);
 
-bool auditDuplicateSymbols(Scope * pScope);
+bool auditSymbolsAndSetFuncids(MeekCtx * pCtx, Scope * pScope);
 void computeScopedVariableOffsets(MeekCtx * pCtx, Scope * pScope);
 
 int compareVarseqid(const SymbolInfo & s0, const SymbolInfo & s1);

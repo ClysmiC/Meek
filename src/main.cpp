@@ -106,6 +106,22 @@ int main()
 	print("Done\n");
 	println();
 
+	// Sort all func nodes by id so that we can retrieve a func node from its id.
+	
+	bubbleSort(ctx.apFuncDefnAndLiteral.pBuffer, ctx.apFuncDefnAndLiteral.cItem, compareFuncid);
+	Assert(Implies(ctx.isMainAssignedFuncid, funcid(*ctx.apFuncDefnAndLiteral[0]) == FUNCID_Main));
+
+#if DEBUG
+	{
+		int offset = ctx.isMainAssignedFuncid ? 0 : 1;
+		for (int iFunc = 0; iFunc < ctx.apFuncDefnAndLiteral.cItem; iFunc++)
+		{
+			FUNCID funcidExpected = FUNCID(iFunc + offset);
+			Assert(funcid(*ctx.apFuncDefnAndLiteral[iFunc]) == funcidExpected);
+		}
+	}
+#endif
+
 	print("Compiling bytecode...\n");
 
 	BytecodeBuilder bytecodeBuilder;
@@ -119,7 +135,6 @@ int main()
 #if 0
 	disassemble(*bytecodeBuilder.pBytecodeFuncMain);
 #else
-
 	print("Running interpreter...\n");
 
 	Interpreter interp;

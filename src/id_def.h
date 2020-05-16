@@ -65,6 +65,15 @@ enum TYPID : u32
 	TYPID_Nil = static_cast<u32>(0xFF'FF'FF'FF)
 };
 
+enum FUNCID : u32
+{
+	FUNCID_Main = 0,
+
+	FUNCID_NonMainStart,
+
+	FUNCID_Nil = static_cast<u32>(0xFF'FF'FF'FF)
+};
+
 enum PENDINGTYPID : u32
 {
 	PENDINGTYPID_Nil = static_cast<u32>(0xFF'FF'FF'FF)
