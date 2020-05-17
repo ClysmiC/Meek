@@ -464,8 +464,9 @@ AstNode * parseExprStmtOrAssignStmt(Parser * pParser)
 
 AstNode * parseStructDefnStmt(Parser * pParser)
 {
-	Scanner * pScanner = pParser->pCtx->pScanner;
-	TypeTable * pTypeTable = pParser->pCtx->pTypeTable;
+	MeekCtx * pCtx = pParser->pCtx;
+	Scanner * pScanner = pCtx->pScanner;
+	TypeTable * pTypeTable = pCtx->pTypeTable;
 
 	Scope * pScopeDefn = pParser->pScopeCurrent;
 	int iStart = peekTokenStartEnd(pScanner).iStart;
@@ -561,7 +562,7 @@ AstNode * parseStructDefnStmt(Parser * pParser)
 	structDefnInfo.symbolk = SYMBOLK_Struct;
 	structDefnInfo.structData.pStructDefnStmt = pNode;
 
-	defineSymbol(pScopeDefn, pNode->ident.lexeme, structDefnInfo);
+	defineSymbol(pCtx, pScopeDefn, pNode->ident.lexeme, structDefnInfo);
 
 	// Insert into type table
 
@@ -601,8 +602,9 @@ AstNode * parseVarDeclStmt(
 
 	const Expectations & expectations = c_mpVardeclkExpectations[vardeclk];
 
-	Scanner * pScanner = pParser->pCtx->pScanner;
-	TypeTable * pTypeTable = pParser->pCtx->pTypeTable;
+	MeekCtx * pCtx = pParser->pCtx;
+	Scanner * pScanner = pCtx->pScanner;
+	TypeTable * pTypeTable = pCtx->pTypeTable;
 
 	AstErr * pErr = nullptr;
 	Token * pTokenIdent = nullptr;
@@ -740,7 +742,7 @@ AstNode * parseVarDeclStmt(
 		SymbolInfo varDeclInfo;
 		varDeclInfo.symbolk = SYMBOLK_Var;
 		varDeclInfo.varData.pVarDeclStmt = pNode;
-		defineSymbol(pParser->pScopeCurrent, pTokenIdent->lexeme, varDeclInfo);
+		defineSymbol(pCtx, pParser->pScopeCurrent, pTokenIdent->lexeme, varDeclInfo);
 	}
 
 	// Set seqid
@@ -2403,6 +2405,7 @@ AstNode * parseFuncDefnStmtOrLiteralExpr(Parser * pParser, FUNCHEADERK funcheade
 		pNode->pBodyStmt = pBody;
 		pNode->ident.scopeid = pScopeOuter->id;
 		pNode->scopeid = pScopeInner->id;
+		pNode->funcid = FUNCID(pCtx->apFuncDefnAndLiteral.cItem);
 
 		SymbolInfo funcDefnInfo;
 		funcDefnInfo.symbolk = SYMBOLK_Func;
@@ -2410,7 +2413,7 @@ AstNode * parseFuncDefnStmtOrLiteralExpr(Parser * pParser, FUNCHEADERK funcheade
 
 		Assert(pNode->ident.lexeme.strv.cCh > 0);
 
-		defineSymbol(pScopeOuter, pNode->ident.lexeme, funcDefnInfo);
+		defineSymbol(pCtx, pScopeOuter, pNode->ident.lexeme, funcDefnInfo);
 		registerPendingFuncType(
 			pTypeTable,
 			pScopeOuter,
@@ -2425,6 +2428,7 @@ AstNode * parseFuncDefnStmtOrLiteralExpr(Parser * pParser, FUNCHEADERK funcheade
 		AstFuncLiteralExpr * pNode = Down(pNodeUnderConstruction, FuncLiteralExpr);
 		pNode->pBodyStmt = pBody;
 		pNode->scopeid = pScopeInner->id;
+		pNode->funcid = FUNCID(pCtx->apFuncDefnAndLiteral.cItem);
 
 		registerPendingFuncType(
 			pTypeTable,
@@ -2436,6 +2440,7 @@ AstNode * parseFuncDefnStmtOrLiteralExpr(Parser * pParser, FUNCHEADERK funcheade
 		pNodeResult = Up(pNode);
 	}
 
+	Assert(funcid(*pNodeResult) == pCtx->apFuncDefnAndLiteral.cItem);
 	append(&pCtx->apFuncDefnAndLiteral, pNodeResult);
 	return pNodeResult;
 

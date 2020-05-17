@@ -130,9 +130,9 @@ enum FSYMBQ : u16
 typedef u16 GRFSYMBQ;
 
 void init(Scope * pScope, SCOPEID scopeid, SCOPEK scopek, Scope * pScopeParent);
-void defineSymbol(Scope * pScope, const Lexeme & lexeme, const SymbolInfo & symbInfo);
+void defineSymbol(MeekCtx * pCtx, Scope * pScope, const Lexeme & lexeme, const SymbolInfo & symbInfo);
 
-bool auditSymbolsAndSetFuncids(MeekCtx * pCtx, Scope * pScope);
+bool auditDuplicateSymbols(MeekCtx * pCtx, Scope * pScope);
 void computeScopedVariableOffsets(MeekCtx * pCtx, Scope * pScope);
 
 int compareVarseqid(const SymbolInfo & s0, const SymbolInfo & s1);

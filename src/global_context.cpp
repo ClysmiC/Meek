@@ -31,21 +31,11 @@ void init(MeekCtx * pMeekCtx, char * pText, uint textSize)
 
 	pMeekCtx->pNodeRoot = nullptr;
 
-	pMeekCtx->isMainAssignedFuncid = false;
-	pMeekCtx->areFuncsSortedByFuncid = false;
-	pMeekCtx->funcidNext = FUNCID_NonMainStart;
+	pMeekCtx->funcidMain = FUNCID_Nil;
 }
 
 AstNode * funcNodeFromFuncid(MeekCtx * pCtx, FUNCID funcid)
 {
-	Assert(pCtx->areFuncsSortedByFuncid);
-
-	int iFunc = funcid;
-	if (!pCtx->isMainAssignedFuncid)
-	{
-		iFunc -= 1;
-	}
-
-	Assert(iFunc < pCtx->apFuncDefnAndLiteral.cItem);
-	return pCtx->apFuncDefnAndLiteral[iFunc];
+	Assert(funcid < FUNCID(pCtx->apFuncDefnAndLiteral.cItem));
+	return pCtx->apFuncDefnAndLiteral[funcid];
 }

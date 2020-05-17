@@ -4,6 +4,7 @@
 
 enum ASTID : u32
 {
+	ASTID_Nil = static_cast<u32>(0xFF'FF'FF'FF)
 };
 
 enum VARSEQID : u32
@@ -67,10 +68,6 @@ enum TYPID : u32
 
 enum FUNCID : u32
 {
-	FUNCID_Main = 0,
-
-	FUNCID_NonMainStart,
-
 	FUNCID_Nil = static_cast<u32>(0xFF'FF'FF'FF)
 };
 

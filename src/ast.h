@@ -525,7 +525,6 @@ static constexpr uint s_nodeSizeDebug = sizeof(AstNode);
 
 
 FUNCID funcid(const AstNode & node);
-int compareFuncid(AstNode * const & node0, AstNode * const & node1);
 
 
 // Walking AST

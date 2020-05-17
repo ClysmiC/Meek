@@ -28,7 +28,7 @@ void pushAndProcessScope(ResolvePass * pPass, SCOPEID scopeid)
 	MeekCtx * pCtx = pPass->pCtx;
 
 	push(&pPass->scopeidStack, scopeid);
-	auditSymbolsAndSetFuncids(pCtx, pCtx->mpScopeidPScope[scopeid]);
+	auditDuplicateSymbols(pCtx, pCtx->mpScopeidPScope[scopeid]);
 	computeScopedVariableOffsets(pCtx, pCtx->mpScopeidPScope[scopeid]);
 }
 

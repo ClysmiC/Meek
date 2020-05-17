@@ -80,6 +80,15 @@ int main()
 
 	ctx.pNodeRoot = pNodeRoot;
 
+#if DEBUG
+	{
+		for (int iFunc = 0; iFunc < ctx.apFuncDefnAndLiteral.cItem; iFunc++)
+		{
+			Assert(funcid(*ctx.apFuncDefnAndLiteral[iFunc]) == FUNCID(iFunc));
+		}
+	}
+#endif
+
 	print("Running resolve pass...\n");
 	if (!tryResolveAllTypes(ctx.pTypeTable))
 	{
@@ -105,22 +114,6 @@ int main()
 
 	print("Done\n");
 	println();
-
-	// Sort all func nodes by id so that we can retrieve a func node from its id.
-	
-	bubbleSort(ctx.apFuncDefnAndLiteral.pBuffer, ctx.apFuncDefnAndLiteral.cItem, compareFuncid);
-	Assert(Implies(ctx.isMainAssignedFuncid, funcid(*ctx.apFuncDefnAndLiteral[0]) == FUNCID_Main));
-
-#if DEBUG
-	{
-		int offset = ctx.isMainAssignedFuncid ? 0 : 1;
-		for (int iFunc = 0; iFunc < ctx.apFuncDefnAndLiteral.cItem; iFunc++)
-		{
-			FUNCID funcidExpected = FUNCID(iFunc + offset);
-			Assert(funcid(*ctx.apFuncDefnAndLiteral[iFunc]) == funcidExpected);
-		}
-	}
-#endif
 
 	print("Compiling bytecode...\n");
 

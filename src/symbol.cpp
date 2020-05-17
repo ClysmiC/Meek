@@ -79,7 +79,7 @@ void init(Scope * pScope, SCOPEID scopeid, SCOPEK scopek, Scope * pScopeParent)
 	}
 }
 
-void defineSymbol(Scope * pScope, const Lexeme & lexeme, const SymbolInfo & symbInfo)
+void defineSymbol(MeekCtx * pCtx, Scope * pScope, const Lexeme & lexeme, const SymbolInfo & symbInfo)
 {
 	DynamicArray<SymbolInfo> * paSymbInfo = lookup(pScope->symbolsDefined, lexeme);
 	if (!paSymbInfo)
@@ -88,15 +88,31 @@ void defineSymbol(Scope * pScope, const Lexeme & lexeme, const SymbolInfo & symb
 		init(paSymbInfo);
 	}
 
-	// NOTE (andrew) No attempt is made to detect redefinitions here. We do this in
-	//	a separate pass once all types have been resolved.
+	// NOTE (andrew) No attempt is made to detect redefinitions here. That is done seperately, per-scope,
+	//	in the resolve pass. A special exception is made for main, since it is a program-wide concern.
+
+	if (symbInfo.symbolk == SYMBOLK_Func && lexeme.strv == "main")
+	{
+		if (pScope->id != SCOPEID_Global)
+		{
+			AssertTodo;		// Report error that main can only be defined at global level
+		}
+		else if (pCtx->funcidMain != FUNCID_Nil)
+		{
+			AssertTodo;		// Report error that multiple functions named main not allowed
+		}
+		else
+		{
+			pCtx->funcidMain = symbInfo.funcData.pFuncDefnStmt->funcid;
+		}
+	}
 
 	append(paSymbInfo, symbInfo);
 }
 
-bool auditSymbolsAndSetFuncids(MeekCtx * pCtx, Scope * pScope)
+bool auditDuplicateSymbols(MeekCtx * pCtx, Scope * pScope)
 {
-	bool success = false;
+	bool duplicateFound = false;
 	for (auto it = iter(pScope->symbolsDefined); it.pValue; iterNext(&it))
 	{
 		Lexeme lexeme = *it.pKey;
@@ -123,7 +139,7 @@ bool auditSymbolsAndSetFuncids(MeekCtx * pCtx, Scope * pScope)
 						print(lexeme.strv);
 						println();
 
-						success = false;
+						duplicateFound = true;
 
 						remove(paSymbInfo, iSymbInfo);
 						iSymbInfo--;
@@ -140,7 +156,7 @@ bool auditSymbolsAndSetFuncids(MeekCtx * pCtx, Scope * pScope)
 						print(lexeme.strv);
 						println();
 
-						success = false;
+						duplicateFound = true;
 
 						remove(paSymbInfo, iSymbInfo);
 						iSymbInfo--;
@@ -149,66 +165,34 @@ bool auditSymbolsAndSetFuncids(MeekCtx * pCtx, Scope * pScope)
 
 				case SYMBOLK_Func:
 				{
-					if (symbInfo.funcData.pFuncDefnStmt->ident.lexeme.strv == "main")
+					// @Slow
+
+					for (int iSymbInfoOther = iSymbInfo + 1; iSymbInfoOther < paSymbInfo->cItem; iSymbInfoOther++)
 					{
-						bool mainError = false;
-						if (pScope->id != SCOPEID_Global)
+						SymbolInfo symbInfoOther = (*paSymbInfo)[iSymbInfoOther];
+						if (symbInfoOther.symbolk != SYMBOLK_Func)
+							continue;
+
+						if (symbInfo.funcData.pFuncDefnStmt->typidDefn == symbInfoOther.funcData.pFuncDefnStmt->typidDefn)
 						{
-							print("'main' function must be defined in global scope");
-							success = false;
-							mainError = true;
+							// TODO: better error story
+
+							print("Duplicate function with same signature ");
+							print(lexeme.strv);
+							println();
+
+							duplicateFound = true;
+
+							remove(paSymbInfo, iSymbInfo);
+							iSymbInfo--;
 						}
-						else if (pCtx->isMainAssignedFuncid)
-						{
-							print("Only one 'main' function may be defined");
-							success = false;
-							mainError = true;
-						}
-						
-						if (!mainError)
-						{
-							symbInfo.funcData.pFuncDefnStmt->funcid = FUNCID_Main;
-							pCtx->isMainAssignedFuncid = true;
-						}
-						else
-						{
-							symbInfo.funcData.pFuncDefnStmt->funcid = FUNCID_Nil;
-						}
-					}
-					else
-					{
-						// @Slow
-
-						for (int iSymbInfoOther = iSymbInfo + 1; iSymbInfoOther < paSymbInfo->cItem; iSymbInfoOther++)
-						{
-							SymbolInfo symbInfoOther = (*paSymbInfo)[iSymbInfoOther];
-							if (symbInfoOther.symbolk != SYMBOLK_Func)
-								continue;
-
-							if (symbInfo.funcData.pFuncDefnStmt->typidDefn == symbInfoOther.funcData.pFuncDefnStmt->typidDefn)
-							{
-								// TODO: better error story
-
-								print("Duplicate function with same signature ");
-								print(lexeme.strv);
-								println();
-
-								success = false;
-
-								remove(paSymbInfo, iSymbInfo);
-								iSymbInfo--;
-							}
-						}
-
-						symbInfo.funcData.pFuncDefnStmt->funcid = pCtx->funcidNext;
-						pCtx->funcidNext = FUNCID(pCtx->funcidNext + 1);
 					}
 				}
 			}
 		}
 	}
 
-	return success;
+	return !duplicateFound;
 }
 
 void computeScopedVariableOffsets(MeekCtx * pCtx, Scope * pScope)

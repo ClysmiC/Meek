@@ -28,9 +28,7 @@ struct MeekCtx
 	// All functions
 
 	DynamicArray<AstNode *> apFuncDefnAndLiteral;
-	bool isMainAssignedFuncid;
-	bool areFuncsSortedByFuncid;
-	FUNCID funcidNext;
+	FUNCID funcidMain;
 
 #ifdef _WIN64
 	static const int s_cBitTargetWord = 64;
