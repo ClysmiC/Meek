@@ -125,19 +125,33 @@ int main()
 	print("Done\n");
 	println();
 
-#if 0
-	disassemble(*bytecodeBuilder.pBytecodeFuncMain);
+#if 1
+	for (int iFunc = 0; iFunc < bytecodeBuilder.aBytecodeFunc.cItem; iFunc++)
+	{
+		disassemble(bytecodeBuilder.aBytecodeFunc[iFunc]);
+		println();
+	}
 #else
-	print("Running interpreter...\n");
 
-	Interpreter interp;
-	init(&interp, &ctx);
+	if (ctx.funcidMain != FUNCID_Nil)
+	{
+		print("Running interpreter...\n");
 
-	interpret(&interp, *bytecodeBuilder.pBytecodeFuncMain);
+		Interpreter interp;
+		init(&interp, &ctx);
+
+		interpret(&interp, bytecodeBuilder.aBytecodeFunc[ctx.funcidMain]);
+
+		print("Done\n");
+		println();
+	}
+	else
+	{
+		print("No main function. Not running interpreter.");
+		println();
+	}
 #endif
 
-	print("Done\n");
-	println();
 
 	// DebugPrintCtx dpc;
 	// init(&dpc, &ctx);

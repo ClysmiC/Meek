@@ -243,14 +243,50 @@ enum BCOP : u8
 	BCOP_StackFree,
 
 	// Call
-	//	- (semantics TBD)
+	//
+	//	CALLER:
+	//	- Reads uintptr offset from bytecode
+	//	- Peeks FUNCID inside the stack. The offset indicates how many bytes are on top of the FUNCID on the stack.
+	//		An offset of 0 indicates that the FUNCID is on top. The bytes on top of the stack are the evaluated arguments,
+	//		placed on the stack by the caller. The callee will discard the FUNCID and all of the arguments above it when
+	//		it discards its own call frame due to a RETURN.
+	//	- Places caller's frame pointer on the stack. Set callee's FP to SP.
+	//	- Places return address on the stack
+	//	- Sets the IP to point to the first instruction of the function with the corresponding ID.
+	//
+	//	BEFORE CALL
+	//                            SP
+	//	STACK ->                   v
+	//	[ funcAddress | arg0 | arg1
+	//
+	//	AFTER CALL                  FP            SP
+	//	STACK ->                     v             v
+	//	[ funcAddress | arg0 | arg1 | callerFP | RA 
 
 	BCOP_Call,
 
 	// Return
-	//	- (semantics TBD)
-
-	BCOP_Return,
+	//	- Pops n-bit RV off the stack (will be restored before return finishes)
+	//	- Pops Return Address (RA) off the stack
+	//	- Pops callerFP off the stack and restores it to FP.
+	//	- Pops args off the stack
+	//	- Restores RV back onto the stack
+	//	- Sets the IP to point to popped RA
+	//
+	//	BEFORE RETURN
+	//                                                 SP
+	//	STACK ->                                        v
+	//	[ funcAddress | arg0 | arg1 | callerFP | RA | RV
+	//
+	//	AFTER RETURN
+	//	STACK ->
+	//	[ RV
+		
+	BCOP_Return0,
+	BCOP_Return8,
+	BCOP_Return16,
+	BCOP_Return32,
+	BCOP_Return64,
 
 	// Debug Print (debug only, subject to removal!)
 	//	- Reads typid from bytecode
@@ -307,14 +343,20 @@ enum SIZEDBCOP
 };
 BCOP bcopSized(SIZEDBCOP sizedBcop, int cBit);
 
+struct BytecodeProgram
+{
+	DynamicArray<u8> bytes;
+};
 
 struct BytecodeFunction
 {
+	AstNode * pFuncNode;
+
 	DynamicArray<u8> bytes;
 	DynamicArray<int> sourceLineNumbers;
 };
 
-void init(BytecodeFunction * pBcf);
+void init(BytecodeFunction * pBcf, AstNode * pFuncNode);
 void dispose(BytecodeFunction * pBcf);
 
 struct BytecodeBuilder
@@ -322,7 +364,6 @@ struct BytecodeBuilder
 	MeekCtx * pCtx;
 
 	DynamicArray<BytecodeFunction> aBytecodeFunc;
-	BytecodeFunction * pBytecodeFuncMain;
 
 	// Per-func compilation
 
@@ -357,6 +398,11 @@ struct BytecodeBuilder
 				int iJumpArgPlaceholder;	// For binops that short circuit evaluate
 				int ipZero;					// "
 			} binopExprData;
+
+			struct UFuncCallExprCtx
+			{
+				// TODO
+			} funcCallExprData;
 		};
 	};
 

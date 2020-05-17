@@ -38,11 +38,11 @@ struct Interpreter
 
 	u8 * pVirtualAddressSpace;
 
+	u8 * pGlobals;
+
 	u8 * pStack;
 	u8 * pStackBase;
 	u8 * pStackFrame;
-
-	u8 * pGlobals;
 
 	u8 * ip;
 };

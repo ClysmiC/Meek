@@ -167,7 +167,11 @@ static const char * c_mpBcopStrName[] = {
 	"StackAlloc",
 	"StackFree",
 	"Call",
-	"Return",
+	"Return0",
+	"Return8",
+	"Return16",
+	"Return32",
+	"Return64",
 	"DebugPrint",
 	"DebugExit",
 };
@@ -444,10 +448,11 @@ BCOP bcopSized(SIZEDBCOP sizedBcop, int cBit)
 	}
 }
 
-void init(BytecodeFunction * pBcf)
+void init(BytecodeFunction * pBcf, AstNode * pFuncNode)
 {
 	init(&pBcf->bytes);
 	init(&pBcf->sourceLineNumbers);
+	pBcf->pFuncNode = pFuncNode;
 }
 
 void dispose(BytecodeFunction * pBcf)
@@ -502,9 +507,8 @@ void compileBytecode(BytecodeBuilder * pBuilder)
 		}
 
 		BytecodeFunction * pBytecodeFunc = appendNew(&pBuilder->aBytecodeFunc);
-		init(pBytecodeFunc);
+		init(pBytecodeFunc, pNode);
 
-		pBuilder->pBytecodeFuncMain = pBytecodeFunc;		// TODO: Actually detect main
 		pBuilder->pBytecodeFuncCompiling = pBytecodeFunc;
 
 		pBuilder->root = true;
@@ -655,6 +659,7 @@ bool visitBytecodeBuilderPreorder(AstNode * pNode, void * pBuilder_)
 			{
 				pNodeCtx->wantsChildExprAddr = true;
 			}
+
 			return true;
 		} break;
 
@@ -1230,18 +1235,35 @@ void visitBytecodeBuilderPostOrder(AstNode * pNode, void * pBuilder_)
 
 				case SYMBEXPRK_Func:
 				{
-					// Do nothing -- func call expr is responsible for this case, since there is nothing for us to
-					//	compute and put on the stack.
+					Assert(pNodeCtxParent);
 
-					AssertTodo;		// I think I don't need to do anything here, but keeping this assert until I actually run a purposeful test.
+					BCOP bcop = bcopSized(SIZEDBCOP_LoadImmediate, sizeof(FUNCID) * 8);
+
+					emitOp(pBytecodeFunc, bcop, startLine);
+					emit(pBytecodeFunc, pExpr->funcData.pDefnCached->funcid);
+
+					// HMM: Kind of weird that the FUNCID is what we are using for the "address" of the
+					//	function... but kind of necessary due to the way the bytecode is split into
+					//	a chunk per function.
+
+					Assert(pNodeCtxParent->wantsChildExprAddr);
 				} break;
 			}
 		} break;
 
 		case ASTK_PointerDereferenceExpr:
 		case ASTK_ArrayAccessExpr:
-		case ASTK_FuncCallExpr:
+			AssertTodo;
 			break;
+
+		case ASTK_FuncCallExpr:
+		{
+			auto * pExpr = Down(pNode, FuncCallExpr);
+
+			uintptr byteOffsetFuncid = ;
+			emitOp(pBytecodeFunc, BCOP_Call, startLine);
+			emit(pBytecodeFunc, byteOffsetFuncid);
+		} break;
 
 		case ASTK_FuncLiteralExpr:
 			AssertTodo;
@@ -1486,6 +1508,21 @@ void disassemble(const BytecodeFunction & bcf)
 	int byteOffset = 0;
 	int linePrev = -1;
 	int iOp = 0;
+
+	print("Disassembly of function '");
+	if (bcf.pFuncNode->astk == ASTK_FuncDefnStmt)
+	{
+		print(Down(bcf.pFuncNode, FuncDefnStmt)->ident.lexeme.strv);
+	}
+	else
+	{
+		Assert(bcf.pFuncNode->astk == ASTK_FuncLiteralExpr);
+		print("<lambda>");
+	}
+	printfmt("' (id: %u)", funcid(*bcf.pFuncNode));
+	println();
+	print(":");
+	println();
 	
 	while (byteOffset < bcf.bytes.cItem)
 	{
@@ -1514,9 +1551,6 @@ void disassemble(const BytecodeFunction & bcf)
 
 		switch (bcop)
 		{
-			case BCOP_Return:
-				break;
-
 			case BCOP_LoadImmediate8:
 			{
 				printfmt("%08d ", byteOffset);
@@ -1675,6 +1709,26 @@ void disassemble(const BytecodeFunction & bcf)
 				printfmt("%" PRIuPTR, cByte);
 				println();
 			} break;
+
+			case BCOP_Call:
+			{
+				printfmt("%08d ", byteOffset);
+
+				uintptr callAddrStackOffset = *reinterpret_cast<uintptr *>(bcf.bytes.pBuffer + byteOffset);
+				byteOffset += sizeof(uintptr);
+
+				print("     |  ");
+				print(" -> ");
+				printfmt("%" PRIuPTR, callAddrStackOffset);
+				println();
+			} break;
+
+			case BCOP_Return0:
+			case BCOP_Return8:
+			case BCOP_Return16:
+			case BCOP_Return32:
+			case BCOP_Return64:
+				break;
 
 			case BCOP_DebugPrint:
 			{
