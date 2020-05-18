@@ -125,12 +125,8 @@ int main()
 	print("Done\n");
 	println();
 
-#if 1
-	for (int iFunc = 0; iFunc < bytecodeBuilder.aBytecodeFunc.cItem; iFunc++)
-	{
-		disassemble(bytecodeBuilder.aBytecodeFunc[iFunc]);
-		println();
-	}
+#if 0
+	disassemble(bytecodeBuilder.bytecodeProgram);
 #else
 
 	if (ctx.funcidMain != FUNCID_Nil)
@@ -140,7 +136,10 @@ int main()
 		Interpreter interp;
 		init(&interp, &ctx);
 
-		interpret(&interp, bytecodeBuilder.aBytecodeFunc[ctx.funcidMain]);
+		interpret(
+			&interp,
+			bytecodeBuilder.bytecodeProgram,
+			bytecodeBuilder.bytecodeProgram.bytecodeFuncs[ctx.funcidMain].iByte0);
 
 		print("Done\n");
 		println();

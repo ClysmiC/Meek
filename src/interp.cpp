@@ -39,9 +39,9 @@ void dispose(Interpreter * pInterp)
 	pInterp->pStackFrame = nullptr;
 }
 
-void interpret(Interpreter * pInterp, const BytecodeFunction & bcf)
+void interpret(Interpreter * pInterp, const BytecodeProgram & bcp, int iByteIpStart)
 {
-	pInterp->ip = bcf.bytes.pBuffer;
+	pInterp->ip = bcp.bytes.pBuffer + iByteIpStart;
 
 #define ReadVarFromBytecode(type, var) \
 	do { \
@@ -77,11 +77,6 @@ void interpret(Interpreter * pInterp, const BytecodeFunction & bcf)
 
 		switch (bcop)
 		{
-			case BCOP_Return:
-			{
-				AssertTodo;
-			} break;
-
 			case BCOP_LoadImmediate8:
 			{
 				WriteBytecodeBytesToStack(u8);
@@ -606,6 +601,36 @@ void interpret(Interpreter * pInterp, const BytecodeFunction & bcf)
 				ReadVarFromBytecode(uintptr, bytesToFree);
 
 				pInterp->pStack -= bytesToFree;
+			} break;
+
+			case BCOP_Call:
+			{
+				AssertTodo;
+			} break;
+
+			case BCOP_Return0:
+			{
+				AssertTodo;
+			} break;
+
+			case BCOP_Return8:
+			{
+				AssertTodo;
+			} break;
+
+			case BCOP_Return16:
+			{
+				AssertTodo;
+			} break;
+
+			case BCOP_Return32:
+			{
+				AssertTodo;
+			} break;
+
+			case BCOP_Return64:
+			{
+				AssertTodo;
 			} break;
 
 			case BCOP_DebugPrint:

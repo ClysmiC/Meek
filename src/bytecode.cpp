@@ -448,29 +448,25 @@ BCOP bcopSized(SIZEDBCOP sizedBcop, int cBit)
 	}
 }
 
-void init(BytecodeFunction * pBcf, AstNode * pFuncNode)
+void init(BytecodeProgram * pBcp)
 {
-	init(&pBcf->bytes);
-	init(&pBcf->sourceLineNumbers);
-	pBcf->pFuncNode = pFuncNode;
+	init(&pBcp->bytes);
+	init(&pBcp->bytecodeFuncs);
+	init(&pBcp->sourceLineNumbers);
 }
 
-void dispose(BytecodeFunction * pBcf)
-{
-	dispose(&pBcf->bytes);
-	dispose(&pBcf->sourceLineNumbers);
-}
+//void init(BytecodeFunction * pBcf, AstNode * pFuncNode)
+//{
+//	init(&pBcf->sourceLineNumbers);
+//	pBcf->pFuncNode = pFuncNode;
+//}
 
 void init(BytecodeBuilder * pBuilder, MeekCtx * pCtx)
 {
 	pBuilder->pCtx = pCtx;
-	init(&pBuilder->aBytecodeFunc);
+	pBuilder->funcRoot = false;
+	init(&pBuilder->bytecodeProgram);
 	init(&pBuilder->nodeCtxStack);
-}
-
-void dispose(BytecodeBuilder * pBuilder)
-{
-	dispose(&pBuilder->aBytecodeFunc);
 }
 
 void init(BytecodeBuilder::NodeCtx * pNodeCtx, AstNode * pNode)
@@ -506,12 +502,9 @@ void compileBytecode(BytecodeBuilder * pBuilder)
 			// pBodyStmt = pExpr->pBodyStmt;
 		}
 
-		BytecodeFunction * pBytecodeFunc = appendNew(&pBuilder->aBytecodeFunc);
-		init(pBytecodeFunc, pNode);
+		int iByte0 = pBuilder->bytecodeProgram.bytes.cItem;
 
-		pBuilder->pBytecodeFuncCompiling = pBytecodeFunc;
-
-		pBuilder->root = true;
+		pBuilder->funcRoot = true;
 		walkAst(
 			pCtx,
 			pNode,
@@ -519,89 +512,94 @@ void compileBytecode(BytecodeBuilder * pBuilder)
 			&visitBytecodeBuilderHook,
 			&visitBytecodeBuilderPostOrder,
 			pBuilder);
+
+		BytecodeFunction * pBcf = appendNew(&pBuilder->bytecodeProgram.bytecodeFuncs);
+		pBcf->pFuncNode = pNode;
+		pBcf->iByte0 = iByte0;
+		pBcf->cByte = pBuilder->bytecodeProgram.bytes.cItem - iByte0;
 	}
 }
 
-void emitOp(BytecodeFunction * bcf, BCOP byteEmit, int lineNumber)
+void emitOp(BytecodeProgram * bcp, BCOP byteEmit, int lineNumber)
 {
 	StaticAssert(sizeof(BCOP) == sizeof(u8));
 
-	append(&bcf->bytes, u8(byteEmit));
-	append(&bcf->sourceLineNumbers, lineNumber);
+	append(&bcp->bytes, u8(byteEmit));
+	append(&bcp->sourceLineNumbers, lineNumber);
 	
 }
 
-void emit(BytecodeFunction * bcf, u8 byteEmit)
+void emit(BytecodeProgram * bcp, u8 byteEmit)
 {
-	append(&bcf->bytes, byteEmit);
+	append(&bcp->bytes, byteEmit);
 }
 
-void emit(BytecodeFunction * bcf, s8 byteEmit)
+void emit(BytecodeProgram * bcp, s8 byteEmit)
 {
-	u8 * pDst = appendNew(&bcf->bytes);
+	u8 * pDst = appendNew(&bcp->bytes);
 	memcpy(pDst, &byteEmit, 1);
 }
 
-void emit(BytecodeFunction * bcf, u16 bytesEmit)
+void emit(BytecodeProgram * bcp, u16 bytesEmit)
 {
-	emit(bcf, &bytesEmit, sizeof(bytesEmit));
+	emit(bcp, &bytesEmit, sizeof(bytesEmit));
 }
 
-void emit(BytecodeFunction * bcf, s16 bytesEmit)
+void emit(BytecodeProgram * bcp, s16 bytesEmit)
 {
-	emit(bcf, &bytesEmit, sizeof(bytesEmit));
+	emit(bcp, &bytesEmit, sizeof(bytesEmit));
 }
 
-void emit(BytecodeFunction * bcf, u32 bytesEmit)
+void emit(BytecodeProgram * bcp, u32 bytesEmit)
 {
-	emit(bcf, &bytesEmit, sizeof(bytesEmit));
+	emit(bcp, &bytesEmit, sizeof(bytesEmit));
 }
 
-void emit(BytecodeFunction * bcf, s32 bytesEmit)
+void emit(BytecodeProgram * bcp, s32 bytesEmit)
 {
-	emit(bcf, &bytesEmit, sizeof(bytesEmit));
+	emit(bcp, &bytesEmit, sizeof(bytesEmit));
 }
 
-void emit(BytecodeFunction * bcf, u64 bytesEmit)
+void emit(BytecodeProgram * bcp, u64 bytesEmit)
 {
-	emit(bcf, &bytesEmit, sizeof(bytesEmit));
+	emit(bcp, &bytesEmit, sizeof(bytesEmit));
 }
 
-void emit(BytecodeFunction * bcf, s64 bytesEmit)
+void emit(BytecodeProgram * bcp, s64 bytesEmit)
 {
-	emit(bcf, &bytesEmit, sizeof(bytesEmit));
+	emit(bcp, &bytesEmit, sizeof(bytesEmit));
 }
 
-void emit(BytecodeFunction * bcf, f32 bytesEmit)
+void emit(BytecodeProgram * bcp, f32 bytesEmit)
 {
-	emit(bcf, &bytesEmit, sizeof(bytesEmit));
+	emit(bcp, &bytesEmit, sizeof(bytesEmit));
 }
 
-void emit(BytecodeFunction * bcf, f64 bytesEmit)
+void emit(BytecodeProgram * bcp, f64 bytesEmit)
 {
-	emit(bcf, &bytesEmit, sizeof(bytesEmit));
+	emit(bcp, &bytesEmit, sizeof(bytesEmit));
 }
 
-void emit(BytecodeFunction * bcf, void * pBytesEmit, int cBytesEmit)
+void emit(BytecodeProgram * bcp, void * pBytesEmit, int cBytesEmit)
 {
 	for (int i = 0; i < cBytesEmit; i++)
 	{
-		appendNew(&bcf->bytes);
+		appendNew(&bcp->bytes);
 	}
 
-	u8 * pDst = &bcf->bytes[bcf->bytes.cItem - cBytesEmit];
+	u8 * pDst = &bcp->bytes[bcp->bytes.cItem - cBytesEmit];
 	memcpy(pDst, pBytesEmit, cBytesEmit);
 }
 
-void emitByteRepeat(BytecodeFunction * bcf, u8 byteEmit, int cRepeat)
+void emitByteRepeat(BytecodeProgram * bcp, u8 byteEmit, int cRepeat)
 {
 	for (int i = 0; i < cRepeat; i++)
 	{
-		emit(bcf, byteEmit);
+		emit(bcp, byteEmit);
 	}
 }
 
-void backpatchJumpArg(BytecodeFunction * bcf, int iBytePatch, int ipZero, int ipTarget)
+void backpatchJumpArg(BytecodeProgram * bcp, int iBytePatch, int ipZero, int ipTarget)
 {
 	if (ipTarget - ipZero > S16_MAX || ipTarget - ipZero < S16_MIN)
 	{
@@ -609,14 +607,14 @@ void backpatchJumpArg(BytecodeFunction * bcf, int iBytePatch, int ipZero, int ip
 	}
 
 	s16 bytesNew = ipTarget - ipZero;
-	backpatch(bcf, iBytePatch, &bytesNew, sizeof(bytesNew));
+	backpatch(bcp, iBytePatch, &bytesNew, sizeof(bytesNew));
 }
 
-void backpatch(BytecodeFunction * bcf, int iBytePatch, void * pBytesNew, int cBytesNew)
+void backpatch(BytecodeProgram * bcp, int iBytePatch, void * pBytesNew, int cBytesNew)
 {
-	Assert(iBytePatch <= bcf->bytes.cItem - cBytesNew);
+	Assert(iBytePatch <= bcp->bytes.cItem - cBytesNew);
 
-	u8 * pDst = &bcf->bytes[iBytePatch];
+	u8 * pDst = &bcp->bytes[iBytePatch];
 	memcpy(pDst, pBytesNew, cBytesNew);
 }
 
@@ -626,10 +624,10 @@ bool visitBytecodeBuilderPreorder(AstNode * pNode, void * pBuilder_)
 	Assert(!isErrorNode(*pNode));
 
 	BytecodeBuilder * pBuilder = reinterpret_cast<BytecodeBuilder *>(pBuilder_);
-	BytecodeFunction * pBytecodeFunc = pBuilder->pBytecodeFuncCompiling;
+	BytecodeProgram * pBcp = &pBuilder->bytecodeProgram;
 	MeekCtx * pCtx = pBuilder->pCtx;
 
-	Assert(Implies(pBuilder->root, pNode->astk == ASTK_FuncDefnStmt || pNode->astk == ASTK_FuncLiteralExpr));
+	Assert(Implies(pBuilder->funcRoot, pNode->astk == ASTK_FuncDefnStmt || pNode->astk == ASTK_FuncLiteralExpr));
 
 	int startLine = getStartLine(*pCtx, pNode->astid);
 
@@ -670,8 +668,8 @@ bool visitBytecodeBuilderPreorder(AstNode * pNode, void * pBuilder_)
 
 		case ASTK_FuncLiteralExpr:
 		{
-			bool result = pBuilder->root;
-			pBuilder->root = false;
+			bool result = pBuilder->funcRoot;
+			pBuilder->funcRoot = false;
 			return result;
 		}
 
@@ -694,16 +692,16 @@ bool visitBytecodeBuilderPreorder(AstNode * pNode, void * pBuilder_)
 
 			uintptr virtualAddress = virtualAddressStart(*pScope) + symbInfo.varData.byteOffset;
 
-			emitOp(pBytecodeFunc, BCOP_LoadImmediatePtr, startLine);
-			emit(pBytecodeFunc, virtualAddress);
+			emitOp(pBcp, BCOP_LoadImmediatePtr, startLine);
+			emit(pBcp, virtualAddress);
 
 			return true;
 		}
 
 		case ASTK_FuncDefnStmt:
 		{
-			bool result = pBuilder->root;
-			pBuilder->root = false;
+			bool result = pBuilder->funcRoot;
+			pBuilder->funcRoot = false;
 			return result;
 		}
 
@@ -715,7 +713,7 @@ bool visitBytecodeBuilderPreorder(AstNode * pNode, void * pBuilder_)
 
 		case ASTK_WhileStmt:
 		{
-			pNodeCtx->whileStmtData.ipJumpToTopOfLoop = pBytecodeFunc->bytes.cItem;
+			pNodeCtx->whileStmtData.ipJumpToTopOfLoop = pBcp->bytes.cItem;
 			return true;
 		}
 
@@ -730,8 +728,8 @@ bool visitBytecodeBuilderPreorder(AstNode * pNode, void * pBuilder_)
 			uintptr cByteLocal = cByteLocalVars(*pScope);
 			if (cByteLocal > 0)
 			{
-				emitOp(pBytecodeFunc, BCOP_StackAlloc, startLine);
-				emit(pBytecodeFunc, cByteLocal);
+				emitOp(pBcp, BCOP_StackAlloc, startLine);
+				emit(pBcp, cByteLocal);
 			}
 
 			return true;
@@ -760,7 +758,7 @@ void visitBytecodeBuilderHook(AstNode * pNode, AWHK awhk, void * pBuilder_)
 	Assert(!isErrorNode(*pNode));
 
 	BytecodeBuilder * pBuilder = reinterpret_cast<BytecodeBuilder *>(pBuilder_);
-	BytecodeFunction * pBytecodeFunc = pBuilder->pBytecodeFuncCompiling;
+	BytecodeProgram * pBcp = &pBuilder->bytecodeProgram;
 	MeekCtx * pCtx = pBuilder->pCtx;
 
 	int startLine = getStartLine(*pCtx, pNode->astid);
@@ -796,8 +794,8 @@ void visitBytecodeBuilderHook(AstNode * pNode, AWHK awhk, void * pBuilder_)
 					BCOP bcopDuplicate = bcopSized(SIZEDBCOP_Duplicate, cBitPtr);
 					BCOP bcopLoad = bcopSized(SIZEDBCOP_Load, cBitSize);
 
-					emitOp(pBytecodeFunc, bcopDuplicate, startLine);
-					emitOp(pBytecodeFunc, bcopLoad, startLine);
+					emitOp(pBcp, bcopDuplicate, startLine);
+					emitOp(pBcp, bcopLoad, startLine);
 				} break;
 			}
 		} break;
@@ -807,12 +805,12 @@ void visitBytecodeBuilderHook(AstNode * pNode, AWHK awhk, void * pBuilder_)
 			Assert(pNode->astk == ASTK_IfStmt);
 
 			s16 placeholder = 0;
-			emitOp(pBytecodeFunc, BCOP_JumpIfFalse, startLine);
+			emitOp(pBcp, BCOP_JumpIfFalse, startLine);
 
-			pNodeCtx->ifStmtData.iJumpArgPlaceholder = pBytecodeFunc->bytes.cItem;
-			emit(pBytecodeFunc, placeholder);
+			pNodeCtx->ifStmtData.iJumpArgPlaceholder = pBcp->bytes.cItem;
+			emit(pBcp, placeholder);
 
-			pNodeCtx->ifStmtData.ipZero = pBytecodeFunc->bytes.cItem;
+			pNodeCtx->ifStmtData.ipZero = pBcp->bytes.cItem;
 		} break;
 
 		case AWHK_IfPreElse:
@@ -825,23 +823,23 @@ void visitBytecodeBuilderHook(AstNode * pNode, AWHK awhk, void * pBuilder_)
 			// Emit jump over else
 
 			s16 placeholder = 0;
-			emitOp(pBytecodeFunc, BCOP_Jump, startLine);	// Would be better if line mapped to the line of the "else" token
+			emitOp(pBcp, BCOP_Jump, startLine);	// Would be better if line mapped to the line of the "else" token
 
-			int iJumpOverElseBackpatch = pBytecodeFunc->bytes.cItem;
-			emit(pBytecodeFunc, placeholder);
+			int iJumpOverElseBackpatch = pBcp->bytes.cItem;
+			emit(pBcp, placeholder);
 
 			// Backpatch jump over if
 
 			backpatchJumpArg(
-				pBytecodeFunc,
+				pBcp,
 				pNodeCtx->ifStmtData.iJumpArgPlaceholder,
 				pNodeCtx->ifStmtData.ipZero,
-				pBytecodeFunc->bytes.cItem);
+				pBcp->bytes.cItem);
 
 			// Setup jump over else
 
 			pNodeCtx->ifStmtData.iJumpArgPlaceholder = iJumpOverElseBackpatch;
-			pNodeCtx->ifStmtData.ipZero = pBytecodeFunc->bytes.cItem;
+			pNodeCtx->ifStmtData.ipZero = pBcp->bytes.cItem;
 		} break;
 
 		case AWHK_WhilePostCondition:
@@ -849,12 +847,12 @@ void visitBytecodeBuilderHook(AstNode * pNode, AWHK awhk, void * pBuilder_)
 			Assert(pNode->astk == ASTK_WhileStmt);
 
 			s16 placeholder = 0;
-			emitOp(pBytecodeFunc, BCOP_JumpIfFalse, startLine);
+			emitOp(pBcp, BCOP_JumpIfFalse, startLine);
 
-			pNodeCtx->whileStmtData.iJumpPastLoopArgPlaceholder = pBytecodeFunc->bytes.cItem;
-			emit(pBytecodeFunc, placeholder);
+			pNodeCtx->whileStmtData.iJumpPastLoopArgPlaceholder = pBcp->bytes.cItem;
+			emit(pBcp, placeholder);
 
-			pNodeCtx->whileStmtData.ipZeroJumpPastLoop = pBytecodeFunc->bytes.cItem;
+			pNodeCtx->whileStmtData.ipZeroJumpPastLoop = pBcp->bytes.cItem;
 		} break;
 
 		case AWHK_BinopPostFirstOperand:
@@ -881,20 +879,20 @@ void visitBytecodeBuilderHook(AstNode * pNode, AWHK awhk, void * pBuilder_)
 
 			if (bcopJump != BCOP_Nil)
 			{
-				emitOp(pBytecodeFunc, bcopJump, startLine);
-				pNodeCtx->binopExprData.iJumpArgPlaceholder = pBytecodeFunc->bytes.cItem;
+				emitOp(pBcp, bcopJump, startLine);
+				pNodeCtx->binopExprData.iJumpArgPlaceholder = pBcp->bytes.cItem;
 
 				s16 placeholder = 0;
-				emit(pBytecodeFunc, placeholder);
-				pNodeCtx->binopExprData.ipZero = pBytecodeFunc->bytes.cItem;
+				emit(pBcp, placeholder);
+				pNodeCtx->binopExprData.ipZero = pBcp->bytes.cItem;
 
 				// If we take the jump, we leave the eager result on the stack as the result of the entire
 				//	expression. If we don't take the jump, we pop the first value off the stack and the
 				//	second value (once evaluated) will become the result of the entire expression.
 
 				uintptr bytesToPop = sizeof(bool);
-				emitOp(pBytecodeFunc, BCOP_StackFree, startLine);
-				emit(pBytecodeFunc, bytesToPop);
+				emitOp(pBcp, BCOP_StackFree, startLine);
+				emit(pBcp, bytesToPop);
 			}
 		} break;
 	}
@@ -906,7 +904,7 @@ void visitBytecodeBuilderPostOrder(AstNode * pNode, void * pBuilder_)
 	Assert(!isErrorNode(*pNode));
 
 	BytecodeBuilder * pBuilder = reinterpret_cast<BytecodeBuilder *>(pBuilder_);
-	BytecodeFunction * pBytecodeFunc = pBuilder->pBytecodeFuncCompiling;
+	BytecodeProgram * pBcp = &pBuilder->bytecodeProgram;
 	MeekCtx * pCtx = pBuilder->pCtx;
 
 	Assert(count(pBuilder->nodeCtxStack) > 0);
@@ -940,12 +938,12 @@ void visitBytecodeBuilderPostOrder(AstNode * pNode, void * pBuilder_)
 
 					switch (typid)
 					{
-						case TYPID_S8:		emitOp(pBytecodeFunc, BCOP_NegateS8, startLine); break;
-						case TYPID_S16:		emitOp(pBytecodeFunc, BCOP_NegateS16, startLine); break;
-						case TYPID_S32:		emitOp(pBytecodeFunc, BCOP_NegateS32, startLine); break;
-						case TYPID_S64:		emitOp(pBytecodeFunc, BCOP_NegateS64, startLine); break;
-						case TYPID_F32:		emitOp(pBytecodeFunc, BCOP_NegateFloat32, startLine); break;
-						case TYPID_F64:		emitOp(pBytecodeFunc, BCOP_NegateFloat64, startLine); break;
+						case TYPID_S8:		emitOp(pBcp, BCOP_NegateS8, startLine); break;
+						case TYPID_S16:		emitOp(pBcp, BCOP_NegateS16, startLine); break;
+						case TYPID_S32:		emitOp(pBcp, BCOP_NegateS32, startLine); break;
+						case TYPID_S64:		emitOp(pBcp, BCOP_NegateS64, startLine); break;
+						case TYPID_F32:		emitOp(pBcp, BCOP_NegateFloat32, startLine); break;
+						case TYPID_F64:		emitOp(pBcp, BCOP_NegateFloat64, startLine); break;
 						default:
 							AssertNotReached;
 					} break;
@@ -976,10 +974,10 @@ void visitBytecodeBuilderPostOrder(AstNode * pNode, void * pBuilder_)
 			if (pExpr->pOp->tokenk == TOKENK_AmpAmp || pExpr->pOp->tokenk == TOKENK_PipePipe)
 			{
 				backpatchJumpArg(
-					pBytecodeFunc,
+					pBcp,
 					pNodeCtx->binopExprData.iJumpArgPlaceholder,
 					pNodeCtx->binopExprData.ipZero,
-					pBytecodeFunc->bytes.cItem);
+					pBcp->bytes.cItem);
 			}
 
 			// Determine if widening is needed
@@ -1109,11 +1107,11 @@ void visitBytecodeBuilderPostOrder(AstNode * pNode, void * pBuilder_)
 				if (cBitSize != 32) AssertTodo;
 
 				BCOP bcop = bcopSized(sizedbcop, cBitSize);
-				emitOp(pBytecodeFunc, bcop, startLine);
+				emitOp(pBcp, bcop, startLine);
 
 				if (shouldEmitNotAtEnd)
 				{
-					emitOp(pBytecodeFunc, BCOP_Not, startLine);
+					emitOp(pBcp, BCOP_Not, startLine);
 				}
 			}
 		} break;
@@ -1133,25 +1131,25 @@ void visitBytecodeBuilderPostOrder(AstNode * pNode, void * pBuilder_)
 			{
 				case LITERALK_Int:
 				{
-					emitOp(pBytecodeFunc, BCOP_LoadImmediate32, startLine);
-					emit(pBytecodeFunc, intValue(pExpr));
+					emitOp(pBcp, BCOP_LoadImmediate32, startLine);
+					emit(pBcp, intValue(pExpr));
 				} break;
 
 				case LITERALK_Float:
 				{
-					emitOp(pBytecodeFunc, BCOP_LoadImmediate32, startLine);
-					emit(pBytecodeFunc, floatValue(pExpr));
+					emitOp(pBcp, BCOP_LoadImmediate32, startLine);
+					emit(pBcp, floatValue(pExpr));
 				} break;
 
 				case LITERALK_Bool:
 				{
 					if (boolValue(pExpr))
 					{
-						emitOp(pBytecodeFunc, BCOP_LoadTrue, startLine);
+						emitOp(pBcp, BCOP_LoadTrue, startLine);
 					}
 					else
 					{
-						emitOp(pBytecodeFunc, BCOP_LoadFalse, startLine);
+						emitOp(pBcp, BCOP_LoadFalse, startLine);
 					}
 				} break;
 
@@ -1181,8 +1179,8 @@ void visitBytecodeBuilderPostOrder(AstNode * pNode, void * pBuilder_)
 
 					uintptr virtualAddress = virtualAddressStart(*pScope) + symbInfo.varData.byteOffset;
 
-					emitOp(pBytecodeFunc, BCOP_LoadImmediatePtr, startLine);
-					emit(pBytecodeFunc, virtualAddress);
+					emitOp(pBcp, BCOP_LoadImmediatePtr, startLine);
+					emit(pBcp, virtualAddress);
 
 					if (!pNodeCtxParent->wantsChildExprAddr)
 					{
@@ -1196,7 +1194,7 @@ void visitBytecodeBuilderPostOrder(AstNode * pNode, void * pBuilder_)
 							"not wanting address is not valid for non-primitive types");
 
 						BCOP bcop = bcopSized(SIZEDBCOP_Load, cBitSize);
-						emitOp(pBytecodeFunc, bcop, startLine);
+						emitOp(pBcp, bcop, startLine);
 					}
 				} break;
 
@@ -1239,8 +1237,8 @@ void visitBytecodeBuilderPostOrder(AstNode * pNode, void * pBuilder_)
 
 					BCOP bcop = bcopSized(SIZEDBCOP_LoadImmediate, sizeof(FUNCID) * 8);
 
-					emitOp(pBytecodeFunc, bcop, startLine);
-					emit(pBytecodeFunc, pExpr->funcData.pDefnCached->funcid);
+					emitOp(pBcp, bcop, startLine);
+					emit(pBcp, pExpr->funcData.pDefnCached->funcid);
 
 					// HMM: Kind of weird that the FUNCID is what we are using for the "address" of the
 					//	function... but kind of necessary due to the way the bytecode is split into
@@ -1260,9 +1258,10 @@ void visitBytecodeBuilderPostOrder(AstNode * pNode, void * pBuilder_)
 		{
 			auto * pExpr = Down(pNode, FuncCallExpr);
 
-			uintptr byteOffsetFuncid = ;
-			emitOp(pBytecodeFunc, BCOP_Call, startLine);
-			emit(pBytecodeFunc, byteOffsetFuncid);
+			/*uintptr byteOffsetFuncid = ;
+			emitOp(pBcp, BCOP_Call, startLine);
+			emit(pBcp, byteOffsetFuncid);*/
+			AssertTodo;
 		} break;
 
 		case ASTK_FuncLiteralExpr:
@@ -1353,7 +1352,7 @@ void visitBytecodeBuilderPostOrder(AstNode * pNode, void * pBuilder_)
 					if (cBitSize != 32) AssertTodo;
 
 					BCOP bcop = bcopSized(sizedbcop, cBitSize);
-					emitOp(pBytecodeFunc, bcop, startLine);
+					emitOp(pBcp, bcop, startLine);
 
 					typidRhs = typidLhs;
 					pTypeRhs = pTypeLhs;
@@ -1368,7 +1367,7 @@ void visitBytecodeBuilderPostOrder(AstNode * pNode, void * pBuilder_)
 					if (cBitSize != 32) AssertTodo;
 
 					BCOP bcop = bcopSized(SIZEDBCOP_Store, cBitSize);
-					emitOp(pBytecodeFunc, bcop, startLine);
+					emitOp(pBcp, bcop, startLine);
 				} break;
 			}
 		} break;
@@ -1390,15 +1389,15 @@ void visitBytecodeBuilderPostOrder(AstNode * pNode, void * pBuilder_)
 			if (!pStmt->pInitExpr)
 			{
 				emitOp(
-					pBytecodeFunc,
+					pBcp,
 					bcopSized(SIZEDBCOP_LoadImmediate, cBitSize),
 					startLine);
 
-				emitByteRepeat(pBytecodeFunc, 0, cByteSize);
+				emitByteRepeat(pBcp, 0, cByteSize);
 			}
 
 			emitOp(
-				pBytecodeFunc,
+				pBcp,
 				bcopSized(SIZEDBCOP_Store, cBitSize),
 				startLine);
 		} break;
@@ -1407,7 +1406,7 @@ void visitBytecodeBuilderPostOrder(AstNode * pNode, void * pBuilder_)
 		{
 			// Temporary for testing... in reality we will emit return code here (if necessary)
 
-			emitOp(pBytecodeFunc, BCOP_DebugExit, startLine);
+			emitOp(pBcp, BCOP_DebugExit, startLine);
 		}
 
 		case ASTK_StructDefnStmt:
@@ -1420,10 +1419,10 @@ void visitBytecodeBuilderPostOrder(AstNode * pNode, void * pBuilder_)
 			// Backpatch jump over if (or else)
 
 			backpatchJumpArg(
-				pBytecodeFunc,
+				pBcp,
 				pNodeCtx->ifStmtData.iJumpArgPlaceholder,
 				pNodeCtx->ifStmtData.ipZero,
-				pBytecodeFunc->bytes.cItem);
+				pBcp->bytes.cItem);
 		} break;
 
 		case ASTK_WhileStmt:
@@ -1434,14 +1433,14 @@ void visitBytecodeBuilderPostOrder(AstNode * pNode, void * pBuilder_)
 			// Placeholder/backpatch isn't strictly necessary here, but backpatchJumpArg handles the math/validation
 
 			s16 placeholder = 0;
-			emitOp(pBytecodeFunc, BCOP_Jump, startLine);
+			emitOp(pBcp, BCOP_Jump, startLine);
 
-			int iPlaceholder = pBytecodeFunc->bytes.cItem;
-			emit(pBytecodeFunc, placeholder);
+			int iPlaceholder = pBcp->bytes.cItem;
+			emit(pBcp, placeholder);
 
-			int ipZero = pBytecodeFunc->bytes.cItem;
+			int ipZero = pBcp->bytes.cItem;
 			backpatchJumpArg(
-				pBytecodeFunc,
+				pBcp,
 				iPlaceholder,
 				ipZero,
 				pNodeCtx->whileStmtData.ipJumpToTopOfLoop
@@ -1450,10 +1449,10 @@ void visitBytecodeBuilderPostOrder(AstNode * pNode, void * pBuilder_)
 			// Backpatch jump over loop
 
 			backpatchJumpArg(
-				pBytecodeFunc,
+				pBcp,
 				pNodeCtx->whileStmtData.iJumpPastLoopArgPlaceholder,
 				pNodeCtx->whileStmtData.ipZeroJumpPastLoop,
-				pBytecodeFunc->bytes.cItem
+				pBcp->bytes.cItem
 			);
 		} break;
 
@@ -1468,8 +1467,8 @@ void visitBytecodeBuilderPostOrder(AstNode * pNode, void * pBuilder_)
 			uintptr cByteLocal = cByteLocalVars(*pScope);
 			if (cByteLocal > 0)
 			{
-				emitOp(pBytecodeFunc, BCOP_StackFree, startLine);
-				emit(pBytecodeFunc, cByteLocal);
+				emitOp(pBcp, BCOP_StackFree, startLine);
+				emit(pBcp, cByteLocal);
 			}
 		} break;
 
@@ -1483,8 +1482,8 @@ void visitBytecodeBuilderPostOrder(AstNode * pNode, void * pBuilder_)
 			auto * pStmt = Down(pNode, PrintStmt);
 			TYPID typid = DownExpr(pStmt->pExpr)->typidEval;
 
-			emitOp(pBytecodeFunc, BCOP_DebugPrint, startLine);
-			emit(pBytecodeFunc, typid);
+			emitOp(pBcp, BCOP_DebugPrint, startLine);
+			emit(pBcp, typid);
 		} break;
 
 		case ASTK_ParamsReturnsGrp:
@@ -1503,258 +1502,264 @@ void visitBytecodeBuilderPostOrder(AstNode * pNode, void * pBuilder_)
 }
 
 #ifdef DEBUG
-void disassemble(const BytecodeFunction & bcf)
+void disassemble(const BytecodeProgram & bcp)
 {
-	int byteOffset = 0;
-	int linePrev = -1;
 	int iOp = 0;
 
-	print("Disassembly of function '");
-	if (bcf.pFuncNode->astk == ASTK_FuncDefnStmt)
+	for (int iFunc = 0; iFunc < bcp.bytecodeFuncs.cItem; iFunc++)
 	{
-		print(Down(bcf.pFuncNode, FuncDefnStmt)->ident.lexeme.strv);
-	}
-	else
-	{
-		Assert(bcf.pFuncNode->astk == ASTK_FuncLiteralExpr);
-		print("<lambda>");
-	}
-	printfmt("' (id: %u)", funcid(*bcf.pFuncNode));
-	println();
-	print(":");
-	println();
-	
-	while (byteOffset < bcf.bytes.cItem)
-	{
-		printfmt("%08d ", byteOffset);
+		const BytecodeFunction & bcf = bcp.bytecodeFuncs[iFunc];
+		AstNode * pFuncNode = bcp.bytecodeFuncs[iFunc].pFuncNode;
 
-		u8 bcop = bcf.bytes[byteOffset];
-		byteOffset++;
-
-		Assert(bcop < BCOP_Max);
-		AssertInfo(iOp < bcf.sourceLineNumbers.cItem, "Mismatch between # of ops and # of line numbers. Did we use emit instead of emitOp?");
-		int line = bcf.sourceLineNumbers[iOp];
-
-		if (line == linePrev)
+		print("Disassembly of function '");
+		if (pFuncNode->astk == ASTK_FuncDefnStmt)
 		{
-			print("     |  ");
+			print(Down(pFuncNode, FuncDefnStmt)->ident.lexeme.strv);
 		}
 		else
 		{
-			printfmt("%6d  ", line);
+			Assert(pFuncNode->astk == ASTK_FuncLiteralExpr);
+			print("<lambda>");
 		}
-
-		print(c_mpBcopStrName[bcop]);
+		printfmt("' (id: %u)", funcid(*pFuncNode));
 		println();
-
-		// TODO: Document args for each op in a data-driven way... would eliminate the need for this switch statement.
-
-		switch (bcop)
+		print(":");
+		println();
+	
+		int iByte = bcf.iByte0;
+		int linePrev = -1;
+		while (iByte < bcf.iByte0 + bcf.cByte)
 		{
-			case BCOP_LoadImmediate8:
+			printfmt("%08d ", iByte);
+
+			u8 bcop = bcp.bytes[iByte];
+			iByte++;
+
+			Assert(bcop < BCOP_Max);
+			AssertInfo(iOp < bcp.sourceLineNumbers.cItem, "Mismatch between # of ops and # of line numbers. Did we use emit instead of emitOp?");
+			int line = bcp.sourceLineNumbers[iOp];
+			iOp++;
+
+			if (line == linePrev)
 			{
-				printfmt("%08d ", byteOffset);
-
-				u8 value = bcf.bytes[byteOffset];
-				byteOffset += 1;
-
 				print("     |  ");
-				print(" -> ");
-				printfmt("%#x", value);
-				println();
-			} break;
-
-			case BCOP_LoadImmediate16:
+			}
+			else
 			{
-				printfmt("%08d ", byteOffset);
+				printfmt("%6d  ", line);
+			}
 
-				u16 value = *reinterpret_cast<u16 *>(bcf.bytes.pBuffer + byteOffset);
-				byteOffset += sizeof(u16);
+			print(c_mpBcopStrName[bcop]);
+			println();
 
-				print("     |  ");
-				print(" -> ");
-				printfmt("%#x", value);
-				println();
-			} break;
+			// TODO: Document args for each op in a data-driven way... would eliminate the need for this switch statement.
 
-			case BCOP_LoadImmediate32:
+			switch (bcop)
 			{
-				printfmt("%08d ", byteOffset);
+				case BCOP_LoadImmediate8:
+				{
+					printfmt("%08d ", iByte);
 
-				u32 value = *reinterpret_cast<u32 *>(bcf.bytes.pBuffer + byteOffset);
-				byteOffset += sizeof(u32);
+					u8 value = bcp.bytes[iByte];
+					iByte += 1;
 
-				print("     |  ");
-				print(" -> ");
-				printfmt("%#x", value);
-				println();
-			} break;
+					print("     |  ");
+					print(" -> ");
+					printfmt("%#x", value);
+					println();
+				} break;
 
-			case BCOP_LoadImmediate64:
-			{
-				printfmt("%08d ", byteOffset);
+				case BCOP_LoadImmediate16:
+				{
+					printfmt("%08d ", iByte);
 
-				u64 value = *reinterpret_cast<u64 *>(bcf.bytes.pBuffer + byteOffset);
-				byteOffset += sizeof(u64);
+					u16 value = *reinterpret_cast<u16 *>(bcp.bytes.pBuffer + iByte);
+					iByte += sizeof(u16);
 
-				print("     |  ");
-				print(" -> ");
-				printfmt("%#x", value);
-				println();
-			} break;
+					print("     |  ");
+					print(" -> ");
+					printfmt("%#x", value);
+					println();
+				} break;
 
-			case BCOP_LoadTrue:
-			case BCOP_LoadFalse:
-			case BCOP_Load8:
-			case BCOP_Load16:
-			case BCOP_Load32:
-			case BCOP_Load64:
-			case BCOP_Store8:
-			case BCOP_Store16:
-			case BCOP_Store32:
-			case BCOP_Store64:
-			case BCOP_Duplicate8:
-			case BCOP_Duplicate16:
-			case BCOP_Duplicate32:
-			case BCOP_Duplicate64:
-			case BCOP_AddInt8:
-			case BCOP_AddInt16:
-			case BCOP_AddInt32:
-			case BCOP_AddInt64:
-			case BCOP_SubInt8:
-			case BCOP_SubInt16:
-			case BCOP_SubInt32:
-			case BCOP_SubInt64:
-			case BCOP_MulInt8:
-			case BCOP_MulInt16:
-			case BCOP_MulInt32:
-			case BCOP_MulInt64:
-			case BCOP_DivS8:
-			case BCOP_DivS16:
-			case BCOP_DivS32:
-			case BCOP_DivS64:
-			case BCOP_DivU8:
-			case BCOP_DivU16:
-			case BCOP_DivU32:
-			case BCOP_DivU64:
-			case BCOP_AddFloat32:
-			case BCOP_AddFloat64:
-			case BCOP_SubFloat32:
-			case BCOP_SubFloat64:
-			case BCOP_MulFloat32:
-			case BCOP_MulFloat64:
-			case BCOP_DivFloat32:
-			case BCOP_DivFloat64:
-			case BCOP_TestEqInt8:
-			case BCOP_TestEqInt16:
-			case BCOP_TestEqInt32:
-			case BCOP_TestEqInt64:
-			case BCOP_TestLtS8:
-			case BCOP_TestLtS16:
-			case BCOP_TestLtS32:
-			case BCOP_TestLtS64:
-			case BCOP_TestLtU8:
-			case BCOP_TestLtU16:
-			case BCOP_TestLtU32:
-			case BCOP_TestLtU64:
-			case BCOP_TestLteS8:
-			case BCOP_TestLteS16:
-			case BCOP_TestLteS32:
-			case BCOP_TestLteS64:
-			case BCOP_TestLteU8:
-			case BCOP_TestLteU16:
-			case BCOP_TestLteU32:
-			case BCOP_TestLteU64:
-			case BCOP_TestEqFloat32:
-			case BCOP_TestEqFloat64:
-			case BCOP_TestLtFloat32:
-			case BCOP_TestLtFloat64:
-			case BCOP_TestLteFloat32:
-			case BCOP_TestLteFloat64:
-			case BCOP_Not:
-			case BCOP_NegateS8:
-			case BCOP_NegateS16:
-			case BCOP_NegateS32:
-			case BCOP_NegateS64:
-			case BCOP_NegateFloat32:
-			case BCOP_NegateFloat64:
-				break;
+				case BCOP_LoadImmediate32:
+				{
+					printfmt("%08d ", iByte);
 
-			case BCOP_Jump:
-			case BCOP_JumpIfFalse:
-			case BCOP_JumpIfPeekFalse:
-			case BCOP_JumpIfPeekTrue:
-			{
-				printfmt("%08d ", byteOffset);
+					u32 value = *reinterpret_cast<u32 *>(bcp.bytes.pBuffer + iByte);
+					iByte += sizeof(u32);
 
-				s16 bytesToJump = *reinterpret_cast<s16 *>(bcf.bytes.pBuffer + byteOffset);
-				byteOffset += sizeof(s16);
+					print("     |  ");
+					print(" -> ");
+					printfmt("%#x", value);
+					println();
+				} break;
 
-				print("     |  ");
-				print(" -> ");
-				printfmt("%d", bytesToJump);
-				println();
-			} break;
+				case BCOP_LoadImmediate64:
+				{
+					printfmt("%08d ", iByte);
 
-			case BCOP_StackAlloc:
-			case BCOP_StackFree:
-			{
-				printfmt("%08d ", byteOffset);
+					u64 value = *reinterpret_cast<u64 *>(bcp.bytes.pBuffer + iByte);
+					iByte += sizeof(u64);
 
-				uintptr cByte = *reinterpret_cast<uintptr *>(bcf.bytes.pBuffer + byteOffset);
-				byteOffset += sizeof(uintptr);
+					print("     |  ");
+					print(" -> ");
+					printfmt("%#x", value);
+					println();
+				} break;
 
-				print("     |  ");
-				print(" -> ");
-				printfmt("%" PRIuPTR, cByte);
-				println();
-			} break;
+				case BCOP_LoadTrue:
+				case BCOP_LoadFalse:
+				case BCOP_Load8:
+				case BCOP_Load16:
+				case BCOP_Load32:
+				case BCOP_Load64:
+				case BCOP_Store8:
+				case BCOP_Store16:
+				case BCOP_Store32:
+				case BCOP_Store64:
+				case BCOP_Duplicate8:
+				case BCOP_Duplicate16:
+				case BCOP_Duplicate32:
+				case BCOP_Duplicate64:
+				case BCOP_AddInt8:
+				case BCOP_AddInt16:
+				case BCOP_AddInt32:
+				case BCOP_AddInt64:
+				case BCOP_SubInt8:
+				case BCOP_SubInt16:
+				case BCOP_SubInt32:
+				case BCOP_SubInt64:
+				case BCOP_MulInt8:
+				case BCOP_MulInt16:
+				case BCOP_MulInt32:
+				case BCOP_MulInt64:
+				case BCOP_DivS8:
+				case BCOP_DivS16:
+				case BCOP_DivS32:
+				case BCOP_DivS64:
+				case BCOP_DivU8:
+				case BCOP_DivU16:
+				case BCOP_DivU32:
+				case BCOP_DivU64:
+				case BCOP_AddFloat32:
+				case BCOP_AddFloat64:
+				case BCOP_SubFloat32:
+				case BCOP_SubFloat64:
+				case BCOP_MulFloat32:
+				case BCOP_MulFloat64:
+				case BCOP_DivFloat32:
+				case BCOP_DivFloat64:
+				case BCOP_TestEqInt8:
+				case BCOP_TestEqInt16:
+				case BCOP_TestEqInt32:
+				case BCOP_TestEqInt64:
+				case BCOP_TestLtS8:
+				case BCOP_TestLtS16:
+				case BCOP_TestLtS32:
+				case BCOP_TestLtS64:
+				case BCOP_TestLtU8:
+				case BCOP_TestLtU16:
+				case BCOP_TestLtU32:
+				case BCOP_TestLtU64:
+				case BCOP_TestLteS8:
+				case BCOP_TestLteS16:
+				case BCOP_TestLteS32:
+				case BCOP_TestLteS64:
+				case BCOP_TestLteU8:
+				case BCOP_TestLteU16:
+				case BCOP_TestLteU32:
+				case BCOP_TestLteU64:
+				case BCOP_TestEqFloat32:
+				case BCOP_TestEqFloat64:
+				case BCOP_TestLtFloat32:
+				case BCOP_TestLtFloat64:
+				case BCOP_TestLteFloat32:
+				case BCOP_TestLteFloat64:
+				case BCOP_Not:
+				case BCOP_NegateS8:
+				case BCOP_NegateS16:
+				case BCOP_NegateS32:
+				case BCOP_NegateS64:
+				case BCOP_NegateFloat32:
+				case BCOP_NegateFloat64:
+					break;
 
-			case BCOP_Call:
-			{
-				printfmt("%08d ", byteOffset);
+				case BCOP_Jump:
+				case BCOP_JumpIfFalse:
+				case BCOP_JumpIfPeekFalse:
+				case BCOP_JumpIfPeekTrue:
+				{
+					printfmt("%08d ", iByte);
 
-				uintptr callAddrStackOffset = *reinterpret_cast<uintptr *>(bcf.bytes.pBuffer + byteOffset);
-				byteOffset += sizeof(uintptr);
+					s16 bytesToJump = *reinterpret_cast<s16 *>(bcp.bytes.pBuffer + iByte);
+					iByte += sizeof(s16);
 
-				print("     |  ");
-				print(" -> ");
-				printfmt("%" PRIuPTR, callAddrStackOffset);
-				println();
-			} break;
+					print("     |  ");
+					print(" -> ");
+					printfmt("%d", bytesToJump);
+					println();
+				} break;
 
-			case BCOP_Return0:
-			case BCOP_Return8:
-			case BCOP_Return16:
-			case BCOP_Return32:
-			case BCOP_Return64:
-				break;
+				case BCOP_StackAlloc:
+				case BCOP_StackFree:
+				{
+					printfmt("%08d ", iByte);
 
-			case BCOP_DebugPrint:
-			{
-				printfmt("%08d ", byteOffset);
+					uintptr cByte = *reinterpret_cast<uintptr *>(bcp.bytes.pBuffer + iByte);
+					iByte += sizeof(uintptr);
 
-				TYPID value = *reinterpret_cast<TYPID *>(bcf.bytes.pBuffer + byteOffset);
-				byteOffset += sizeof(TYPID);
+					print("     |  ");
+					print(" -> ");
+					printfmt("%" PRIuPTR, cByte);
+					println();
+				} break;
 
-				print("     |  ");
-				print(" -> ");
-				printfmt("%#x", value);
-				println();
-			} break;
+				case BCOP_Call:
+				{
+					printfmt("%08d ", iByte);
 
-			case BCOP_DebugExit:
-				break;
+					uintptr callAddrStackOffset = *reinterpret_cast<uintptr *>(bcp.bytes.pBuffer + iByte);
+					iByte += sizeof(uintptr);
 
-			default:
-				AssertNotReached;
-				break;
+					print("     |  ");
+					print(" -> ");
+					printfmt("%" PRIuPTR, callAddrStackOffset);
+					println();
+				} break;
+
+				case BCOP_Return0:
+				case BCOP_Return8:
+				case BCOP_Return16:
+				case BCOP_Return32:
+				case BCOP_Return64:
+					break;
+
+				case BCOP_DebugPrint:
+				{
+					printfmt("%08d ", iByte);
+
+					TYPID value = *reinterpret_cast<TYPID *>(bcp.bytes.pBuffer + iByte);
+					iByte += sizeof(TYPID);
+
+					print("     |  ");
+					print(" -> ");
+					printfmt("%#x", value);
+					println();
+				} break;
+
+				case BCOP_DebugExit:
+					break;
+
+				default:
+					AssertNotReached;
+					break;
+			}
+
+			linePrev = line;
 		}
-
-		linePrev = line;
-		iOp++;
 	}
 
-	AssertInfo(iOp == bcf.sourceLineNumbers.cItem, "Mismatch between # of ops and # of line numbers. Did we use emit instead of emitOp?");
+	AssertInfo(iOp == bcp.sourceLineNumbers.cItem, "Mismatch between # of ops and # of line numbers. Did we use emit instead of emitOp?");
 }
 #endif

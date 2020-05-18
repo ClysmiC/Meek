@@ -3,7 +3,7 @@
 #include "als.h"
 #include "id_def.h"
 
-struct BytecodeFunction;
+struct BytecodeProgram;
 struct MeekCtx;
 struct Scope;
 
@@ -50,6 +50,6 @@ struct Interpreter
 void init(Interpreter * pInterp, MeekCtx * pCtx);
 void dispose(Interpreter * pInterp);
 
-void interpret(Interpreter * pInterp, const BytecodeFunction & bcf);
+void interpret(Interpreter * pInterp, const BytecodeProgram & bcp, int iByteIpStart);
 
 uintptr virtualAddressStart(const Scope & scope);

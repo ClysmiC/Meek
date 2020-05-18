@@ -343,33 +343,25 @@ enum SIZEDBCOP
 };
 BCOP bcopSized(SIZEDBCOP sizedBcop, int cBit);
 
-struct BytecodeProgram
-{
-	DynamicArray<u8> bytes;
-};
-
 struct BytecodeFunction
 {
 	AstNode * pFuncNode;
 
-	DynamicArray<u8> bytes;
-	DynamicArray<int> sourceLineNumbers;
+	int iByte0;
+	int cByte;
 };
 
-void init(BytecodeFunction * pBcf, AstNode * pFuncNode);
-void dispose(BytecodeFunction * pBcf);
+struct BytecodeProgram
+{
+	DynamicArray<u8> bytes;
+	DynamicArray<BytecodeFunction> bytecodeFuncs;	// In order of appearance in bytecode
+	DynamicArray<int> sourceLineNumbers;			// In order of appearance of ops in bytecode
+};
+
+void init(BytecodeProgram * pBcp);
 
 struct BytecodeBuilder
 {
-	MeekCtx * pCtx;
-
-	DynamicArray<BytecodeFunction> aBytecodeFunc;
-
-	// Per-func compilation
-
-	BytecodeFunction * pBytecodeFuncCompiling;
-	bool root = false;
-
 	struct NodeCtx
 	{
 		AstNode * pNode;
@@ -406,36 +398,38 @@ struct BytecodeBuilder
 		};
 	};
 
+	MeekCtx * pCtx;
+	bool funcRoot;
+	BytecodeProgram bytecodeProgram;
 	Stack<NodeCtx> nodeCtxStack;
 };
 
 void init(BytecodeBuilder * pBuilder, MeekCtx * pCtx);
-void dispose(BytecodeBuilder * pBuilder);
 
 void init(BytecodeBuilder::NodeCtx * pNodeCtx, AstNode * pNode);
 
 void compileBytecode(BytecodeBuilder * pBuilder);
-void emitOp(BytecodeFunction * bcf, BCOP byteEmit, int lineNumber);
-void emit(BytecodeFunction * bcf, u8 byteEmit);
-void emit(BytecodeFunction * bcf, s8 byteEmit);
-void emit(BytecodeFunction * bcf, u16 bytesEmit);
-void emit(BytecodeFunction * bcf, s16 bytesEmit);
-void emit(BytecodeFunction * bcf, u32 bytesEmit);
-void emit(BytecodeFunction * bcf, s32 bytesEmit);
-void emit(BytecodeFunction * bcf, u64 bytesEmit);
-void emit(BytecodeFunction * bcf, s64 bytesEmit);
-void emit(BytecodeFunction * bcf, f32 bytesEmit);
-void emit(BytecodeFunction * bcf, f64 bytesEmit);
-void emit(BytecodeFunction * bcf, void * pBytesEmit, int cBytesEmit);
-void emitByteRepeat(BytecodeFunction * bcf, u8 byteEmit, int cRepeat);
+void emitOp(BytecodeProgram * bcp, BCOP byteEmit, int lineNumber);
+void emit(BytecodeProgram * bcp, u8 byteEmit);
+void emit(BytecodeProgram * bcp, s8 byteEmit);
+void emit(BytecodeProgram * bcp, u16 bytesEmit);
+void emit(BytecodeProgram * bcp, s16 bytesEmit);
+void emit(BytecodeProgram * bcp, u32 bytesEmit);
+void emit(BytecodeProgram * bcp, s32 bytesEmit);
+void emit(BytecodeProgram * bcp, u64 bytesEmit);
+void emit(BytecodeProgram * bcp, s64 bytesEmit);
+void emit(BytecodeProgram * bcp, f32 bytesEmit);
+void emit(BytecodeProgram * bcp, f64 bytesEmit);
+void emit(BytecodeProgram * bcp, void * pBytesEmit, int cBytesEmit);
+void emitByteRepeat(BytecodeProgram * bcp, u8 byteEmit, int cRepeat);
 
-void backpatchJumpArg(BytecodeFunction * bcf, int iBytePatch, int ipZero, int ipTarget);
-void backpatch(BytecodeFunction * bcf, int iBytePatch, void * pBytesNew, int cBytesNew);
+void backpatchJumpArg(BytecodeProgram * bcp, int iBytePatch, int ipZero, int ipTarget);
+void backpatch(BytecodeProgram * bcp, int iBytePatch, void * pBytesNew, int cBytesNew);
 
 bool visitBytecodeBuilderPreorder(AstNode * pNode, void * pBuilder_);
 void visitBytecodeBuilderPostOrder(AstNode * pNode, void * pBuilder_);
 void visitBytecodeBuilderHook(AstNode * pNode, AWHK awhk, void * pBuilder_);
 
 #ifdef DEBUG
-void disassemble(const BytecodeFunction & bcf);
+void disassemble(const BytecodeProgram & bcp);
 #endif
