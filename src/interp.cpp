@@ -12,6 +12,8 @@ void init(Interpreter * pInterp, MeekCtx * pCtx)
 {
 	constexpr int c_MiB = 1024 * 1024;
 
+	pInterp->pCtx = pCtx;
+
 	Scope * pScopeGlobal = pCtx->pParser->pScopeGlobal;		// TODO: put this somewhere other than parser...
 
 	constexpr u64 cByteStack = c_MiB;
@@ -39,10 +41,8 @@ void dispose(Interpreter * pInterp)
 	pInterp->pStackFrame = nullptr;
 }
 
-void interpret(Interpreter * pInterp, const BytecodeProgram & bcp, int iByteIpStart)
+void interpret(Interpreter * pInterp, const BytecodeProgram & bcp)
 {
-	pInterp->ip = bcp.bytes.pBuffer + iByteIpStart;
-
 #define ReadVarFromBytecode(type, var) \
 	do { \
 		memcpy(&var, pInterp->ip, sizeof(type)); \
@@ -68,6 +68,25 @@ void interpret(Interpreter * pInterp, const BytecodeProgram & bcp, int iByteIpSt
 	do { \
 		memcpy(&var, pInterp->pStack - sizeof(type), sizeof(type)); } while (0)
 
+#define PeekVarFromStackWithOffset(type, var, offset) \
+	do { \
+		memcpy(&var, pInterp->pStack - sizeof(type) - offset, sizeof(type)); } while (0)
+
+	MeekCtx * pCtx = pInterp->pCtx;
+	Assert(pCtx->funcidMain != FUNCID_Nil);
+
+	const BytecodeFunction * pBcfMain = &bcp.mpFuncidBcf[pCtx->funcidMain];
+	pInterp->ip = bcp.bytes.pBuffer + pBcfMain->iByte0;
+	pInterp->pStackFrame = pInterp->pStack;
+	
+	// Special null fp/return address that will cause main to exit program on return.
+
+	{
+		uintptr nullCallerFp = 0;
+		uintptr nullReturnAddress = 0;
+		WriteVarToStack(uintptr, nullCallerFp);
+		WriteVarToStack(uintptr, nullReturnAddress);
+	}
 
 	bool run = true;
 	while (run)
@@ -112,9 +131,9 @@ void interpret(Interpreter * pInterp, const BytecodeProgram & bcp, int iByteIpSt
 
 #define Load(type) \
 	do { \
-		uintptr _virtAddr; \
-		ReadVarFromStack(uintptr, _virtAddr); \
-		type _value = *reinterpret_cast<type *>(pInterp->pVirtualAddressSpace + _virtAddr); \
+		s32 _offset; \
+		ReadVarFromStack(s32, _offset); \
+		type _value = *reinterpret_cast<type *>(pInterp->pStackFrame + _offset); \
 		WriteVarToStack(type, _value); } while(0)
 
 			case BCOP_Load8:
@@ -142,10 +161,10 @@ void interpret(Interpreter * pInterp, const BytecodeProgram & bcp, int iByteIpSt
 #define Store(type) \
 	do { \
 		type _value; \
-		uintptr _virtAddr; \
+		s32 _offset; \
 		ReadVarFromStack(type, _value); \
-		ReadVarFromStack(uintptr, _virtAddr); \
-		*reinterpret_cast<type *>(pInterp->pVirtualAddressSpace + _virtAddr) = _value; } while (0)
+		ReadVarFromStack(s32, _offset); \
+		*reinterpret_cast<type *>(pInterp->pStackFrame + _offset) = _value; } while (0)
 
 			case BCOP_Store8:
 			{
@@ -605,12 +624,36 @@ void interpret(Interpreter * pInterp, const BytecodeProgram & bcp, int iByteIpSt
 
 			case BCOP_Call:
 			{
-				AssertTodo;
+				uintptr targetAddressOffset;
+				ReadVarFromBytecode(uintptr, targetAddressOffset);
+
+				uintptr iByteFunc;
+				PeekVarFromStackWithOffset(uintptr, iByteFunc, targetAddressOffset);
+
+				u8 * pStackFrameCallee = pInterp->pStackFrame;
+				pInterp->pStackFrame = pInterp->pStack;
+				WriteVarToStack(u8 *, pStackFrameCallee);
+
+				WriteVarToStack(decltype(pInterp->ip), pInterp->ip);
+
+				pInterp->ip = bcp.bytes.pBuffer + iByteFunc;
 			} break;
 
 			case BCOP_Return0:
 			{
-				AssertTodo;
+				uintptr cByteArgs;
+				ReadVarFromBytecode(uintptr, cByteArgs);
+
+				ReadVarFromStack(decltype(pInterp->ip), pInterp->ip);
+				if (pInterp->ip)
+				{
+					ReadVarFromStack(decltype(pInterp->pStackFrame), pInterp->pStackFrame);
+					pInterp->pStack -= cByteArgs;
+				}
+				else
+				{
+					run = false;
+				}
 			} break;
 
 			case BCOP_Return8:
@@ -743,21 +786,4 @@ void interpret(Interpreter * pInterp, const BytecodeProgram & bcp, int iByteIpSt
 #undef ReadVarFromStack
 #undef PeekVarFromStack
 	}
-}
-
-uintptr virtualAddressStart(const Scope & scope)
-{
-	uintptr offset = 0;
-	Scope * pScopeParent = scope.pScopeParent;
-
-	while (pScopeParent)
-	{
-		// FIXME: This will break. Need to consider params, return values, return address, etc. all
-		//	on the stack.
-
-		offset += cByteLocalVars(*pScopeParent);
-		pScopeParent = pScopeParent->pScopeParent;
-	}
-
-	return offset;
 }

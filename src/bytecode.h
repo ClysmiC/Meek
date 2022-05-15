@@ -9,33 +9,40 @@ struct MeekCtx;
 
 enum BCOP : u8
 {
-	// Load Immediate
-	//	- Pushes 1 n-bit value from bytecode onto the stack
+	// - All intermediate primitive values on the stack are either 32 or 64 bits
+	//		- Structs can also sit on the stack as intermediate values. They are their normal size.
+	// - Locals on the stack are 8, 16, 32, or 64 bits
+	//		- When loaded
+	// - Values in bytecode are 8, 16, 32, or 64 bits
 
-	BCOP_LoadImmediate8,
-	BCOP_LoadImmediate16,
+	// Load Immediate
+	//	- Reads n-bit value from bytecode
+	//	- Pushes it onto stack
+
 	BCOP_LoadImmediate32,
 	BCOP_LoadImmediate64,
-	BCOP_LoadTrue,
-	BCOP_LoadFalse,
+	BCOP_LoadTrue,			// NOTE: Doesn't read extra value from bytecode
+	BCOP_LoadFalse,			//	"
 
 	// Load
-	//	- Pops uintptr address off the stack
-	//	- Dereferences it
-	//	- Pushes dereferenced n-bit value onto the stack
+	//	- Reads s32 offset from bytecode
+	//	- Dereferences n-bit local value at frame pointer + offset
+	//	- Sign-extends (SX) or zero-extends (zx) the value up to 32/64 bits
+	//	- Pushes dereferenced value onto the stack
 
-	// HMM: Version of load address that reads the uintptr from bytecode? I suspect I will have lots of
-	//	LoadImmediate followed by LoadAddress as a way to read values out of variables...
-
-	BCOP_Load8,
-	BCOP_Load16,
-	BCOP_Load32,
-	BCOP_Load64,
+	BCOP_LoadLocalZX8,
+	BCOP_LoadLocalZX16,
+	BCOP_LoadLocalZX32,
+	BCOP_LoadLocalZX64,
+	BCOP_LoadLocalSX8,
+	BCOP_LoadLocalSX16,
+	BCOP_LoadLocalSX32,
+	BCOP_LoadLocalSX64,
 
 	// Store
-	//	- Pops n-bit value off the stack
-	//	- Pops uintptr address off the stack
-	//	- Stores value at address
+	//	- Reads s32 offset from bytecode
+	//	- Pops value off the stack
+	//	- Truncates value to n-bits and stores at frame pointer + offset
 
 	BCOP_Store8,
 	BCOP_Store16,
@@ -43,32 +50,26 @@ enum BCOP : u8
 	BCOP_Store64,
 
 	// Duplicate
-	//	- Peeks n-bit value at top of the stack
+	//	- Peeks value at top of the stack
 	//	- Pushes a copy of it
 
-	BCOP_Duplicate8,
-	BCOP_Duplicate16,
 	BCOP_Duplicate32,
 	BCOP_Duplicate64,
 
 	// Add Int
-	//	- Pops 2 n-bit int values off the stack
+	//	- Pops 2 int values off the stack
 	//	- Adds them
-	//	- Pushes n-bit int result onto the stack
+	//	- Pushes int result onto the stack
 
-	BCOP_AddInt8,
-	BCOP_AddInt16,
 	BCOP_AddInt32,
 	BCOP_AddInt64,
 
 	// Sub Int
-	//	- Pops n-bit int subtrahend off the stack
-	//	- Pops n-bit int minuend off the stack
+	//	- Pops int subtrahend off the stack
+	//	- Pops int minuend off the stack
 	//	- Subtracts them (minuend - subtrahend)
-	//	- Pushes n-bit int result onto the stack
+	//	- Pushes int result onto the stack
 
-	BCOP_SubInt8,
-	BCOP_SubInt16,
 	BCOP_SubInt32,
 	BCOP_SubInt64,
 
@@ -77,8 +78,6 @@ enum BCOP : u8
 	//	- Multiplies them
 	//	- Pushes n-bit int result onto the stack
 
-	BCOP_MulInt8,
-	BCOP_MulInt16,
 	BCOP_MulInt32,
 	BCOP_MulInt64,
 
@@ -89,13 +88,9 @@ enum BCOP : u8
 	//	- Pushes n-bit int result onto the stack
 	//	* Use S instructions for signed division, and U instructions for unsigned
 
-	BCOP_DivS8,
-	BCOP_DivS16,
 	BCOP_DivS32,
 	BCOP_DivS64,
 
-	BCOP_DivU8,
-	BCOP_DivU16,
 	BCOP_DivU32,
 	BCOP_DivU64,
 
@@ -137,22 +132,16 @@ enum BCOP : u8
 	//	- Pops 2 n-bit int values off the stack
 	//	- Pushes bool onto the stack. True if the values are equal, false otherwise.
 
-	BCOP_TestEqInt8,
-	BCOP_TestEqInt16,
 	BCOP_TestEqInt32,
 	BCOP_TestEqInt64,
 
 	// Test Less Than Signed/Unsigned Int
-	//	- Pops n-bit int value (b) off the stack
-	//	- Pops n-bit int value (a) off the stack
+	//	- Pops int value (b) off the stack
+	//	- Pops int value (a) off the stack
 	//	- Pushes bool onto the stack. True if the a < b, false otherwise.
 
-	BCOP_TestLtS8,
-	BCOP_TestLtS16,
 	BCOP_TestLtS32,
 	BCOP_TestLtS64,
-	BCOP_TestLtU8,
-	BCOP_TestLtU16,
 	BCOP_TestLtU32,
 	BCOP_TestLtU64,
 
@@ -246,9 +235,9 @@ enum BCOP : u8
 	//
 	//	CALLER:
 	//	- Reads uintptr offset from bytecode
-	//	- Peeks FUNCID inside the stack. The offset indicates how many bytes are on top of the FUNCID on the stack.
-	//		An offset of 0 indicates that the FUNCID is on top. The bytes on top of the stack are the evaluated arguments,
-	//		placed on the stack by the caller. The callee will discard the FUNCID and all of the arguments above it when
+	//	- Peeks func address (uintptr) inside the stack. The offset indicates how many bytes are on top of the address on the stack.
+	//		An offset of 0 indicates that the address is on top. The bytes on top of the address are the evaluated arguments,
+	//		placed on the stack by the caller. The callee will discard the address and all of the arguments above it when
 	//		it discards its own call frame due to a RETURN.
 	//	- Places caller's frame pointer on the stack. Set callee's FP to SP.
 	//	- Places return address on the stack
@@ -266,10 +255,12 @@ enum BCOP : u8
 	BCOP_Call,
 
 	// Return
+	//	- Reads uintptr from bytecode, which holds size of args on stack.
 	//	- Pops n-bit RV off the stack (will be restored before return finishes)
 	//	- Pops Return Address (RA) off the stack
+	//		- If RA is null, terminates the program without executing the instructions below.
 	//	- Pops callerFP off the stack and restores it to FP.
-	//	- Pops args off the stack
+	//	- Pops args off the stack (using value read from bytecode)
 	//	- Restores RV back onto the stack
 	//	- Sets the IP to point to popped RA
 	//
@@ -302,13 +293,13 @@ enum BCOP : u8
 	BCOP_Max,
 	BCOP_Nil = static_cast<u8>(0xFF),
 
-#ifdef _WIN64
-	BCOP_LoadImmediatePtr = BCOP_LoadImmediate64,
-#elif WIN32
-	BCOP_LoadImmediatePtr = BCOP_LoadImmediate32,
-#else
-	StaticAssertNotCompiled;
-#endif
+//#ifdef _WIN64
+//	BCOP_LoadImmediatePtr = BCOP_LoadImmediate64,
+//#elif WIN32
+//	BCOP_LoadImmediatePtr = BCOP_LoadImmediate32,
+//#else
+//	StaticAssertNotCompiled;
+//#endif
 };
 
 // extern const int gc_mpBcopCByte[];
@@ -353,12 +344,19 @@ struct BytecodeFunction
 
 struct BytecodeProgram
 {
+	MeekCtx * pCtx;
 	DynamicArray<u8> bytes;
-	DynamicArray<BytecodeFunction> bytecodeFuncs;	// In order of appearance in bytecode
+	DynamicArray<BytecodeFunction> mpFuncidBcf;		// In order of appearance in bytecode
 	DynamicArray<int> sourceLineNumbers;			// In order of appearance of ops in bytecode
 };
 
-void init(BytecodeProgram * pBcp);
+struct FuncAddressPatch
+{
+	FUNCID funcid;
+	int iByteAddrToPatch;
+};
+
+void init(BytecodeProgram * pBcp, MeekCtx * pCtx);
 
 struct BytecodeBuilder
 {
@@ -393,7 +391,7 @@ struct BytecodeBuilder
 
 			struct UFuncCallExprCtx
 			{
-				// TODO
+				int iByteAfterFuncAddr;
 			} funcCallExprData;
 		};
 	};
@@ -402,6 +400,7 @@ struct BytecodeBuilder
 	bool funcRoot;
 	BytecodeProgram bytecodeProgram;
 	Stack<NodeCtx> nodeCtxStack;
+	DynamicArray<FuncAddressPatch> funcAddressPatches;
 };
 
 void init(BytecodeBuilder * pBuilder, MeekCtx * pCtx);
@@ -429,6 +428,8 @@ void backpatch(BytecodeProgram * bcp, int iBytePatch, void * pBytesNew, int cByt
 bool visitBytecodeBuilderPreorder(AstNode * pNode, void * pBuilder_);
 void visitBytecodeBuilderPostOrder(AstNode * pNode, void * pBuilder_);
 void visitBytecodeBuilderHook(AstNode * pNode, AWHK awhk, void * pBuilder_);
+
+s32 framePointerOffset(MeekCtx * pCtx, const AstVarDeclStmt & varDecl, const BytecodeProgram & bcp);
 
 #ifdef DEBUG
 void disassemble(const BytecodeProgram & bcp);

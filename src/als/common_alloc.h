@@ -95,9 +95,9 @@ T * allocate(FixedPoolAllocator<T, Capacity> * pAlloc)
 
     if (pAlloc->pFree)
     {
-        // Store result
-
         result = reinterpret_cast<T *>(pAlloc->pFree);
+        
+        pAlloc->pFree = pAlloc->pFree->pNext;
 
         // Zero initialize result
         // NOTE: It kinda sucks that this is required for the way that I am using this allocator in
@@ -106,10 +106,6 @@ T * allocate(FixedPoolAllocator<T, Capacity> * pAlloc)
         //  anything that doesn't work when zero-initialized should require an init(..) function.
 
         memset(result, 0, sizeof(T));
-
-        // Advance the free-list
-
-        pAlloc->pFree = pAlloc->pFree->pNext;
     }
 
     return result;

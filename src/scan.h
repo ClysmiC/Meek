@@ -44,7 +44,7 @@ struct Scanner
 	// Speculative parsing/backtracking
 
 	bool isSpeculating = false;
-	uint iPeekBufferSpeculative=  0;
+	uint iPeekBufferSpeculative = 0;
 	int iTextSpeculative = 0;
 
 	// Exit kind

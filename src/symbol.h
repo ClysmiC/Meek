@@ -104,6 +104,9 @@ struct Scope
 	HashMap<Lexeme, DynamicArray<SymbolInfo>> symbolsDefined;
 };
 
+NULLABLE Scope * owningFuncTopLevelScope(Scope * pScope);
+NULLABLE Scope * owningFuncTopLevelScope(MeekCtx * pCtx, SCOPEID scopeid);
+
 struct ScopedIdentifier
 {
 	Lexeme lexeme;
@@ -138,6 +141,7 @@ void computeScopedVariableOffsets(MeekCtx * pCtx, Scope * pScope);
 int compareVarseqid(const SymbolInfo & s0, const SymbolInfo & s1);
 SCOPEID scopeidFromSymbolInfo(const SymbolInfo & symbInfo);
 SymbolInfo lookupVarSymbol(const Scope & scope, const Lexeme & lexeme, GRFSYMBQ grfsymbq = GRFSYMBQ_None);
+SymbolInfo lookupVarSymbol(MeekCtx * pCtx, const AstVarDeclStmt & varDecl);
 SymbolInfo lookupTypeSymbol(const Scope & scope, const Lexeme & lexeme, GRFSYMBQ grfsymbq = GRFSYMBQ_None);
 void lookupFuncSymbol(const Scope & scope, const Lexeme & lexeme, DynamicArray<SymbolInfo> * poResult, GRFSYMBQ grfsymbq = GRFSYMBQ_None);
 

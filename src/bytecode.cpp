@@ -81,16 +81,14 @@
 //StaticAssert(ArrayLen(gc_mpBcopCByte) == BCOP_Max);
 
 static const char * c_mpBcopStrName[] = {
-	"LoadImmediate8",
-	"LoadImmediate16",
 	"LoadImmediate32",
 	"LoadImmediate64",
 	"LoadTrue",
 	"LoadFalse",
-	"Load8",
-	"Load16",
-	"Load32",
-	"Load64",
+	"LoadLocal8",
+	"LoadLocal16",
+	"LoadLocal32",
+	"LoadLocal64",
 	"Store8",
 	"Store16",
 	"Store32",
@@ -448,10 +446,11 @@ BCOP bcopSized(SIZEDBCOP sizedBcop, int cBit)
 	}
 }
 
-void init(BytecodeProgram * pBcp)
+void init(BytecodeProgram * pBcp, MeekCtx * pCtx)
 {
+	pBcp->pCtx = pCtx;
 	init(&pBcp->bytes);
-	init(&pBcp->bytecodeFuncs);
+	init(&pBcp->mpFuncidBcf);
 	init(&pBcp->sourceLineNumbers);
 }
 
@@ -465,8 +464,9 @@ void init(BytecodeBuilder * pBuilder, MeekCtx * pCtx)
 {
 	pBuilder->pCtx = pCtx;
 	pBuilder->funcRoot = false;
-	init(&pBuilder->bytecodeProgram);
+	init(&pBuilder->bytecodeProgram, pCtx);
 	init(&pBuilder->nodeCtxStack);
+	init(&pBuilder->funcAddressPatches);
 }
 
 void init(BytecodeBuilder::NodeCtx * pNodeCtx, AstNode * pNode)
@@ -485,22 +485,6 @@ void compileBytecode(BytecodeBuilder * pBuilder)
 	{
 		AstNode * pNode = pCtx->apFuncDefnAndLiteral[i];
 		AstParamsReturnsGrp * pParamsReturns = nullptr;
-		// AstNode * pBodyStmt = nullptr;
-
-		if (pNode->astk == ASTK_FuncDefnStmt)
-		{
-			// auto * pStmt = Down(pNode, FuncDefnStmt);
-			// pParamsReturns = pStmt->pParamsReturnsGrp;
-			// pBodyStmt = pStmt->pBodyStmt;
-		}
-		else
-		{
-			Assert(pNode->astk == ASTK_FuncLiteralExpr);
-
-			// auto * pExpr = Down(pNode, FuncLiteralExpr);
-			// pParamsReturns = pExpr->pParamsReturnsGrp;
-			// pBodyStmt = pExpr->pBodyStmt;
-		}
 
 		int iByte0 = pBuilder->bytecodeProgram.bytes.cItem;
 
@@ -513,10 +497,18 @@ void compileBytecode(BytecodeBuilder * pBuilder)
 			&visitBytecodeBuilderPostOrder,
 			pBuilder);
 
-		BytecodeFunction * pBcf = appendNew(&pBuilder->bytecodeProgram.bytecodeFuncs);
+		BytecodeFunction * pBcf = appendNew(&pBuilder->bytecodeProgram.mpFuncidBcf);
 		pBcf->pFuncNode = pNode;
 		pBcf->iByte0 = iByte0;
 		pBcf->cByte = pBuilder->bytecodeProgram.bytes.cItem - iByte0;
+	}
+
+	for (int iPatch = 0; iPatch < pBuilder->funcAddressPatches.cItem; iPatch++)
+	{
+		const FuncAddressPatch & fap = pBuilder->funcAddressPatches[iPatch];
+
+		uintptr iByte0 = pBuilder->bytecodeProgram.mpFuncidBcf[fap.funcid].iByte0;
+		backpatch(&pBuilder->bytecodeProgram, fap.iByteAddrToPatch, &iByte0, sizeof(iByte0));
 	}
 }
 
@@ -526,7 +518,6 @@ void emitOp(BytecodeProgram * bcp, BCOP byteEmit, int lineNumber)
 
 	append(&bcp->bytes, u8(byteEmit));
 	append(&bcp->sourceLineNumbers, lineNumber);
-	
 }
 
 void emit(BytecodeProgram * bcp, u8 byteEmit)
@@ -690,10 +681,10 @@ bool visitBytecodeBuilderPreorder(AstNode * pNode, void * pBuilder_)
 			SymbolInfo symbInfo = lookupVarSymbol(*pScope, pStmt->ident.lexeme, FSYMBQ_IgnoreParent);
 			Assert(symbInfo.symbolk == SYMBOLK_Var);
 
-			uintptr virtualAddress = virtualAddressStart(*pScope) + symbInfo.varData.byteOffset;
+			s32 fpo = framePointerOffset(pCtx, *pStmt, *pBcp);
 
-			emitOp(pBcp, BCOP_LoadImmediatePtr, startLine);
-			emit(pBcp, virtualAddress);
+			emitOp(pBcp, BCOP_LoadImmediate32, startLine);
+			emit(pBcp, fpo);
 
 			return true;
 		}
@@ -790,6 +781,10 @@ void visitBytecodeBuilderHook(AstNode * pNode, AWHK awhk, void * pBuilder_)
 
 					// TODO: I'm assuming the bytecode for the LHS put an address on the stack... is that
 					//	a safe assumption to make?
+
+					StaticAssertTodo;
+
+					// NEED TO FIGURE OUT HOW TO DEAL WITH DIFFERENT SIZES, ETC.
 
 					BCOP bcopDuplicate = bcopSized(SIZEDBCOP_Duplicate, cBitPtr);
 					BCOP bcopLoad = bcopSized(SIZEDBCOP_Load, cBitSize);
@@ -895,6 +890,15 @@ void visitBytecodeBuilderHook(AstNode * pNode, AWHK awhk, void * pBuilder_)
 				emit(pBcp, bytesToPop);
 			}
 		} break;
+
+		case AWHK_FuncCallPreArgs:
+		{
+			Assert(pNode->astk == ASTK_FuncCallExpr);
+
+			auto * pExpr = Down(pNode, FuncCallExpr);
+
+			pNodeCtx->funcCallExprData.iByteAfterFuncAddr = pBcp->bytes.cItem;
+		} break;
 	}
 }
 
@@ -986,7 +990,6 @@ void visitBytecodeBuilderPostOrder(AstNode * pNode, void * pBuilder_)
 			TYPID typidRhs = DownExpr(pExpr->pRhsExpr)->typidEval;
 			const Type * pTypeLhs = lookupType(*pCtx->pTypeTable, typidLhs);
 			const Type * pTypeRhs = lookupType(*pCtx->pTypeTable, typidRhs);
-
 			if (typidLhs != typidRhs)
 			{
 				AssertTodo;
@@ -1177,10 +1180,10 @@ void visitBytecodeBuilderPostOrder(AstNode * pNode, void * pBuilder_)
 					SymbolInfo symbInfo = lookupVarSymbol(*pScope, pExpr->ident, FSYMBQ_IgnoreParent);
 					Assert(symbInfo.symbolk == SYMBOLK_Var);
 
-					uintptr virtualAddress = virtualAddressStart(*pScope) + symbInfo.varData.byteOffset;
+					s32 fpo = framePointerOffset(pCtx, *symbInfo.varData.pVarDeclStmt, *pBcp);
 
-					emitOp(pBcp, BCOP_LoadImmediatePtr, startLine);
-					emit(pBcp, virtualAddress);
+					emitOp(pBcp, BCOP_LoadImmediate32, startLine);
+					emit(pBcp, fpo);
 
 					if (!pNodeCtxParent->wantsChildExprAddr)
 					{
@@ -1238,13 +1241,13 @@ void visitBytecodeBuilderPostOrder(AstNode * pNode, void * pBuilder_)
 					BCOP bcop = bcopSized(SIZEDBCOP_LoadImmediate, sizeof(FUNCID) * 8);
 
 					emitOp(pBcp, bcop, startLine);
-					emit(pBcp, pExpr->funcData.pDefnCached->funcid);
 
-					// HMM: Kind of weird that the FUNCID is what we are using for the "address" of the
-					//	function... but kind of necessary due to the way the bytecode is split into
-					//	a chunk per function.
+					FuncAddressPatch * pFap = appendNew(&pBuilder->funcAddressPatches);
+					pFap->funcid = pExpr->funcData.pDefnCached->funcid;
+					pFap->iByteAddrToPatch = pBcp->bytes.cItem;
 
-					Assert(pNodeCtxParent->wantsChildExprAddr);
+					uintptr addressPlaceholder = 0;
+					emit(pBcp, addressPlaceholder);
 				} break;
 			}
 		} break;
@@ -1258,10 +1261,9 @@ void visitBytecodeBuilderPostOrder(AstNode * pNode, void * pBuilder_)
 		{
 			auto * pExpr = Down(pNode, FuncCallExpr);
 
-			/*uintptr byteOffsetFuncid = ;
+			uintptr byteOffset = uintptr(pBcp->bytes.cItem) - pNodeCtx->funcCallExprData.iByteAfterFuncAddr;
 			emitOp(pBcp, BCOP_Call, startLine);
-			emit(pBcp, byteOffsetFuncid);*/
-			AssertTodo;
+			emit(pBcp, byteOffset);
 		} break;
 
 		case ASTK_FuncLiteralExpr:
@@ -1385,7 +1387,6 @@ void visitBytecodeBuilderPostOrder(AstNode * pNode, void * pBuilder_)
 			int cByteSize = pType->info.size;
 			int cBitSize = cByteSize * 8;
 
-			uintptr virtualAddress = virtualAddressStart(*pScope) + symbInfo.varData.byteOffset;
 			if (!pStmt->pInitExpr)
 			{
 				emitOp(
@@ -1404,9 +1405,16 @@ void visitBytecodeBuilderPostOrder(AstNode * pNode, void * pBuilder_)
 
 		case ASTK_FuncDefnStmt:
 		{
-			// Temporary for testing... in reality we will emit return code here (if necessary)
+			// Temporary for testing... need a lot more smarts to ensure that you explicitly return if
+			//	func has return value, etc.
 
-			emitOp(pBcp, BCOP_DebugExit, startLine);
+			auto * pStmt = Down(pNode, FuncDefnStmt);
+			Scope * pScope = pCtx->mpScopeidPScope[pStmt->scopeid];
+			Assert(pScope->scopek == SCOPEK_FuncTopLevel);
+
+			uintptr cByteParam = pScope->funcTopLevelData.cByteParam;
+			emitOp(pBcp, BCOP_Return0, startLine);
+			emit(pBcp, cByteParam);
 		}
 
 		case ASTK_StructDefnStmt:
@@ -1501,15 +1509,48 @@ void visitBytecodeBuilderPostOrder(AstNode * pNode, void * pBuilder_)
 	pop(&pBuilder->nodeCtxStack);
 }
 
+s32 framePointerOffset(MeekCtx * pCtx, const AstVarDeclStmt & varDecl, const BytecodeProgram & bcp)
+{
+	Assert(varDecl.vardeclk == VARDECLK_Local || varDecl.vardeclk == VARDECLK_Param);
+
+	Scope * pScopeVar = bcp.pCtx->mpScopeidPScope[varDecl.ident.scopeid];
+	SymbolInfo symbInfo = lookupVarSymbol(bcp.pCtx, varDecl);
+
+	if (varDecl.vardeclk == VARDECLK_Param)
+	{
+		Scope * pScopeFuncTopLevel = owningFuncTopLevelScope(pScopeVar);
+		Assert(pScopeFuncTopLevel);
+		Assert(pScopeFuncTopLevel->scopek == SCOPEK_FuncTopLevel);
+
+		s32 result = s32(pScopeFuncTopLevel->funcTopLevelData.cByteParam) - s32(symbInfo.varData.byteOffset);
+		return result;
+	}
+	else
+	{
+		s32 cByteLocalsParents = 0;
+		Scope * pScopeCursor = pScopeVar;
+		while (pScopeCursor->scopek != SCOPEK_FuncTopLevel)
+		{
+			Assert(pScopeCursor->scopek == SCOPEK_FuncInner);
+			cByteLocalsParents += s32(pScopeCursor->funcInnerData.cByteLocalVariable);
+			pScopeCursor = pScopeCursor->pScopeParent;
+		}
+
+		s32 result = cByteLocalsParents + s32(symbInfo.varData.byteOffset);
+		result += 2 * sizeof(uintptr);		// FP points at previous FP, then RA, THEN locals.
+		return result;
+	}
+}
+
 #ifdef DEBUG
 void disassemble(const BytecodeProgram & bcp)
 {
 	int iOp = 0;
 
-	for (int iFunc = 0; iFunc < bcp.bytecodeFuncs.cItem; iFunc++)
+	for (int iFunc = 0; iFunc < bcp.mpFuncidBcf.cItem; iFunc++)
 	{
-		const BytecodeFunction & bcf = bcp.bytecodeFuncs[iFunc];
-		AstNode * pFuncNode = bcp.bytecodeFuncs[iFunc].pFuncNode;
+		const BytecodeFunction & bcf = bcp.mpFuncidBcf[iFunc];
+		AstNode * pFuncNode = bcp.mpFuncidBcf[iFunc].pFuncNode;
 
 		print("Disassembly of function '");
 		if (pFuncNode->astk == ASTK_FuncDefnStmt)
@@ -1733,7 +1774,17 @@ void disassemble(const BytecodeProgram & bcp)
 				case BCOP_Return16:
 				case BCOP_Return32:
 				case BCOP_Return64:
-					break;
+				{
+					printfmt("%08d ", iByte);
+
+					uintptr cByteArgs = *reinterpret_cast<uintptr *>(bcp.bytes.pBuffer + iByte);
+					iByte += sizeof(uintptr);
+
+					print("     |  ");
+					print(" -> ");
+					printfmt("%" PRIuPTR, cByteArgs);
+					println();
+				} break;
 
 				case BCOP_DebugPrint:
 				{

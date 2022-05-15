@@ -21,7 +21,7 @@
 #endif
 
 #define Implies(p, q) (!(p)) || (q)
-#define Iff(p, q) (p) == (q)
+#define Iff(p, q) ((p) == (q))
 #define StaticAssert(x) _STATIC_ASSERT(x)
 #define StaticAssertTodo StaticAssert(false)
 #define StaticAssertNotCompiled StaticAssert(false)

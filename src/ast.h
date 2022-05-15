@@ -539,6 +539,7 @@ enum AWHK
 	AWHK_IfPreElse,
 	AWHK_WhilePostCondition,
 	AWHK_BinopPostFirstOperand,
+	AWHK_FuncCallPreArgs
 };
 
 typedef bool (* AstWalkVisitPreFn)(AstNode *, void *);

@@ -50,6 +50,4 @@ struct Interpreter
 void init(Interpreter * pInterp, MeekCtx * pCtx);
 void dispose(Interpreter * pInterp);
 
-void interpret(Interpreter * pInterp, const BytecodeProgram & bcp, int iByteIpStart);
-
-uintptr virtualAddressStart(const Scope & scope);
+void interpret(Interpreter * pInterp, const BytecodeProgram & bcp);

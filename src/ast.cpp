@@ -110,6 +110,7 @@ void walkAst(
 			auto * pNode = Down(pNodeSubtreeRoot, FuncCallExpr);
 			walkAst(pCtx, pNode->pFunc, visitPreorderFn, hookFn, visitPostorderFn, pContext);
 
+			hookFn(Up(pNode), AWHK_FuncCallPreArgs, pContext);
 			for (int iArg = 0; iArg < pNode->apArgs.cItem; iArg++)
 			{
 				walkAst(pCtx, pNode->apArgs[iArg], visitPreorderFn, hookFn, visitPostorderFn, pContext);

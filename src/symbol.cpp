@@ -79,6 +79,28 @@ void init(Scope * pScope, SCOPEID scopeid, SCOPEK scopek, Scope * pScopeParent)
 	}
 }
 
+NULLABLE Scope * owningFuncTopLevelScope(Scope * pScope)
+{
+	Scope * pScopeCandidate = pScope;
+
+	while (pScopeCandidate)
+	{
+		if (pScopeCandidate->scopek == SCOPEK_FuncTopLevel)
+		{
+			return pScopeCandidate;
+		}
+
+		pScopeCandidate = pScopeCandidate->pScopeParent;
+	}
+	
+	return nullptr;
+}
+
+NULLABLE Scope * owningFuncTopLevelScope(MeekCtx * pCtx, SCOPEID scopeid)
+{
+	return owningFuncTopLevelScope(pCtx->mpScopeidPScope[scopeid]);
+}
+
 void defineSymbol(MeekCtx * pCtx, Scope * pScope, const Lexeme & lexeme, const SymbolInfo & symbInfo)
 {
 	DynamicArray<SymbolInfo> * paSymbInfo = lookup(pScope->symbolsDefined, lexeme);
@@ -372,6 +394,14 @@ SymbolInfo lookupVarSymbol(const Scope & scope, const Lexeme & lexeme, GRFSYMBQ 
 	SymbolInfo resultNil;
 	resultNil.symbolk = SYMBOLK_Nil;
 	return resultNil;
+}
+
+SymbolInfo lookupVarSymbol(MeekCtx * pCtx, const AstVarDeclStmt & varDecl)
+{
+	SymbolInfo result = lookupVarSymbol(*pCtx->mpScopeidPScope[varDecl.ident.scopeid], varDecl.ident.lexeme, FSYMBQ_IgnoreParent);
+	Assert(result.symbolk == SYMBOLK_Var);
+
+	return result;
 }
 
 SymbolInfo lookupTypeSymbol(const Scope & scope, const Lexeme & lexeme, GRFSYMBQ grfsymbq)

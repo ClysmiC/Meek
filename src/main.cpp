@@ -128,7 +128,6 @@ int main()
 #if 0
 	disassemble(bytecodeBuilder.bytecodeProgram);
 #else
-
 	if (ctx.funcidMain != FUNCID_Nil)
 	{
 		print("Running interpreter...\n");
@@ -136,10 +135,7 @@ int main()
 		Interpreter interp;
 		init(&interp, &ctx);
 
-		interpret(
-			&interp,
-			bytecodeBuilder.bytecodeProgram,
-			bytecodeBuilder.bytecodeProgram.bytecodeFuncs[ctx.funcidMain].iByte0);
+		interpret(&interp, bytecodeBuilder.bytecodeProgram);
 
 		print("Done\n");
 		println();
