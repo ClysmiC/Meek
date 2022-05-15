@@ -20,7 +20,7 @@ struct ResolvePass
 
 	struct FnCtx
 	{
-		DynamicArray<TYPID> aTypidReturn;
+		DynamicArray<TypeId> aTypidReturn;
 	};
 
 	Stack<FnCtx> fnCtxStack;

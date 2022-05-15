@@ -3,7 +3,7 @@
 #include "ast_decorate.h"
 #include "error.h"
 
-FUNCID funcid(const AstNode & node)
+FuncId funcid(const AstNode & node)
 {
 	if (node.astk == ASTK_FuncDefnStmt)
 	{
@@ -15,7 +15,7 @@ FUNCID funcid(const AstNode & node)
 	}
 	else
 	{
-		return FUNCID_Nil;
+		return FuncId::Nil;
 	}
 }
 

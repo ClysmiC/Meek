@@ -14,28 +14,28 @@ void init(MeekCtx * pMeekCtx, char * pText, uint textSize)
 	init(&g_scanner, pText, textSize);
 	init(&g_parser, pMeekCtx);
 
-	init(&pMeekCtx->mpScopeidPScope);
-	Assert(pMeekCtx->mpScopeidPScope.cItem == g_parser.pScopeBuiltin->id);
-	Assert(pMeekCtx->mpScopeidPScope.cItem + 1 == g_parser.pScopeGlobal->id);
-	append(&pMeekCtx->mpScopeidPScope, g_parser.pScopeBuiltin);
-	append(&pMeekCtx->mpScopeidPScope, g_parser.pScopeGlobal);
+	init(&pMeekCtx->scopes);
+	Assert(pMeekCtx->scopes.cItem == g_parser.pScopeBuiltin->id);
+	Assert(pMeekCtx->scopes.cItem + 1 == g_parser.pScopeGlobal->id);
+	append(&pMeekCtx->scopes, g_parser.pScopeBuiltin);
+	append(&pMeekCtx->scopes, g_parser.pScopeGlobal);
 
 	init(&g_typeTable, pMeekCtx);
 	init(&g_astDecs);
 
-	init(&pMeekCtx->apFuncDefnAndLiteral);
-	pMeekCtx->pScanner = &g_scanner;
-	pMeekCtx->pParser = &g_parser;
-	pMeekCtx->pTypeTable = &g_typeTable;
-	pMeekCtx->pAstDecs = &g_astDecs;
+	init(&pMeekCtx->functions);
+	pMeekCtx->scanner = &g_scanner;
+	pMeekCtx->parser = &g_parser;
+	pMeekCtx->typeTable = &g_typeTable;
+	pMeekCtx->astDecorations = &g_astDecs;
 
-	pMeekCtx->pNodeRoot = nullptr;
+	pMeekCtx->rootNode = nullptr;
 
-	pMeekCtx->funcidMain = FUNCID_Nil;
+	pMeekCtx->mainFuncid = FuncId::Nil;
 }
 
-AstNode * funcNodeFromFuncid(MeekCtx * pCtx, FUNCID funcid)
+AstNode * funcNodeFromFuncid(MeekCtx * pCtx, FuncId funcid)
 {
-	Assert(funcid < FUNCID(pCtx->apFuncDefnAndLiteral.cItem));
-	return pCtx->apFuncDefnAndLiteral[funcid];
+	Assert(funcid < FuncId(pCtx->functions.cItem));
+	return pCtx->functions[(int)funcid];
 }

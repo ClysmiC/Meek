@@ -16,7 +16,7 @@ void debugPrintAst(DebugPrintCtx * pCtx, const AstNode & root)
 
 void init(DebugPrintCtx * pPrintCtx, MeekCtx * pMeekCtx)
 {
-	pPrintCtx->pTypeTable = pMeekCtx->pTypeTable;
+	pPrintCtx->typeTable = pMeekCtx->typeTable;
 	init(&pPrintCtx->mpLevelSkip);
 }
 
@@ -118,7 +118,7 @@ void debugPrintFuncHeader(DebugPrintCtx * pCtx, const DynamicArray<AstNode *> & 
 	}
 };
 
-void debugPrintType(DebugPrintCtx * pCtx, TYPID typid, int level, bool skipAfterArrow)
+void debugPrintType(DebugPrintCtx * pCtx, TypeId typid, int level, bool skipAfterArrow)
 {
 	setSkip(pCtx, level, false);
 	int levelNext = level + 1;
@@ -133,7 +133,7 @@ void debugPrintType(DebugPrintCtx * pCtx, TYPID typid, int level, bool skipAfter
 		return;
 	}
 
-	const Type * pType = lookupType(*pCtx->pTypeTable, typid);
+	const Type * pType = lookupType(*pCtx->typeTable, typid);
 	Assert(pType);
 
 	while (pType->typek == TYPEK_Mod)
@@ -154,7 +154,7 @@ void debugPrintType(DebugPrintCtx * pCtx, TYPID typid, int level, bool skipAfter
 			print("(pointer to)");
 		}
 
-		pType = lookupType(*pCtx->pTypeTable, pType->modTypeData.typidModified);
+		pType = lookupType(*pCtx->typeTable, pType->modTypeData.typidModified);
 		Assert(pType);
 	}
 

@@ -5,6 +5,8 @@
 #include "parse.h"
 #include "type.h"
 
+// #include "core/core.h"
+
 void init(Type * pType, TYPEK typek)
 {
 	pType->typek = typek;
@@ -28,7 +30,7 @@ void init(Type * pType, TYPEK typek)
 		case TYPEK_Mod:
 		{
 			pType->modTypeData.typemod.typemodk = TYPEMODK_Nil;
-			pType->modTypeData.typidModified = TYPID_Unresolved;
+			pType->modTypeData.typidModified = TypeId::Unresolved;
 		} break;
 
 		default:
@@ -121,9 +123,9 @@ bool isFuncTypeResolved(const FuncType & funcType)
 	return true;
 }
 
-bool isTypeResolved(TYPID typid)
+bool isTypeResolved(TypeId typid)
 {
-	return typid >= TYPID_ActualTypesStart;
+	return typid >= TypeId::mFirstResolved;
 }
 
 bool isPointerType(const Type & type)
@@ -152,13 +154,13 @@ NULLABLE const FuncType * funcTypeFromDefnStmt(const TypeTable & typeTable, cons
 	}
 }
 
-PENDINGTYPID registerPendingNamedType(
+PendingTypeId registerPendingNamedType(
 	TypeTable * pTable,
 	Scope * pScope,
 	Lexeme ident,
-	NULLABLE TYPID * pTypidUpdateOnResolve)
+	NULLABLE TypeId * pTypidUpdateOnResolve)
 {
-	PENDINGTYPID result = PENDINGTYPID(pTable->typesPendingResolution.cItem);
+	PendingTypeId result = PendingTypeId(pTable->typesPendingResolution.cItem);
 
 	TypeTable::TypePendingResolve * pTypePending = appendNew(&pTable->typesPendingResolution);
 	init(pTypePending, pScope, TYPEK_Named);
@@ -174,14 +176,14 @@ PENDINGTYPID registerPendingNamedType(
 	return result;
 }
 
-PENDINGTYPID registerPendingFuncType(
+PendingTypeId registerPendingFuncType(
 	TypeTable * pTable,
 	Scope * pScope,
-	const DynamicArray<PENDINGTYPID> & aPendingTypidParam,
-	const DynamicArray<PENDINGTYPID> & aPendingTypidReturn,
-	NULLABLE TYPID * pTypidUpdateOnResolve)
+	const DynamicArray<PendingTypeId> & aPendingTypidParam,
+	const DynamicArray<PendingTypeId> & aPendingTypidReturn,
+	NULLABLE TypeId * pTypidUpdateOnResolve)
 {
-	PENDINGTYPID result = PENDINGTYPID(pTable->typesPendingResolution.cItem);
+	PendingTypeId result = PendingTypeId(pTable->typesPendingResolution.cItem);
 
 	TypeTable::TypePendingResolve * pTypePending = appendNew(&pTable->typesPendingResolution);
 	init(pTypePending, pScope, TYPEK_Func);
@@ -194,32 +196,32 @@ PENDINGTYPID registerPendingFuncType(
 
 	for (int iParam = 0; iParam < aPendingTypidParam.cItem; iParam++)
 	{
-		TYPID * pTypidParam = appendNew(&pTypePending->type.funcTypeData.funcType.paramTypids);
-		*pTypidParam = TYPID_Unresolved;
+		TypeId * pTypidParam = appendNew(&pTypePending->type.funcTypeData.funcType.paramTypids);
+		*pTypidParam = TypeId::Unresolved;
 		setPendingTypeUpdateOnResolvePtr(pTable, aPendingTypidParam[iParam], pTypidParam);
 	}
 
 	for (int iReturn = 0; iReturn < aPendingTypidReturn.cItem; iReturn++)
 	{
-		TYPID * pTypidReturn = appendNew(&pTypePending->type.funcTypeData.funcType.returnTypids);
-		*pTypidReturn = TYPID_Unresolved;
+		TypeId * pTypidReturn = appendNew(&pTypePending->type.funcTypeData.funcType.returnTypids);
+		*pTypidReturn = TypeId::Unresolved;
 		setPendingTypeUpdateOnResolvePtr(pTable, aPendingTypidReturn[iReturn], pTypidReturn);
 	}
 
 	return result;
 }
 
-PENDINGTYPID registerPendingModType(
+PendingTypeId registerPendingModType(
 	TypeTable * pTable,
 	Scope * pScope,
 	TypeModifier typemod,
-	PENDINGTYPID pendingTypidModified,
-	NULLABLE TYPID * pTypidUpdateOnResolve)
+	PendingTypeId pendingTypidModified,
+	NULLABLE TypeId * pTypidUpdateOnResolve)
 {
-	Assert(pendingTypidModified <  PENDINGTYPID(pTable->typesPendingResolution.cItem));
-	AssertInfo(pendingTypidModified == pTable->typesPendingResolution.cItem - 1, "I think this should be true if we register them in the order I think we do");
+	Assert(pendingTypidModified <  PendingTypeId(pTable->typesPendingResolution.cItem));
+	AssertInfo(pendingTypidModified == PendingTypeId(pTable->typesPendingResolution.cItem - 1), "I think this should be true if we register them in the order I think we do");
 
-	PENDINGTYPID result = PENDINGTYPID(pTable->typesPendingResolution.cItem);
+	PendingTypeId result = PendingTypeId(pTable->typesPendingResolution.cItem);
 
 	TypeTable::TypePendingResolve * pTypePending = appendNew(&pTable->typesPendingResolution);
 	init(pTypePending, pScope, TYPEK_Mod);
@@ -235,17 +237,17 @@ PENDINGTYPID registerPendingModType(
 	// TODO (andrew) This is a bit too clever. I am tempted to rewrite how types get registered/resolved... all of this poking into a pointer
 	//	is kind of hard to track.
 
-	TypeTable::TypePendingResolve * pTypePendingModified = &pTable->typesPendingResolution[pendingTypidModified];
+	TypeTable::TypePendingResolve * pTypePendingModified = &pTable->typesPendingResolution[(int)pendingTypidModified];
 	pTypePendingModified->pendingTypidModifiedBy = result;
 
 	return result;
 }
 
-void setPendingTypeUpdateOnResolvePtr(TypeTable * pTable, PENDINGTYPID pendingTypid, TYPID * pTypidUpdateOnResolve)
+void setPendingTypeUpdateOnResolvePtr(TypeTable * pTable, PendingTypeId pendingTypid, TypeId * pTypidUpdateOnResolve)
 {
-	Assert(pendingTypid < PENDINGTYPID(pTable->typesPendingResolution.cItem));
+	Assert(pendingTypid < PendingTypeId(pTable->typesPendingResolution.cItem));
 
-	TypeTable::TypePendingResolve * pTypePending = &pTable->typesPendingResolution[pendingTypid];
+	TypeTable::TypePendingResolve * pTypePending = &pTable->typesPendingResolution[(int)pendingTypid];
 	Assert(pTypePending->cPTypidUpdateOnResolve < TypeTable::TypePendingResolve::s_cTypidUpdateOnResolveMax);
 
 	pTypePending->apTypidUpdateOnResolve[pTypePending->cPTypidUpdateOnResolve] = pTypidUpdateOnResolve;
@@ -437,20 +439,20 @@ uint funcTypeHash(const FuncType & f)
 
 	for (int i = 0; i < f.paramTypids.cItem; i++)
 	{
-		TYPID typid = f.paramTypids[i];
+		TypeId typid = f.paramTypids[i];
 		hash = buildHash(&typid, sizeof(typid), hash);
 	}
 
 	for (int i = 0; i < f.returnTypids.cItem; i++)
 	{
-		TYPID typid = f.returnTypids[i];
+		TypeId typid = f.returnTypids[i];
 		hash = buildHash(&typid, sizeof(typid), hash);
 	}
 
 	return hash;
 }
 
-bool areTypidListTypesFullyResolved(const DynamicArray<TYPID> & aTypid)
+bool areTypidListTypesFullyResolved(const DynamicArray<TypeId> & aTypid)
 {
 	for (int i = 0; i < aTypid.cItem; i++)
 	{
@@ -508,7 +510,7 @@ bool areVarDeclListTypesEq(const DynamicArray<AstNode *> & apVarDecls0, const Dy
 	return true;
 }
 
-bool areTypidListTypesEq(const DynamicArray<TYPID> & aTypid0, const DynamicArray<TYPID> & aTypid1)
+bool areTypidListTypesEq(const DynamicArray<TypeId> & aTypid0, const DynamicArray<TypeId> & aTypid1)
 {
 	if (aTypid0.cItem != aTypid1.cItem)
 	{
@@ -517,8 +519,8 @@ bool areTypidListTypesEq(const DynamicArray<TYPID> & aTypid0, const DynamicArray
 
 	for (int iTypid = 0; iTypid < aTypid0.cItem; iTypid++)
 	{
-		TYPID typid0 = aTypid0[iTypid];
-		TYPID typid1 = aTypid1[iTypid];
+		TypeId typid0 = aTypid0[iTypid];
+		TypeId typid1 = aTypid1[iTypid];
 
 		Assert(isTypeResolved(typid0));
 		Assert(isTypeResolved(typid1));
@@ -565,9 +567,12 @@ void init(TypeTable * pTable, MeekCtx * pCtx)
 		typeEqPtr);
 
 	init(&pTable->typesPendingResolution);
+	TypeTable::TypePendingResolve nilPlaceholder = {};
+	append(&pTable->typesPendingResolution, nilPlaceholder);
+
 	init(&pTable->typeAlloc);
 
-	auto insertBuiltInType = [](TypeTable * pTable, const char * strIdent, TYPID typidExpected, int size)
+	auto insertBuiltInType = [](TypeTable * pTable, const char * strIdent, TypeId typidExpected, int size)
 	{
 		ScopedIdentifier ident;
 		setLexeme(&ident.lexeme, strIdent);
@@ -587,24 +592,24 @@ void init(TypeTable * pTable, MeekCtx * pCtx)
 		Assert(ensureResult.typeInfoComputed);
 	};
 
-	insertBuiltInType(pTable, "void", TYPID_Void, 0);
+	insertBuiltInType(pTable, "void", TypeId::Void, 0);
 
-	insertBuiltInType(pTable, "s8", TYPID_S8, 1);
-	insertBuiltInType(pTable, "s16", TYPID_S16, 2);
-	insertBuiltInType(pTable, "s32", TYPID_S32, 4);
-	insertBuiltInType(pTable, "s64", TYPID_S64, 8);
+	insertBuiltInType(pTable, "s8", TypeId::S8, 1);
+	insertBuiltInType(pTable, "s16", TypeId::S16, 2);
+	insertBuiltInType(pTable, "s32", TypeId::S32, 4);
+	insertBuiltInType(pTable, "s64", TypeId::S64, 8);
 
-	insertBuiltInType(pTable, "u8", TYPID_U8, 1);
-	insertBuiltInType(pTable, "u16", TYPID_U16, 2);
-	insertBuiltInType(pTable, "u32", TYPID_U32, 4);
-	insertBuiltInType(pTable, "u64", TYPID_U64, 8);
+	insertBuiltInType(pTable, "u8", TypeId::U8, 1);
+	insertBuiltInType(pTable, "u16", TypeId::U16, 2);
+	insertBuiltInType(pTable, "u32", TypeId::U32, 4);
+	insertBuiltInType(pTable, "u64", TypeId::U64, 8);
 
-	insertBuiltInType(pTable, "f32", TYPID_F32, 4);
-	insertBuiltInType(pTable, "f64", TYPID_F64, 8);
+	insertBuiltInType(pTable, "f32", TypeId::F32, 4);
+	insertBuiltInType(pTable, "f64", TypeId::F64, 8);
 
-	insertBuiltInType(pTable, "bool", TYPID_Bool, 1);
+	insertBuiltInType(pTable, "bool", TypeId::Bool, 1);
 
-	insertBuiltInType(pTable, "string", TYPID_String, 16);	// TODO: Pass actual size once I figure out the in-memory representation.
+	insertBuiltInType(pTable, "string", TypeId::String, 16);	// TODO: Pass actual size once I figure out the in-memory representation.
 }
 
 void init(TypeTable::TypePendingResolve * pTypePending, Scope * pScope, TYPEK typek)
@@ -612,7 +617,7 @@ void init(TypeTable::TypePendingResolve * pTypePending, Scope * pScope, TYPEK ty
 	init(&pTypePending->type, typek);
 	pTypePending->pScope = pScope;
 	pTypePending->cPTypidUpdateOnResolve = 0;
-	pTypePending->pendingTypidModifiedBy = PENDINGTYPID_Nil;
+	pTypePending->pendingTypidModifiedBy = PendingTypeId::Nil;
 }
 
 void dispose(TypeTable::TypePendingResolve * pTypePending)
@@ -620,7 +625,7 @@ void dispose(TypeTable::TypePendingResolve * pTypePending)
 	dispose(&pTypePending->type);
 }
 
-NULLABLE const Type * lookupType(const TypeTable & table, TYPID typid)
+NULLABLE const Type * lookupType(const TypeTable & table, TypeId typid)
 {
 	auto ppType = lookupByKey(table.table, typid);
 	if (!ppType)
@@ -629,7 +634,7 @@ NULLABLE const Type * lookupType(const TypeTable & table, TYPID typid)
 	return *ppType;
 }
 
-void setTypeInfo(const TypeTable & table, TYPID typid, const Type::ComputedInfo & typeInfo)
+void setTypeInfo(const TypeTable & table, TypeId typid, const Type::ComputedInfo & typeInfo)
 {
 	Assert(isTypeResolved(typid));
 	
@@ -646,7 +651,7 @@ EnsureInTypeTableResult ensureInTypeTable(TypeTable * pTable, Type * pType, bool
 
 	// SLOW: Could write a combined lookup + insertNew if not found query
 
-	const TYPID * pTypid = lookupByValue(pTable->table, pType);
+	const TypeId * pTypid = lookupByValue(pTable->table, pType);
 	if (pTypid)
 	{
 		Assert(!debugAssertIfAlreadyInTable);
@@ -664,8 +669,8 @@ EnsureInTypeTableResult ensureInTypeTable(TypeTable * pTable, Type * pType, bool
 	Type * pTypeCopy = allocate(&pTable->typeAlloc);
 	initCopy(pTypeCopy, *pType);
 
-	TYPID typidInsert = pTable->typidNext;
-	pTable->typidNext = TYPID(pTable->typidNext + 1);
+	TypeId typidInsert = pTable->typidNext;
+	pTable->typidNext = TypeId((int)pTable->typidNext + 1);
 
 	Verify(insert(&pTable->table, typidInsert, pTypeCopy));
 
@@ -703,7 +708,7 @@ Type::ComputedInfo tryComputeTypeInfoAndSetMemberOffsets(const MeekCtx & ctx, SC
 			break;
 		}
 
-		const Type * pTypeVarDecl = lookupType(*ctx.pTypeTable, pVarDeclStmt->typidDefn);
+		const Type * pTypeVarDecl = lookupType(*ctx.typeTable, pVarDeclStmt->typidDefn);
 		Assert(pTypeVarDecl);
 
 		u32 sizeMember = pTypeVarDecl->info.size;
@@ -727,12 +732,12 @@ Type::ComputedInfo tryComputeTypeInfoAndSetMemberOffsets(const MeekCtx & ctx, SC
 		}
 
 		SymbolInfo symbInfoVar = lookupVarSymbol(
-			*ctx.mpScopeidPScope[scopeid],
+			*ctx.scopes[scopeid],
 			pVarDeclStmt->ident.lexeme,
 			FSYMBQ_IgnoreParent
 		);
 
-		updateVarSymbolOffset(*ctx.mpScopeidPScope[scopeid], pVarDeclStmt->ident.lexeme, sizeWithPadding);
+		updateVarSymbolOffset(*ctx.scopes[scopeid], pVarDeclStmt->ident.lexeme, sizeWithPadding);
 
 		sizeWithPadding += sizeMember;
 		alignmentMax = Max(alignmentMax, alignmentMember);
@@ -756,7 +761,7 @@ Type::ComputedInfo tryComputeTypeInfoAndSetMemberOffsets(const MeekCtx & ctx, SC
 	return result;
 }
 
-bool tryComputeTypeInfo(const TypeTable & typeTable, TYPID typid)
+bool tryComputeTypeInfo(const TypeTable & typeTable, TypeId typid)
 {
 	Assert(isTypeResolved(typid));
 
@@ -776,7 +781,7 @@ bool tryComputeTypeInfo(const TypeTable & typeTable, TYPID typid)
 		{
 			SymbolInfo symbInfo =
 				lookupTypeSymbol(
-					*pCtx->mpScopeidPScope[pType->namedTypeData.ident.scopeid],
+					*pCtx->scopes[pType->namedTypeData.ident.scopeid],
 					pType->namedTypeData.ident.lexeme);
 
 			Assert(symbInfo.symbolk == SYMBOLK_Struct);
@@ -918,35 +923,37 @@ bool tryResolveAllTypes(TypeTable * pTable)
 
 	// Resolve named types (and eagerly resolve type infos where we can)
 
-	DynamicArray<TYPID> aTypidComputePending;
+	DynamicArray<TypeId> aTypidComputePending;
 	init(&aTypidComputePending);
 	Defer(dispose(&aTypidComputePending));
 
 	int cTypeUnresolved = 0;
 	{
-		for (int i = 0; i < pTable->typesPendingResolution.cItem; i++)
+		for (PendingTypeId iPending = PendingTypeId::mFirstValid;
+		     iPending < PendingTypeId(pTable->typesPendingResolution.cItem);
+		     iPending = PendingTypeId((int)iPending + 1))
 		{
-			TypeTable::TypePendingResolve * pTypePending = &pTable->typesPendingResolution[i];
+			TypeTable::TypePendingResolve * pTypePending = &pTable->typesPendingResolution[(int)iPending];
 			if (tryResolvePendingType(pTypePending))
 			{
 				auto ensureResult = ensureInTypeTable(pTable, &pTypePending->type);
-				TYPID typid = ensureResult.typid;
+				TypeId typid = ensureResult.typid;
 				for (int iTypidUpdate = 0; iTypidUpdate < pTypePending->cPTypidUpdateOnResolve; iTypidUpdate++)
 				{
-					TYPID * pTypidUpdate = pTypePending->apTypidUpdateOnResolve[iTypidUpdate];
+					TypeId * pTypidUpdate = pTypePending->apTypidUpdateOnResolve[iTypidUpdate];
 					*pTypidUpdate = typid;
 				}
 
-				if (pTypePending->pendingTypidModifiedBy != PENDINGTYPID_Nil)
+				if (pTypePending->pendingTypidModifiedBy != PendingTypeId::Nil)
 				{
 					// NOTE (andrew) This relies on the fact that the modified type should always get added to the pending list (and thus resolved) first
 					// TODO (andrew) This is a bit too clever. I am tempted to rewrite how types get registered/resolved... all of this poking into a pointer
 					//	is kind of hard to track.
 
-					Assert(pTypePending->pendingTypidModifiedBy < PENDINGTYPID(pTable->typesPendingResolution.cItem));
-					AssertInfo(pTypePending->pendingTypidModifiedBy > PENDINGTYPID(i), "This should be true due to the insertion order into this list");
+					Assert(pTypePending->pendingTypidModifiedBy < PendingTypeId(pTable->typesPendingResolution.cItem));
+					AssertInfo(pTypePending->pendingTypidModifiedBy > iPending, "This should be true due to the insertion order into this list");
 
-					TypeTable::TypePendingResolve * pTypePendingModifiedBy = &pTable->typesPendingResolution[pTypePending->pendingTypidModifiedBy];
+					TypeTable::TypePendingResolve * pTypePendingModifiedBy = &pTable->typesPendingResolution[(int)pTypePending->pendingTypidModifiedBy];
 
 					Assert(pTypePendingModifiedBy->type.typek == TYPEK_Mod);
 					Assert(!isTypeResolved(pTypePendingModifiedBy->type.modTypeData.typidModified));
@@ -984,7 +991,7 @@ bool tryResolveAllTypes(TypeTable * pTable)
 
 		for (int i = aTypidComputePending.cItem - 1; i >= 0; i--)
 		{
-			TYPID typidInfoPending = aTypidComputePending[i];
+			TypeId typidInfoPending = aTypidComputePending[i];
 			Assert(isTypeResolved(typidInfoPending));
 
 			const Type * pType = lookupType(*pTable, typidInfoPending);
@@ -1016,7 +1023,7 @@ bool tryResolveAllTypes(TypeTable * pTable)
 	return cTypeUnresolved == 0 && aTypidComputePending.cItem == 0;
 }
 
-TYPID typidFromLiteralk(LITERALK literalk)
+TypeId typidFromLiteralk(LITERALK literalk)
 {
 	if (literalk < LITERALK_Min || literalk >= LITERALK_Max)
 	{
@@ -1026,33 +1033,33 @@ TYPID typidFromLiteralk(LITERALK literalk)
 	// TODO: "untyped" numeric literals that shapeshift into whatever context
 	//	they are used, like in Go.
 
-	static const TYPID s_mpLiteralkTypid[] =
+	static const TypeId s_mpLiteralkTypid[] =
 	{
-		TYPID_S32,
-		TYPID_F32,
-		TYPID_Bool,
-		TYPID_String
+		TypeId::S32,
+		TypeId::F32,
+		TypeId::Bool,
+		TypeId::String
 	};
 	StaticAssert(ArrayLen(s_mpLiteralkTypid) == LITERALK_Max);
 
 	return s_mpLiteralkTypid[literalk];
 }
 
-bool canCoerce(TYPID typidFrom, TYPID typidTo)
+bool canCoerce(TypeId typidFrom, TypeId typidTo)
 {
 	// TODO
 
 	return false;
 }
 
-bool isAnyInt(TYPID typid)
+bool isAnyInt(TypeId typid)
 {
-	return typid >= TYPID_AnyIntStart && typid <= TYPID_AnyIntEnd;
+	return typid >= TypeId::mFirstInt && typid <= TypeId::mLastInt;
 }
 
-bool isAnyFloat(TYPID typid)
+bool isAnyFloat(TypeId typid)
 {
-	return typid == TYPID_F32 || typid == TYPID_F64;
+	return typid >= TypeId::mFirstFloat && typid <= TypeId::mLastFloat;
 }
 
 #if DEBUG

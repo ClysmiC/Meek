@@ -49,7 +49,7 @@ struct SymbolInfo
 
 		struct UBuiltInData
 		{
-			TYPID typid;
+			TypeId typid;
 		} builtInData;
 	};
 };

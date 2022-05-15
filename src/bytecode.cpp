@@ -481,9 +481,9 @@ void compileBytecode(BytecodeBuilder * pBuilder)
 {
 	MeekCtx * pCtx = pBuilder->pCtx;
 
-	for (int i = 0; i < pCtx->apFuncDefnAndLiteral.cItem; i++)
+	for (int i = 0; i < pCtx->functions.cItem; i++)
 	{
-		AstNode * pNode = pCtx->apFuncDefnAndLiteral[i];
+		AstNode * pNode = pCtx->functions[i];
 		AstParamsReturnsGrp * pParamsReturns = nullptr;
 		// AstNode * pBodyStmt = nullptr;
 
@@ -540,55 +540,65 @@ void emit(BytecodeProgram * bcp, s8 byteEmit)
 	memcpy(pDst, &byteEmit, 1);
 }
 
-void emit(BytecodeProgram * bcp, u16 bytesEmit)
+void emit(BytecodeProgram * bcp, u16 bytes)
 {
-	emit(bcp, &bytesEmit, sizeof(bytesEmit));
+	emit(bcp, &bytes, sizeof(bytes));
 }
 
-void emit(BytecodeProgram * bcp, s16 bytesEmit)
+void emit(BytecodeProgram * bcp, s16 bytes)
 {
-	emit(bcp, &bytesEmit, sizeof(bytesEmit));
+	emit(bcp, &bytes, sizeof(bytes));
 }
 
-void emit(BytecodeProgram * bcp, u32 bytesEmit)
+void emit(BytecodeProgram * bcp, u32 bytes)
 {
-	emit(bcp, &bytesEmit, sizeof(bytesEmit));
+	emit(bcp, &bytes, sizeof(bytes));
 }
 
-void emit(BytecodeProgram * bcp, s32 bytesEmit)
+void emit(BytecodeProgram * bcp, s32 bytes)
 {
-	emit(bcp, &bytesEmit, sizeof(bytesEmit));
+	emit(bcp, &bytes, sizeof(bytes));
 }
 
-void emit(BytecodeProgram * bcp, u64 bytesEmit)
+void emit(BytecodeProgram * bcp, u64 bytes)
 {
-	emit(bcp, &bytesEmit, sizeof(bytesEmit));
+	emit(bcp, &bytes, sizeof(bytes));
 }
 
-void emit(BytecodeProgram * bcp, s64 bytesEmit)
+void emit(BytecodeProgram * bcp, s64 bytes)
 {
-	emit(bcp, &bytesEmit, sizeof(bytesEmit));
+	emit(bcp, &bytes, sizeof(bytes));
 }
 
-void emit(BytecodeProgram * bcp, f32 bytesEmit)
+void emit(BytecodeProgram * bcp, f32 bytes)
 {
-	emit(bcp, &bytesEmit, sizeof(bytesEmit));
+	emit(bcp, &bytes, sizeof(bytes));
 }
 
-void emit(BytecodeProgram * bcp, f64 bytesEmit)
+void emit(BytecodeProgram * bcp, f64 bytes)
 {
-	emit(bcp, &bytesEmit, sizeof(bytesEmit));
+	emit(bcp, &bytes, sizeof(bytes));
 }
 
-void emit(BytecodeProgram * bcp, void * pBytesEmit, int cBytesEmit)
+void emit(BytecodeProgram * bcp, FuncId bytes)
 {
-	for (int i = 0; i < cBytesEmit; i++)
+	emit(bcp, &bytes, sizeof(bytes));
+}
+
+void emit(BytecodeProgram * bcp, TypeId bytes)
+{
+	emit(bcp, &bytes, sizeof(bytes));
+}
+
+void emit(BytecodeProgram * bcp, void * pbytes, int cbytes)
+{
+	for (int i = 0; i < cbytes; i++)
 	{
 		appendNew(&bcp->bytes);
 	}
 
-	u8 * pDst = &bcp->bytes[bcp->bytes.cItem - cBytesEmit];
-	memcpy(pDst, pBytesEmit, cBytesEmit);
+	u8 * pDst = &bcp->bytes[bcp->bytes.cItem - cbytes];
+	memcpy(pDst, pbytes, cbytes);
 }
 
 void emitByteRepeat(BytecodeProgram * bcp, u8 byteEmit, int cRepeat)
@@ -686,7 +696,7 @@ bool visitBytecodeBuilderPreorder(AstNode * pNode, void * pBuilder_)
 		{
 			auto * pStmt = Down(pNode, VarDeclStmt);
 
-			Scope * pScope = pCtx->mpScopeidPScope[pStmt->ident.scopeid];
+			Scope * pScope = pCtx->scopes[pStmt->ident.scopeid];
 			SymbolInfo symbInfo = lookupVarSymbol(*pScope, pStmt->ident.lexeme, FSYMBQ_IgnoreParent);
 			Assert(symbInfo.symbolk == SYMBOLK_Var);
 
@@ -723,7 +733,7 @@ bool visitBytecodeBuilderPreorder(AstNode * pNode, void * pBuilder_)
 
 			// HMM: Maybe this should only alloc/free if we don't inherit parent's scope id?
 
-			Scope * pScope = pCtx->mpScopeidPScope[pStmt->scopeid];
+			Scope * pScope = pCtx->scopes[pStmt->scopeid];
 
 			uintptr cByteLocal = cByteLocalVars(*pScope);
 			if (cByteLocal > 0)
@@ -772,8 +782,8 @@ void visitBytecodeBuilderHook(AstNode * pNode, AWHK awhk, void * pBuilder_)
 			Assert(pNode->astk == ASTK_AssignStmt);
 
 			auto * pStmt = Down(pNode, AssignStmt);
-			TYPID typidLhs = DownExpr(pStmt->pLhsExpr)->typidEval;
-			const Type * pTypeLhs = lookupType(*pCtx->pTypeTable, typidLhs);
+			TypeId typidLhs = DownExpr(pStmt->pLhsExpr)->typidEval;
+			const Type * pTypeLhs = lookupType(*pCtx->typeTable, typidLhs);
 
 			pNodeCtx->wantsChildExprAddr = false;
 
@@ -924,8 +934,8 @@ void visitBytecodeBuilderPostOrder(AstNode * pNode, void * pBuilder_)
 		{
 			auto * pExpr = Down(pNode, UnopExpr);
 
-			TYPID typid = UpExpr(pExpr)->typidEval;
-			const Type * pType = lookupType(*pCtx->pTypeTable, typid);
+			TypeId typid = UpExpr(pExpr)->typidEval;
+			const Type * pType = lookupType(*pCtx->typeTable, typid);
 
 			switch (pExpr->pOp->lexeme.strv.pCh[0])
 			{
@@ -938,12 +948,12 @@ void visitBytecodeBuilderPostOrder(AstNode * pNode, void * pBuilder_)
 
 					switch (typid)
 					{
-						case TYPID_S8:		emitOp(pBcp, BCOP_NegateS8, startLine); break;
-						case TYPID_S16:		emitOp(pBcp, BCOP_NegateS16, startLine); break;
-						case TYPID_S32:		emitOp(pBcp, BCOP_NegateS32, startLine); break;
-						case TYPID_S64:		emitOp(pBcp, BCOP_NegateS64, startLine); break;
-						case TYPID_F32:		emitOp(pBcp, BCOP_NegateFloat32, startLine); break;
-						case TYPID_F64:		emitOp(pBcp, BCOP_NegateFloat64, startLine); break;
+						case TypeId::S8:		emitOp(pBcp, BCOP_NegateS8, startLine); break;
+						case TypeId::S16:		emitOp(pBcp, BCOP_NegateS16, startLine); break;
+						case TypeId::S32:		emitOp(pBcp, BCOP_NegateS32, startLine); break;
+						case TypeId::S64:		emitOp(pBcp, BCOP_NegateS64, startLine); break;
+						case TypeId::F32:		emitOp(pBcp, BCOP_NegateFloat32, startLine); break;
+						case TypeId::F64:		emitOp(pBcp, BCOP_NegateFloat64, startLine); break;
 						default:
 							AssertNotReached;
 					} break;
@@ -982,10 +992,10 @@ void visitBytecodeBuilderPostOrder(AstNode * pNode, void * pBuilder_)
 
 			// Determine if widening is needed
 
-			TYPID typidLhs = DownExpr(pExpr->pLhsExpr)->typidEval;
-			TYPID typidRhs = DownExpr(pExpr->pRhsExpr)->typidEval;
-			const Type * pTypeLhs = lookupType(*pCtx->pTypeTable, typidLhs);
-			const Type * pTypeRhs = lookupType(*pCtx->pTypeTable, typidRhs);
+			TypeId typidLhs = DownExpr(pExpr->pLhsExpr)->typidEval;
+			TypeId typidRhs = DownExpr(pExpr->pRhsExpr)->typidEval;
+			const Type * pTypeLhs = lookupType(*pCtx->typeTable, typidLhs);
+			const Type * pTypeRhs = lookupType(*pCtx->typeTable, typidRhs);
 
 			if (typidLhs != typidRhs)
 			{
@@ -1092,8 +1102,8 @@ void visitBytecodeBuilderPostOrder(AstNode * pNode, void * pBuilder_)
 					// Simply leave the value on the stack. The actual logic is handled by the
 					//	short-circuit jump that we already emitted.
 
-					Assert(typidLhs == TYPID_Bool);
-					Assert(typidRhs == TYPID_Bool);
+					Assert(typidLhs == TypeId::Bool);
+					Assert(typidRhs == TypeId::Bool);
 				} break;
 
 				default:
@@ -1173,7 +1183,7 @@ void visitBytecodeBuilderPostOrder(AstNode * pNode, void * pBuilder_)
 				{
 					Assert(pNodeCtxParent);
 
-					Scope * pScope = pCtx->mpScopeidPScope[pExpr->varData.pDeclCached->ident.scopeid];
+					Scope * pScope = pCtx->scopes[pExpr->varData.pDeclCached->ident.scopeid];
 					SymbolInfo symbInfo = lookupVarSymbol(*pScope, pExpr->ident, FSYMBQ_IgnoreParent);
 					Assert(symbInfo.symbolk == SYMBOLK_Var);
 
@@ -1184,8 +1194,8 @@ void visitBytecodeBuilderPostOrder(AstNode * pNode, void * pBuilder_)
 
 					if (!pNodeCtxParent->wantsChildExprAddr)
 					{
-						TYPID typid = DownExpr(pNode)->typidEval;
-						const Type * pType = lookupType(*pCtx->pTypeTable, typid);
+						TypeId typid = DownExpr(pNode)->typidEval;
+						const Type * pType = lookupType(*pCtx->typeTable, typid);
 
 						int cBitSize = pType->info.size * 8;
 
@@ -1235,7 +1245,7 @@ void visitBytecodeBuilderPostOrder(AstNode * pNode, void * pBuilder_)
 				{
 					Assert(pNodeCtxParent);
 
-					BCOP bcop = bcopSized(SIZEDBCOP_LoadImmediate, sizeof(FUNCID) * 8);
+					BCOP bcop = bcopSized(SIZEDBCOP_LoadImmediate, sizeof(FuncId) * 8);
 
 					emitOp(pBcp, bcop, startLine);
 					emit(pBcp, pExpr->funcData.pDefnCached->funcid);
@@ -1275,10 +1285,10 @@ void visitBytecodeBuilderPostOrder(AstNode * pNode, void * pBuilder_)
 		{
 			auto * pStmt = Down(pNode, AssignStmt);
 
-			TYPID typidLhs = DownExpr(pStmt->pLhsExpr)->typidEval;
-			TYPID typidRhs = DownExpr(pStmt->pRhsExpr)->typidEval;
-			const Type * pTypeLhs = lookupType(*pCtx->pTypeTable, typidLhs);
-			const Type * pTypeRhs = lookupType(*pCtx->pTypeTable, typidRhs);
+			TypeId typidLhs = DownExpr(pStmt->pLhsExpr)->typidEval;
+			TypeId typidRhs = DownExpr(pStmt->pRhsExpr)->typidEval;
+			const Type * pTypeLhs = lookupType(*pCtx->typeTable, typidLhs);
+			const Type * pTypeRhs = lookupType(*pCtx->typeTable, typidRhs);
 
 			switch (pStmt->pAssignToken->tokenk)
 			{
@@ -1295,7 +1305,7 @@ void visitBytecodeBuilderPostOrder(AstNode * pNode, void * pBuilder_)
 						AssertTodo;
 					}
 
-					if (typidLhs != TYPID_S32)
+					if (typidLhs != TypeId::S32)
 					{
 						AssertTodo;
 					}
@@ -1361,7 +1371,7 @@ void visitBytecodeBuilderPostOrder(AstNode * pNode, void * pBuilder_)
 
 				case TOKENK_Equal:
 				{
-					const Type * pTypeLhs = lookupType(*pCtx->pTypeTable, typidLhs);
+					const Type * pTypeLhs = lookupType(*pCtx->typeTable, typidLhs);
 					int cBitSize = pTypeLhs->info.size * 8;
 
 					if (cBitSize != 32) AssertTodo;
@@ -1376,12 +1386,12 @@ void visitBytecodeBuilderPostOrder(AstNode * pNode, void * pBuilder_)
 		{
 			auto * pStmt = Down(pNode, VarDeclStmt);
 
-			Scope * pScope = pCtx->mpScopeidPScope[pStmt->ident.scopeid];
+			Scope * pScope = pCtx->scopes[pStmt->ident.scopeid];
 			SymbolInfo symbInfo = lookupVarSymbol(*pScope, pStmt->ident.lexeme, FSYMBQ_IgnoreParent);
 			Assert(symbInfo.symbolk == SYMBOLK_Var);
 
-			TYPID typid = pStmt->typidDefn;
-			const Type * pType = lookupType(*pCtx->pTypeTable, typid);
+			TypeId typid = pStmt->typidDefn;
+			const Type * pType = lookupType(*pCtx->typeTable, typid);
 			int cByteSize = pType->info.size;
 			int cBitSize = cByteSize * 8;
 
@@ -1462,7 +1472,7 @@ void visitBytecodeBuilderPostOrder(AstNode * pNode, void * pBuilder_)
 
 			// HMM: Maybe this should only alloc/free if we don't inherit parent's scope id?
 
-			Scope * pScope = pCtx->mpScopeidPScope[pStmt->scopeid];
+			Scope * pScope = pCtx->scopes[pStmt->scopeid];
 
 			uintptr cByteLocal = cByteLocalVars(*pScope);
 			if (cByteLocal > 0)
@@ -1480,7 +1490,7 @@ void visitBytecodeBuilderPostOrder(AstNode * pNode, void * pBuilder_)
 		case ASTK_PrintStmt:
 		{
 			auto * pStmt = Down(pNode, PrintStmt);
-			TYPID typid = DownExpr(pStmt->pExpr)->typidEval;
+			TypeId typid = DownExpr(pStmt->pExpr)->typidEval;
 
 			emitOp(pBcp, BCOP_DebugPrint, startLine);
 			emit(pBcp, typid);
@@ -1739,8 +1749,8 @@ void disassemble(const BytecodeProgram & bcp)
 				{
 					printfmt("%08d ", iByte);
 
-					TYPID value = *reinterpret_cast<TYPID *>(bcp.bytes.pBuffer + iByte);
-					iByte += sizeof(TYPID);
+					TypeId value = *reinterpret_cast<TypeId *>(bcp.bytes.pBuffer + iByte);
+					iByte += sizeof(TypeId);
 
 					print("     |  ");
 					print(" -> ");

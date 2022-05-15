@@ -12,7 +12,7 @@ void init(Interpreter * pInterp, MeekCtx * pCtx)
 {
 	constexpr int c_MiB = 1024 * 1024;
 
-	Scope * pScopeGlobal = pCtx->pParser->pScopeGlobal;		// TODO: put this somewhere other than parser...
+	Scope * pScopeGlobal = pCtx->parser->pScopeGlobal;		// TODO: put this somewhere other than parser...
 
 	constexpr u64 cByteStack = c_MiB;
 	uintptr cByteGlobal = pScopeGlobal->globalData.cByteGlobalVariable;
@@ -635,12 +635,12 @@ void interpret(Interpreter * pInterp, const BytecodeProgram & bcp, int iByteIpSt
 
 			case BCOP_DebugPrint:
 			{
-				TYPID typid;
-				ReadVarFromBytecode(TYPID, typid);
+				TypeId typid;
+				ReadVarFromBytecode(TypeId, typid);
 
 				switch (typid)
 				{
-					case TYPID_U8:
+					case TypeId::U8:
 					{
 						u8 val;
 						ReadVarFromStack(u8, val);
@@ -648,7 +648,7 @@ void interpret(Interpreter * pInterp, const BytecodeProgram & bcp, int iByteIpSt
 						println();
 					} break;
 
-					case TYPID_U16:
+					case TypeId::U16:
 					{
 						u16 val;
 						ReadVarFromStack(u16, val);
@@ -656,7 +656,7 @@ void interpret(Interpreter * pInterp, const BytecodeProgram & bcp, int iByteIpSt
 						println();
 					} break;
 
-					case TYPID_U32:
+					case TypeId::U32:
 					{
 						u32 val;
 						ReadVarFromStack(u32, val);
@@ -664,7 +664,7 @@ void interpret(Interpreter * pInterp, const BytecodeProgram & bcp, int iByteIpSt
 						println();
 					} break;
 
-					case TYPID_U64:
+					case TypeId::U64:
 					{
 						u64 val;
 						ReadVarFromStack(u64, val);
@@ -672,7 +672,7 @@ void interpret(Interpreter * pInterp, const BytecodeProgram & bcp, int iByteIpSt
 						println();
 					} break;
 
-					case TYPID_S8:
+					case TypeId::S8:
 					{
 						s8 val;
 						ReadVarFromStack(s8, val);
@@ -680,7 +680,7 @@ void interpret(Interpreter * pInterp, const BytecodeProgram & bcp, int iByteIpSt
 						println();
 					} break;
 
-					case TYPID_S16:
+					case TypeId::S16:
 					{
 						s16 val;
 						ReadVarFromStack(s16, val);
@@ -688,7 +688,7 @@ void interpret(Interpreter * pInterp, const BytecodeProgram & bcp, int iByteIpSt
 						println();
 					} break;
 
-					case TYPID_S32:
+					case TypeId::S32:
 					{
 						s32 val;
 						ReadVarFromStack(s32, val);
@@ -696,7 +696,7 @@ void interpret(Interpreter * pInterp, const BytecodeProgram & bcp, int iByteIpSt
 						println();
 					} break;
 
-					case TYPID_S64:
+					case TypeId::S64:
 					{
 						s64 val;
 						ReadVarFromStack(s64, val);
@@ -704,7 +704,7 @@ void interpret(Interpreter * pInterp, const BytecodeProgram & bcp, int iByteIpSt
 						println();
 					} break;
 
-					case TYPID_F32:
+					case TypeId::F32:
 					{
 						f32 val;
 						ReadVarFromStack(f32, val);
@@ -712,7 +712,7 @@ void interpret(Interpreter * pInterp, const BytecodeProgram & bcp, int iByteIpSt
 						println();
 					} break;
 
-					case TYPID_F64:
+					case TypeId::F64:
 					{
 						f64 val;
 						ReadVarFromStack(f64, val);

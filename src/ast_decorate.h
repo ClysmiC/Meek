@@ -65,7 +65,7 @@ struct AstDecorations
 	AstDecorationTable<StartEndIndices> startEndDecoration;
 };
 
-void init(AstDecorations * pAstDecs);
+void init(AstDecorations * astDecorations);
 
 StartEndIndices getStartEnd(const AstDecorations & astDecs, ASTID astid, bool * poSuccess=nullptr);
 StartEndIndices getStartEnd(const AstDecorations & astDecs, ASTID astidStartStart, ASTID astidEndEnd, bool * poSuccess=nullptr);

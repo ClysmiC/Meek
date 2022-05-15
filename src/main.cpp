@@ -59,18 +59,18 @@ int main()
 	MeekCtx ctx;
 	init(&ctx, buffer, bytesRead);
 
-	AstNode * pNodeRoot = nullptr;
+	AstNode * rootNode = nullptr;
 	{
 		printfmt("Parsing %s...\n", filename);
 
 		bool success;
-		pNodeRoot = parseProgram(ctx.pParser, &success);
+		rootNode = parseProgram(ctx.parser, &success);
 
 		if (!success)
 		{
 			// TODO: Still try to do semantic analysis on non-erroneous parts of the program so that we can report better errors?
 
-			reportScanAndParseErrors(*ctx.pParser);
+			reportScanAndParseErrors(*ctx.parser);
 			return 1;
 		}
 
@@ -78,25 +78,25 @@ int main()
 		println();
 	}
 
-	ctx.pNodeRoot = pNodeRoot;
+	ctx.rootNode = rootNode;
 
 #if DEBUG
 	{
-		for (int iFunc = 0; iFunc < ctx.apFuncDefnAndLiteral.cItem; iFunc++)
+		for (int iFunc = 0; iFunc < ctx.functions.cItem; iFunc++)
 		{
-			Assert(funcid(*ctx.apFuncDefnAndLiteral[iFunc]) == FUNCID(iFunc));
+			Assert(funcid(*ctx.functions[iFunc]) == FuncId(iFunc));
 		}
 	}
 #endif
 
 	print("Running resolve pass...\n");
-	if (!tryResolveAllTypes(ctx.pTypeTable))
+	if (!tryResolveAllTypes(ctx.typeTable))
 	{
 		print("Unable to resolve some types\n");
 		return 1;
 	}
 
-	computeScopedVariableOffsets(&ctx, ctx.pParser->pScopeGlobal);
+	computeScopedVariableOffsets(&ctx, ctx.parser->pScopeGlobal);
 
 	// TODO (andrew) Probably just eagerly insert func names into the symbol table like we do for others, and generate types pending resolution
 	//	that will poke in the typid's of the args. Then, this function could be a simple audit to make sure that there are no redefined funcs.
@@ -110,7 +110,7 @@ int main()
 
 	ResolvePass resolvePass;
 	init(&resolvePass, &ctx);
-	doResolvePass(&resolvePass, pNodeRoot);
+	doResolvePass(&resolvePass, rootNode);
 
 	print("Done\n");
 	println();
@@ -129,7 +129,7 @@ int main()
 	disassemble(bytecodeBuilder.bytecodeProgram);
 #else
 
-	if (ctx.funcidMain != FUNCID_Nil)
+	if (ctx.mainFuncid != FuncId::Nil)
 	{
 		print("Running interpreter...\n");
 
@@ -139,7 +139,7 @@ int main()
 		interpret(
 			&interp,
 			bytecodeBuilder.bytecodeProgram,
-			bytecodeBuilder.bytecodeProgram.bytecodeFuncs[ctx.funcidMain].iByte0);
+			bytecodeBuilder.bytecodeProgram.bytecodeFuncs[(int)ctx.mainFuncid].iByte0);
 
 		print("Done\n");
 		println();

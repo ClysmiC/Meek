@@ -50,10 +50,10 @@ struct Parser
 	DynamicArray<AstNode *> apErrorNodes;
 };
 
-void init(Parser * pParser, MeekCtx * pCtx);
+void init(Parser * parser, MeekCtx * pCtx);
 void reportScanAndParseErrors(const Parser & parser);
 
-AstNode * parseProgram(Parser * pParser, bool * poSuccess);
+AstNode * parseProgram(Parser * parser, bool * poSuccess);
 
 // Might want to move this out of parse.h as this will probably be reusable elsewhere
 
@@ -82,21 +82,21 @@ enum PARAMK
 
 // Scope management
 
-Scope * pushScope(Parser * pParser, SCOPEK scopek);
-Scope * popScope(Parser * pParser);
+Scope * pushScope(Parser * parser, SCOPEK scopek);
+Scope * popScope(Parser * parser);
 
 
 // Node allocation
 
-AstNode * astNew(Parser * pParser, ASTK astk, StartEndIndices startEnd);
-AstNode * astNewErr(Parser * pParser, ASTK astkErr, StartEndIndices startEnd, AstNode * pChild0 = nullptr, AstNode * pChild1 = nullptr, AstNode * pChild2 = nullptr);
-AstNode * astNewErr(Parser * pParser, ASTK astkErr, StartEndIndices startEnd, AstNode * aPChildren[], uint cPChildren);
-AstNode * astNewErrMoveChildren(Parser * pParser, ASTK astkErr, StartEndIndices startEnd, DynamicArray<AstNode *> * papChildren);
+AstNode * astNew(Parser * parser, ASTK astk, StartEndIndices startEnd);
+AstNode * astNewErr(Parser * parser, ASTK astkErr, StartEndIndices startEnd, AstNode * pChild0 = nullptr, AstNode * pChild1 = nullptr, AstNode * pChild2 = nullptr);
+AstNode * astNewErr(Parser * parser, ASTK astkErr, StartEndIndices startEnd, AstNode * aPChildren[], uint cPChildren);
+AstNode * astNewErrMoveChildren(Parser * parser, ASTK astkErr, StartEndIndices startEnd, DynamicArray<AstNode *> * papChildren);
 
 // Error handling
 
-bool tryRecoverFromPanic(Parser * pParser, TOKENK tokenkRecover);
-bool tryRecoverFromPanic(Parser * pParser, const TOKENK * aTokenkRecover, int cTokenkRecover, TOKENK * poTokenkMatched = nullptr);
+bool tryRecoverFromPanic(Parser * parser, TOKENK tokenkRecover);
+bool tryRecoverFromPanic(Parser * parser, const TOKENK * aTokenkRecover, int cTokenkRecover, TOKENK * poTokenkMatched = nullptr);
 
 
 // STMT
@@ -108,41 +108,41 @@ enum PARSESTMTK
 	PARSESTMTK_Stmt
 };
 
-AstNode * parseStmt(Parser * pParser, PARSESTMTK parsestmtk = PARSESTMTK_Stmt);
-AstNode * parseExprStmtOrAssignStmt(Parser * pParser);
-AstNode * parseStructDefnStmt(Parser * pParser);
+AstNode * parseStmt(Parser * parser, PARSESTMTK parsestmtk = PARSESTMTK_Stmt);
+AstNode * parseExprStmtOrAssignStmt(Parser * parser);
+AstNode * parseStructDefnStmt(Parser * parser);
 AstNode * parseVarDeclStmt(
-	Parser * pParser,
+	Parser * parser,
 	VARDECLK vardeclk,
-	NULLABLE PENDINGTYPID * poPendingTypid = nullptr);
+	NULLABLE PendingTypeId * poPendingTypid = nullptr);
 
-AstNode * parseIfStmt(Parser * pParser);
-AstNode * parseWhileStmt(Parser * pParser);
-AstNode * parseDoPseudoStmtOrBlockStmt(Parser * pParser, bool pushPopScopeBlock = true);
-AstNode * parseDoPseudoStmt(Parser * pParser);
-AstNode * parseBlockStmt(Parser * pParser, bool pushPopScope = true);
-AstNode * parseReturnStmt(Parser * pParser);
-AstNode * parseBreakStmt(Parser * pParser);
-AstNode * parseContinueStmt(Parser * pParser);
-AstNode * parsePrintStmt(Parser * pParser);
-AstNode * parseFuncDefnStmt(Parser * pParser);
+AstNode * parseIfStmt(Parser * parser);
+AstNode * parseWhileStmt(Parser * parser);
+AstNode * parseDoPseudoStmtOrBlockStmt(Parser * parser, bool pushPopScopeBlock = true);
+AstNode * parseDoPseudoStmt(Parser * parser);
+AstNode * parseBlockStmt(Parser * parser, bool pushPopScope = true);
+AstNode * parseReturnStmt(Parser * parser);
+AstNode * parseBreakStmt(Parser * parser);
+AstNode * parseContinueStmt(Parser * parser);
+AstNode * parsePrintStmt(Parser * parser);
+AstNode * parseFuncDefnStmt(Parser * parser);
 
 // EXPR
 
-AstNode * parseExpr(Parser * pParser);
-AstNode * parseExpr(Parser * pParser);
-AstNode * parseBinop(Parser * pParser, const BinopInfo & op);
-AstNode * parseUnopPre(Parser * pParser);
-AstNode * parsePrimary(Parser * pParser);
-AstNode * parseVarOrMemberVarSymbolExpr(Parser * pParser, NULLABLE AstNode * pMemberOwnerExpr);
-AstNode * parseLiteralExpr(Parser * pParser, bool mustBeIntLiteralk = false);
-AstNode * parseFuncLiteralExpr(Parser * pParser);
-AstNode * parseFuncSymbolExpr(Parser * pParser);
+AstNode * parseExpr(Parser * parser);
+AstNode * parseExpr(Parser * parser);
+AstNode * parseBinop(Parser * parser, const BinopInfo & op);
+AstNode * parseUnopPre(Parser * parser);
+AstNode * parsePrimary(Parser * parser);
+AstNode * parseVarOrMemberVarSymbolExpr(Parser * parser, NULLABLE AstNode * pMemberOwnerExpr);
+AstNode * parseLiteralExpr(Parser * parser, bool mustBeIntLiteralk = false);
+AstNode * parseFuncLiteralExpr(Parser * parser);
+AstNode * parseFuncSymbolExpr(Parser * parser);
 
 // Helpers
 
-AstNode * parseFuncDefnStmtOrLiteralExpr(Parser * pParser, FUNCHEADERK funcheaderk);
-AstNode * finishParsePrimary(Parser * pParser, AstNode * pLhsExpr);
+AstNode * parseFuncDefnStmtOrLiteralExpr(Parser * parser, FUNCHEADERK funcheaderk);
+AstNode * finishParsePrimary(Parser * parser, AstNode * pLhsExpr);
 
 // Type parsing helpers
 
@@ -166,18 +166,18 @@ struct ParseTypeResult
 
 		//struct UFuncTypeData
 		//{
-		//	DynamicArray<PENDINGTYPID> aPendingTypidParam;
-		//	DynamicArray<PENDINGTYPID> aPendingTypidReturn;
+		//	DynamicArray<PendingTYPID> aPendingTypidParam;
+		//	DynamicArray<PendingTYPID> aPendingTypidReturn;
 		//} funcTypeData;
 
 		struct UNonFuncTypeData
 		{
-			PENDINGTYPID pendingTypid;
+			PendingTypeId pendingTypid;
 		} nonErrorData;
 	};
 };
 
-ParseTypeResult tryParseType(Parser * pParser);
+ParseTypeResult tryParseType(Parser * parser);
 
 struct ParseFuncHeaderParam
 {
@@ -188,47 +188,47 @@ struct ParseFuncHeaderParam
 		struct UFuncHeaderDefn				// FUNCHEADERK_Defn
 		{
 			AstFuncDefnStmt * pioNode;
-			DynamicArray<PENDINGTYPID> * paPendingTypidParam;
-			DynamicArray<PENDINGTYPID> * paPendingTypidReturn;
+			DynamicArray<PendingTypeId> * paPendingTypidParam;
+			DynamicArray<PendingTypeId> * paPendingTypidReturn;
 		} paramDefn;
 
 		struct UFuncHeaderLiteral			// FUNCHEADERK_Literal
 		{
 			AstFuncLiteralExpr * pioNode;
-			DynamicArray<PENDINGTYPID> * paPendingTypidParam;
-			DynamicArray<PENDINGTYPID> * paPendingTypidReturn;
+			DynamicArray<PendingTypeId> * paPendingTypidParam;
+			DynamicArray<PendingTypeId> * paPendingTypidReturn;
 		} paramLiteral;
 
 		struct UFuncHeaderType				// FUNCHEADERK_Type
 		{
-			DynamicArray<PENDINGTYPID> * paPendingTypidParam;
-			DynamicArray<PENDINGTYPID> * paPendingTypidReturn;
+			DynamicArray<PendingTypeId> * paPendingTypidParam;
+			DynamicArray<PendingTypeId> * paPendingTypidReturn;
 		} paramType;
 
 		struct UFuncHeaderSymbolExpr		// FUNCHEADERK_SymbolExpr
 		{
-			DynamicArray<PENDINGTYPID> * paPendingTypidParam;
+			DynamicArray<PendingTypeId> * paPendingTypidParam;
 			Lexeme * poIdent;
 		} paramSymbolExpr;
 	};
 };
 
-NULLABLE AstErr * tryParseFuncHeader(Parser * pParser, const ParseFuncHeaderParam & param);
+NULLABLE AstErr * tryParseFuncHeader(Parser * parser, const ParseFuncHeaderParam & param);
 
 
 // NOTE: This moves the children into the AST
 
-AstNode * handleScanOrUnexpectedTokenkErr(Parser * pParser, DynamicArray<AstNode *> * papChildren = nullptr);
+AstNode * handleScanOrUnexpectedTokenkErr(Parser * parser, DynamicArray<AstNode *> * papChildren = nullptr);
 
 
 // Only claimed tokens are safe to stick in the AST. If you merely peek, the
 //  pending token's memory will be overwritten next time you consume a token.
 
-Token * ensurePendingToken(Parser * pParser);
-Token * claimPendingToken(Parser * pParser);
-Token * ensureAndClaimPendingToken(Parser * pParser);
+Token * ensurePendingToken(Parser * parser);
+Token * claimPendingToken(Parser * parser);
+Token * ensureAndClaimPendingToken(Parser * parser);
 
-inline void releaseToken(Parser * pParser, Token * pToken)
+inline void releaseToken(Parser * parser, Token * pToken)
 {
-	release(&pParser->tokenAlloc, pToken);
+	release(&parser->tokenAlloc, pToken);
 }

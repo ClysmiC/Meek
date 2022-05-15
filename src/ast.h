@@ -292,7 +292,7 @@ struct AstSymbolExpr
 
 		struct UFuncData
 		{
-			DynamicArray<TYPID> aTypidDisambig;			// Disambiguating typeid's supplied by the programmer
+			DynamicArray<TypeId> aTypidDisambig;			// Disambiguating typeid's supplied by the programmer
 			NULLABLE AstFuncDefnStmt * pDefnCached;		// Set in resolve pass. Not a child node.
 		} funcData;
 	};
@@ -324,7 +324,7 @@ struct AstFuncLiteralExpr
 	AstNode * pBodyStmt;
 
 	SCOPEID scopeid;		// Scope introduced by this func defn
-	FUNCID funcid;
+	FuncId funcid;
 
 #if 0
 	static constexpr uint s_nodeSizeDebug = sizeof(AstFuncLiteralExpr);
@@ -348,7 +348,7 @@ struct AstExpr
 		AstFuncLiteralExpr			funcLiteralExpr;
 	};
 
-	TYPID typidEval = TYPID_Unresolved;
+	TypeId typidEval = TypeId::Unresolved;
 };
 #if 0
 static constexpr uint s_nodeSizeDebug = sizeof(AstExpr);
@@ -377,7 +377,7 @@ struct AstVarDeclStmt
 	NULLABLE AstNode * pInitExpr;
 
 	VARSEQID varseqid;
-	TYPID typidDefn;
+	TypeId typidDefn;
 	VARDECLK vardeclk;
 };
 
@@ -386,7 +386,7 @@ struct AstStructDefnStmt
 	ScopedIdentifier ident;
 	DynamicArray<AstNode *> apVarDeclStmt;
 	SCOPEID scopeid;        // Scope introduced by this struct defn
-	TYPID typidDefn;
+	TypeId typidDefn;
 };
 #if 0
 	static constexpr uint s_nodeSizeDebug = sizeof(AstStructDefnStmt);
@@ -400,8 +400,8 @@ struct AstFuncDefnStmt
 
 	AstNode * pBodyStmt;
 	SCOPEID scopeid;        // Scope introduced by this func defn
-	TYPID typidDefn;
-	FUNCID funcid;
+	TypeId typidDefn;
+	FuncId funcid;
 };
 #if 0
 	static constexpr uint s_nodeSizeDebug = sizeof(AstFuncDefnStmt);
@@ -524,7 +524,7 @@ static constexpr uint s_nodeSizeDebug = sizeof(AstNode);
 #endif
 
 
-FUNCID funcid(const AstNode & node);
+FuncId funcid(const AstNode & node);
 
 
 // Walking AST

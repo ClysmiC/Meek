@@ -27,9 +27,9 @@ void reportParseError(const Parser & parser, const AstNode & node, const char * 
 {
 	MeekCtx * pCtx = parser.pCtx;
 
-	auto startEnd = getStartEnd(*pCtx->pAstDecs, node.astid);
+	auto startEnd = getStartEnd(*pCtx->astDecorations, node.astid);
 
-	printfmt("[Error: test.meek, line %d]\n", lineFromI(*pCtx->pScanner, startEnd.iStart));
+	printfmt("[Error: test.meek, line %d]\n", lineFromI(*pCtx->scanner, startEnd.iStart));
 
 	va_list arglist;
 	va_start(arglist, errFormat);

@@ -52,50 +52,50 @@ struct Scanner
 	SCANEXITK	scanexitk = SCANEXITK_Nil;
 };
 
-void init(Scanner * pScanner, char * pText, uint textSize);
+void init(Scanner * scanner, char * pText, uint textSize);
 bool isFinished(const Scanner & scanner);
 int lineFromI(const Scanner & scanner, int iText);
 
 // Scanning
 
-TOKENK peekToken(Scanner * pScanner, NULLABLE Token * poToken=nullptr, uint lookahead=0);
-TOKENK prevToken(Scanner * pScanner, NULLABLE Token * poToken=nullptr, uint lookbehind=0);
-StartEndIndices peekTokenStartEnd(Scanner * pScanner, uint lookahead=0);
-StartEndIndices prevTokenStartEnd(Scanner * pScanner, uint lookbehind=0);
-bool tryConsumeToken(Scanner * pScanner, TOKENK tokenk, NULLABLE Token * poToken=nullptr);
-bool tryConsumeToken(Scanner * pScanner, const TOKENK * aTokenk, int cTokenk, NULLABLE Token * poToken=nullptr);
-bool tryPeekToken(Scanner * pScanner, const TOKENK * aTokenk, int cTokenk, NULLABLE Token * poToken=nullptr);
-TOKENK consumeToken(Scanner * pScanner, NULLABLE Token * poToken=nullptr);
+TOKENK peekToken(Scanner * scanner, NULLABLE Token * poToken=nullptr, uint lookahead=0);
+TOKENK prevToken(Scanner * scanner, NULLABLE Token * poToken=nullptr, uint lookbehind=0);
+StartEndIndices peekTokenStartEnd(Scanner * scanner, uint lookahead=0);
+StartEndIndices prevTokenStartEnd(Scanner * scanner, uint lookbehind=0);
+bool tryConsumeToken(Scanner * scanner, TOKENK tokenk, NULLABLE Token * poToken=nullptr);
+bool tryConsumeToken(Scanner * scanner, const TOKENK * aTokenk, int cTokenk, NULLABLE Token * poToken=nullptr);
+bool tryPeekToken(Scanner * scanner, const TOKENK * aTokenk, int cTokenk, NULLABLE Token * poToken=nullptr);
+TOKENK consumeToken(Scanner * scanner, NULLABLE Token * poToken=nullptr);
 
 // Speculative scanning
 
-TOKENK nextTokenkSpeculative(Scanner * pScanner);
-void backtrackAfterSpeculation(Scanner * pScanner);
+TOKENK nextTokenkSpeculative(Scanner * scanner);
+void backtrackAfterSpeculation(Scanner * scanner);
 
 
 
 // Internal
 
-TOKENK produceNextToken(Scanner * pScanner, Token * poToken);
-bool tryConsumeChar(Scanner * pScanner, char expected);
-bool tryConsumeChar(Scanner * pScanner, char rangeMin, char rangeMax, char * poMatch=nullptr);
-bool tryConsumeCharSequenceThenSpace(Scanner * pScanner, const char * sequence);
-char consumeChar(Scanner * pScanner);
-bool tryPeekChar(Scanner * pScanner, char expected, int lookahead=0);
-bool tryPeekChar(Scanner * pScanner, char rangeMin, char rangeMax, char * poMatch=nullptr, int lookahead=0);
-char peekChar(Scanner * pScanner, int lookahead=0);
+TOKENK produceNextToken(Scanner * scanner, Token * poToken);
+bool tryConsumeChar(Scanner * scanner, char expected);
+bool tryConsumeChar(Scanner * scanner, char rangeMin, char rangeMax, char * poMatch=nullptr);
+bool tryConsumeCharSequenceThenSpace(Scanner * scanner, const char * sequence);
+char consumeChar(Scanner * scanner);
+bool tryPeekChar(Scanner * scanner, char expected, int lookahead=0);
+bool tryPeekChar(Scanner * scanner, char rangeMin, char rangeMax, char * poMatch=nullptr, int lookahead=0);
+char peekChar(Scanner * scanner, int lookahead=0);
 
-void onStartToken(Scanner * pScanner);
-StringView currentLexeme(const Scanner & pScanner);
-void makeToken(Scanner * pScanner, TOKENK tokenk, Token * poToken);
-void makeToken(Scanner * pScanner, TOKENK tokenk, StringView lexeme, Token * poToken);
-void makeErrorToken(Scanner * pScanner, GRFERRTOK ferrtok, Token * poToken);
-void makeEofToken(Scanner * pScanner, Token * poToken);
-void finishAfterConsumeDotAndDigit(Scanner * pScanner, char firstDigit, Token * poToken);
-void finishAfterConsumeDigit(Scanner * pScanner, char firstDigit, Token * poToken);
-void finishAfterConsumeDigitMaybeStartingWithDot(Scanner * pScanner, char firstDigit, bool startsWithDot, Token * poToken);
+void onStartToken(Scanner * scanner);
+StringView currentLexeme(const Scanner & scanner);
+void makeToken(Scanner * scanner, TOKENK tokenk, Token * poToken);
+void makeToken(Scanner * scanner, TOKENK tokenk, StringView lexeme, Token * poToken);
+void makeErrorToken(Scanner * scanner, GRFERRTOK ferrtok, Token * poToken);
+void makeEofToken(Scanner * scanner, Token * poToken);
+void finishAfterConsumeDotAndDigit(Scanner * scanner, char firstDigit, Token * poToken);
+void finishAfterConsumeDigit(Scanner * scanner, char firstDigit, Token * poToken);
+void finishAfterConsumeDigitMaybeStartingWithDot(Scanner * scanner, char firstDigit, bool startsWithDot, Token * poToken);
 
-bool checkEndOfFile(Scanner * pScanner, int lookahead=0);
+bool checkEndOfFile(Scanner * scanner, int lookahead=0);
 
 inline bool isDigit(char c)
 {

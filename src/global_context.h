@@ -11,24 +11,22 @@ struct Parser;
 struct Scope;
 struct TypeTable;
 
-// NOTE (andrew) These are all pointers to globals, instead of embedding all the globals in a single struct. The extra
-//	pointer reach through is annoying, but improves #include hygiene a lot.
-
 struct MeekCtx
 {
-	Scanner * pScanner;
-	Parser * pParser;
-	TypeTable * pTypeTable;
+	Scanner * scanner;
+	Parser * parser;
+	TypeTable * typeTable;
 
-	DynamicArray<Scope *> mpScopeidPScope;
+	// Indexed by ScopeId
+	DynamicArray<Scope *> scopes;
 
-	AstNode * pNodeRoot;
-	AstDecorations * pAstDecs;
+	AstNode * rootNode;
+	AstDecorations * astDecorations;
 
 	// All functions
 
-	DynamicArray<AstNode *> apFuncDefnAndLiteral;
-	FUNCID funcidMain;
+	DynamicArray<AstNode *> functions;
+	FuncId mainFuncid;
 
 #ifdef _WIN64
 	static const int s_cBitTargetWord = 64;
@@ -42,4 +40,4 @@ struct MeekCtx
 };
 
 void init(MeekCtx * pMeekCtx, char * pText, uint textSize);
-AstNode * funcNodeFromFuncid(MeekCtx * pCtx, FUNCID funcid);
+AstNode * funcNodeFromFuncid(MeekCtx * pCtx, FuncId funcid);

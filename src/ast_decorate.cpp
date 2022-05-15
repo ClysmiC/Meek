@@ -1,9 +1,9 @@
 #include "ast_decorate.h"
 #include "scan.h"
 
-void init(AstDecorations * pAstDecs)
+void init(AstDecorations * astDecorations)
 {
-	init(&pAstDecs->startEndDecoration);
+	init(&astDecorations->startEndDecoration);
 }
 
 StartEndIndices getStartEnd(const AstDecorations & astDecs, ASTID astid, bool * poSuccess)
@@ -44,10 +44,10 @@ StartEndIndices getStartEnd(const AstDecorations & astDecs, ASTID astidStartStar
 int getStartLine(const MeekCtx & ctx, ASTID astid)
 {
 	bool success;
-	StartEndIndices startEnd = getStartEnd(*ctx.pAstDecs, astid, &success);
+	StartEndIndices startEnd = getStartEnd(*ctx.astDecorations, astid, &success);
 
 	if (!success)
 		return -1;
 
-	return lineFromI(*ctx.pScanner, startEnd.iStart);
+	return lineFromI(*ctx.scanner, startEnd.iStart);
 }

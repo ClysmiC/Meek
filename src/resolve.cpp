@@ -8,7 +8,7 @@
 #include "symbol.h"
 #include "type.h"
 
-#define SetBubbleIfUnresolved(typid) do { if (!isTypeResolved(typid)) (typid) = TYPID_BubbleError; } while(0)
+#define SetBubbleIfUnresolved(typid) do { if (!isTypeResolved(typid)) (typid) = TypeId::BubbleError; } while(0)
 
 void init(ResolvePass * pPass, MeekCtx * pCtx)
 {
@@ -28,8 +28,8 @@ void pushAndProcessScope(ResolvePass * pPass, SCOPEID scopeid)
 	MeekCtx * pCtx = pPass->pCtx;
 
 	push(&pPass->scopeidStack, scopeid);
-	auditDuplicateSymbols(pCtx, pCtx->mpScopeidPScope[scopeid]);
-	computeScopedVariableOffsets(pCtx, pCtx->mpScopeidPScope[scopeid]);
+	auditDuplicateSymbols(pCtx, pCtx->scopes[scopeid]);
+	computeScopedVariableOffsets(pCtx, pCtx->scopes[scopeid]);
 }
 
 void resolveExpr(ResolvePass * pPass, AstNode * pNode)
@@ -37,9 +37,9 @@ void resolveExpr(ResolvePass * pPass, AstNode * pNode)
 	Assert(category(pNode->astk) == ASTCATK_Expr);
 
 	MeekCtx * pCtx = pPass->pCtx;
-	TypeTable * pTypeTable = pCtx->pTypeTable;
+	TypeTable * typeTable = pCtx->typeTable;
 
-	TYPID typidResult = TYPID_Unresolved;
+	TypeId typidResult = TypeId::Unresolved;
 
 	switch (pNode->astk)
 	{
@@ -51,12 +51,12 @@ void resolveExpr(ResolvePass * pPass, AstNode * pNode)
 
 			auto * pExpr = Down(pNode, BinopExpr);
 
-			TYPID typidLhs = DownExpr(pExpr->pLhsExpr)->typidEval;
-			TYPID typidRhs = DownExpr(pExpr->pRhsExpr)->typidEval;
+			TypeId typidLhs = DownExpr(pExpr->pLhsExpr)->typidEval;
+			TypeId typidRhs = DownExpr(pExpr->pRhsExpr)->typidEval;
 
 			if (!isTypeResolved(typidLhs) || !isTypeResolved(typidRhs))
 			{
-				typidResult = TYPID_BubbleError;
+				typidResult = TypeId::BubbleError;
 				goto LEndSetTypidAndReturn;
 			}
 
@@ -65,7 +65,7 @@ void resolveExpr(ResolvePass * pPass, AstNode * pNode)
 				// TODO: report error
 
 				printfmt("Binary operator type mismatch. L: %d, R: %d\n", typidLhs, typidRhs);
-				typidResult = TYPID_TypeError;
+				typidResult = TypeId::TypeError;
 				goto LEndSetTypidAndReturn;
 			}
 
@@ -82,7 +82,7 @@ void resolveExpr(ResolvePass * pPass, AstNode * pNode)
 				case TOKENK_AmpAmp:
 				case TOKENK_PipePipe:
 				{
-					typidResult = TYPID_Bool;
+					typidResult = TypeId::Bool;
 				} break;
 
 				default:
@@ -111,11 +111,11 @@ void resolveExpr(ResolvePass * pPass, AstNode * pNode)
 		case ASTK_UnopExpr:
 		{
 			auto * pExpr = Down(pNode, UnopExpr);
-			TYPID typidExpr = DownExpr(pExpr->pExpr)->typidEval;
+			TypeId typidExpr = DownExpr(pExpr->pExpr)->typidEval;
 
 			if (!isTypeResolved(typidExpr))
 			{
-				typidResult = TYPID_BubbleError;
+				typidResult = TypeId::BubbleError;
 				goto LEndSetTypidAndReturn;
 			}
 
@@ -137,7 +137,7 @@ void resolveExpr(ResolvePass * pPass, AstNode * pNode)
 					typePtr.modTypeData.typemod.typemodk = TYPEMODK_Pointer;
 					typePtr.modTypeData.typidModified = typidExpr;
 
-					auto ensureResult = ensureInTypeTable(pTypeTable, &typePtr);
+					auto ensureResult = ensureInTypeTable(typeTable, &typePtr);
 					Assert(ensureResult.typeInfoComputed);
 
 					typidResult = ensureResult.typid;
@@ -163,7 +163,7 @@ void resolveExpr(ResolvePass * pPass, AstNode * pNode)
 					// Lookup all funcs matching this identifier
 
 					SCOPEID scopeidCur = peek(pPass->scopeidStack);
-					Scope * pScopeCur = pCtx->mpScopeidPScope[scopeidCur];
+					Scope * pScopeCur = pCtx->scopes[scopeidCur];
 					lookupFuncSymbol(*pScopeCur, pExpr->ident, &pExpr->unresolvedData.aCandidates);
 
 					// Lookup var matching this identifier, and slot it in where it fits
@@ -218,7 +218,7 @@ void resolveExpr(ResolvePass * pPass, AstNode * pNode)
 					}
 					else if (pExpr->unresolvedData.aCandidates.cItem > 1)
 					{
-						typidResult = TYPID_UnresolvedHasCandidates;
+						typidResult = TypeId::UnresolvedHasCandidates;
 					}
 					else
 					{
@@ -226,9 +226,9 @@ void resolveExpr(ResolvePass * pPass, AstNode * pNode)
 						print(pExpr->ident.strv);
 						println();
 
-						// HMM: Is this the right result value? Should we have a specific TYPID_UnresolvedIdentifier?
+						// HMM: Is this the right result value? Should we have a specific TypeId::UnresolvedIdentifier?
 
-						typidResult = TYPID_Unresolved;
+						typidResult = TypeId::Unresolved;
 					}
 				}
 				break;
@@ -246,21 +246,21 @@ void resolveExpr(ResolvePass * pPass, AstNode * pNode)
 					Assert(pExpr->memberData.pOwner);
 					AssertInfo(!pExpr->memberData.pDeclCached, "This shouldn't be resolved yet because this is the code that should resolve it!");
 
-					TYPID ownerTypid = DownExpr(pExpr->memberData.pOwner)->typidEval;
+					TypeId ownerTypid = DownExpr(pExpr->memberData.pOwner)->typidEval;
 
 					if (!isTypeResolved(ownerTypid))
 					{
-						typidResult = TYPID_BubbleError;
+						typidResult = TypeId::BubbleError;
 						goto LEndSetTypidAndReturn;
 					}
 
-					const Type * pOwnerType = lookupType(*pTypeTable, ownerTypid);
+					const Type * pOwnerType = lookupType(*typeTable, ownerTypid);
 					Assert(pOwnerType);
 
 					if (pOwnerType->typek == TYPEK_Func)
 					{
 						print("Trying to access data member of a function?");
-						typidResult = TYPID_TypeError;
+						typidResult = TypeId::TypeError;
 						goto LEndSetTypidAndReturn;
 					}
 					else if (pOwnerType->typek == TYPEK_Mod)
@@ -274,11 +274,11 @@ void resolveExpr(ResolvePass * pPass, AstNode * pNode)
 
 					SymbolInfo symbInfoMember;
 					{
-						Scope * pScopeOwnerOuter = pCtx->mpScopeidPScope[pOwnerType->namedTypeData.ident.scopeid];
+						Scope * pScopeOwnerOuter = pCtx->scopes[pOwnerType->namedTypeData.ident.scopeid];
 						SymbolInfo symbInfoOwner = lookupTypeSymbol(*pScopeOwnerOuter, pOwnerType->namedTypeData.ident.lexeme);
 						Assert(symbInfoOwner.symbolk == SYMBOLK_Struct);
 
-						Scope * pScopeOwnerInner = pCtx->mpScopeidPScope[symbInfoOwner.structData.pStructDefnStmt->scopeid];
+						Scope * pScopeOwnerInner = pCtx->scopes[symbInfoOwner.structData.pStructDefnStmt->scopeid];
 						symbInfoMember = lookupVarSymbol(*pScopeOwnerInner, pExpr->ident, FSYMBQ_IgnoreParent);
 					}
 
@@ -291,7 +291,7 @@ void resolveExpr(ResolvePass * pPass, AstNode * pNode)
 						print(pExpr->ident.strv);
 						println();
 
-						typidResult = TYPID_Unresolved;
+						typidResult = TypeId::Unresolved;
 						goto LEndSetTypidAndReturn;
 					}
 
@@ -308,7 +308,7 @@ void resolveExpr(ResolvePass * pPass, AstNode * pNode)
 					AssertInfo(!pExpr->funcData.pDefnCached, "This shouldn't be resolved yet because this is the code that should resolve it!");
 
 					SCOPEID scopeidCur = peek(pPass->scopeidStack);
-					Scope * pScopeCur = pCtx->mpScopeidPScope[scopeidCur];
+					Scope * pScopeCur = pCtx->scopes[scopeidCur];
 
 					DynamicArray<SymbolInfo> aSymbInfoFuncCandidates;
 					init(&aSymbInfoFuncCandidates);
@@ -330,13 +330,13 @@ void resolveExpr(ResolvePass * pPass, AstNode * pNode)
 						bool allArgsMatch = true;
 						for (int iParam = 0; iParam < pExpr->funcData.aTypidDisambig.cItem; iParam++)
 						{
-							TYPID typidDisambig = pExpr->funcData.aTypidDisambig[iParam];
+							TypeId typidDisambig = pExpr->funcData.aTypidDisambig[iParam];
 							Assert(isTypeResolved(typidDisambig));
 
 							Assert(pCandidateDefnStmt->pParamsReturnsGrp->apParamVarDecls[iParam]->astk == ASTK_VarDeclStmt);
 							auto * pNode = Down(pCandidateDefnStmt->pParamsReturnsGrp->apParamVarDecls[iParam], VarDeclStmt);
 
-							TYPID typidCandidate = pNode->typidDefn;
+							TypeId typidCandidate = pNode->typidDefn;
 							Assert(isTypeResolved(typidCandidate));
 
 							// NOTE: Don't want any type coercion here. The disambiguating types provided should
@@ -373,7 +373,7 @@ void resolveExpr(ResolvePass * pPass, AstNode * pNode)
 						print(pExpr->ident.strv);
 						println();
 
-						typidResult = TYPID_Unresolved;
+						typidResult = TypeId::Unresolved;
 					}
 				} break;
 			}
@@ -382,21 +382,21 @@ void resolveExpr(ResolvePass * pPass, AstNode * pNode)
 		case ASTK_PointerDereferenceExpr:
 		{
 			auto * pExpr = Down(pNode, PointerDereferenceExpr);
-			TYPID typidPtr = DownExpr(pExpr->pPointerExpr)->typidEval;
+			TypeId typidPtr = DownExpr(pExpr->pPointerExpr)->typidEval;
 
 			if (!isTypeResolved(typidPtr))
 			{
-				typidResult = TYPID_BubbleError;
+				typidResult = TypeId::BubbleError;
 				goto LEndSetTypidAndReturn;
 			}
 
-			const Type * pTypePtr = lookupType(*pTypeTable, typidPtr);
+			const Type * pTypePtr = lookupType(*typeTable, typidPtr);
 			Assert(pTypePtr);
 
 			if (!isPointerType(*pTypePtr))
 			{
 				print("Trying to dereference a non-pointer\n");
-				typidResult = TYPID_TypeError;
+				typidResult = TypeId::TypeError;
 				goto LEndSetTypidAndReturn;
 			}
 
@@ -407,16 +407,16 @@ void resolveExpr(ResolvePass * pPass, AstNode * pNode)
 		{
 			auto * pExpr = Down(pNode, ArrayAccessExpr);
 
-			TYPID typidArray = DownExpr(pExpr->pArrayExpr)->typidEval;
-			TYPID typidSubscript = DownExpr(pExpr->pSubscriptExpr)->typidEval;
+			TypeId typidArray = DownExpr(pExpr->pArrayExpr)->typidEval;
+			TypeId typidSubscript = DownExpr(pExpr->pSubscriptExpr)->typidEval;
 
 			if (!isTypeResolved(typidArray))
 			{
-				typidResult = TYPID_BubbleError;
+				typidResult = TypeId::BubbleError;
 				goto LEndSetTypidAndReturn;
 			}
 
-			if (typidSubscript != TYPID_S32)
+			if (typidSubscript != TypeId::S32)
 			{
 				// TODO: support s8, s16, s64, u8, etc...
 				// TODO: catch negative compile time constants
@@ -427,7 +427,7 @@ void resolveExpr(ResolvePass * pPass, AstNode * pNode)
 				print("Trying to access array with a non integer\n");
 			}
 
-			const Type * pTypeArray = lookupType(*pTypeTable, typidArray);
+			const Type * pTypeArray = lookupType(*typeTable, typidArray);
 			Assert(pTypeArray);
 
 			if (!isArrayType(*pTypeArray))
@@ -437,7 +437,7 @@ void resolveExpr(ResolvePass * pPass, AstNode * pNode)
 				//	fact that I am returning error TYPID's?
 
 				print("Trying to access non-array as if it were an array...\n");
-				typidResult = TYPID_TypeError;
+				typidResult = TypeId::TypeError;
 				goto LEndSetTypidAndReturn;
 			}
 
@@ -450,14 +450,14 @@ void resolveExpr(ResolvePass * pPass, AstNode * pNode)
 
 			// Calling expression 
 
-			TYPID typidCallingExpr = DownExpr(pExpr->pFunc)->typidEval;
-			Assert(Implies(typidCallingExpr == TYPID_UnresolvedHasCandidates, pExpr->pFunc->astk == ASTK_SymbolExpr));
+			TypeId typidCallingExpr = DownExpr(pExpr->pFunc)->typidEval;
+			Assert(Implies(typidCallingExpr == TypeId::UnresolvedHasCandidates, pExpr->pFunc->astk == ASTK_SymbolExpr));
 
-			bool callingExprResolvedOrHasCandidates = isTypeResolved(typidCallingExpr) || typidCallingExpr == TYPID_UnresolvedHasCandidates;
+			bool callingExprResolvedOrHasCandidates = isTypeResolved(typidCallingExpr) || typidCallingExpr == TypeId::UnresolvedHasCandidates;
 
 			// Args
 
-			DynamicArray<TYPID> aTypidArg;
+			DynamicArray<TypeId> aTypidArg;
 			init(&aTypidArg);
 			ensureCapacity(&aTypidArg, pExpr->apArgs.cItem);
 			Defer(dispose(&aTypidArg));
@@ -465,8 +465,8 @@ void resolveExpr(ResolvePass * pPass, AstNode * pNode)
 			bool allArgsResolvedOrHasCandidates = true;
 			for (int iArg = 0; iArg < pExpr->apArgs.cItem; iArg++)
 			{
-				TYPID typidArg = DownExpr(pExpr->apArgs[iArg])->typidEval;
-				if (!isTypeResolved(typidArg) && typidArg != TYPID_UnresolvedHasCandidates)
+				TypeId typidArg = DownExpr(pExpr->apArgs[iArg])->typidEval;
+				if (!isTypeResolved(typidArg) && typidArg != TypeId::UnresolvedHasCandidates)
 				{
 					allArgsResolvedOrHasCandidates = false;
 				}
@@ -476,13 +476,13 @@ void resolveExpr(ResolvePass * pPass, AstNode * pNode)
 
 			if (!callingExprResolvedOrHasCandidates || !allArgsResolvedOrHasCandidates)
 			{
-				typidResult = TYPID_BubbleError;
+				typidResult = TypeId::BubbleError;
 				goto LEndSetTypidAndReturn;
 			}
 
 			if (pExpr->pFunc->astk != ASTK_SymbolExpr)
 			{
-				const Type * pType = lookupType(*pTypeTable, typidCallingExpr);
+				const Type * pType = lookupType(*typeTable, typidCallingExpr);
 				Assert(pType);
 
 				switch (pType->typek)
@@ -495,7 +495,7 @@ void resolveExpr(ResolvePass * pPass, AstNode * pNode)
 						print("Calling non-function as if it were a function");
 						println();
 
-						typidResult = TYPID_TypeError;
+						typidResult = TypeId::TypeError;
 						goto LEndSetTypidAndReturn;
 					} break;
 
@@ -518,14 +518,14 @@ void resolveExpr(ResolvePass * pPass, AstNode * pNode)
 								aTypidArg.cItem
 							);
 
-							typidResult = TYPID_TypeError;
+							typidResult = TypeId::TypeError;
 							goto LEndSetTypidAndReturn;
 						}
 
 						for (int iParam = 0; iParam < pFuncType->paramTypids.cItem; iParam++)
 						{
-							TYPID typidParam = pFuncType->paramTypids[iParam];
-							TYPID typidArg = aTypidArg[iParam];
+							TypeId typidParam = pFuncType->paramTypids[iParam];
+							TypeId typidArg = aTypidArg[iParam];
 
 							if (isTypeResolved(typidArg))
 							{
@@ -535,13 +535,13 @@ void resolveExpr(ResolvePass * pPass, AstNode * pNode)
 
 									print("Function call type mismatch");
 
-									typidResult = TYPID_TypeError;
+									typidResult = TypeId::TypeError;
 									goto LEndSetTypidAndReturn;
 								}
 							}
 							else
 							{
-								Assert(typidArg == TYPID_UnresolvedHasCandidates);
+								Assert(typidArg == TypeId::UnresolvedHasCandidates);
 
 								// TODO: try to find exactly 1 candidate... just like we do if funcexpr is a symbolexpr
 								AssertInfo(false, "TODO");
@@ -597,7 +597,7 @@ void resolveExpr(ResolvePass * pPass, AstNode * pNode)
 					{
 						SymbolInfo symbInfoFuncCandidate = pFuncSymbolExpr->unresolvedData.aCandidates[iFuncCandidate];
 
-						TYPID typidCandidate = TYPID_Unresolved;
+						TypeId typidCandidate = TypeId::Unresolved;
 						if (symbInfoFuncCandidate.symbolk == SYMBOLK_Var)
 						{
 							typidCandidate = symbInfoFuncCandidate.varData.pVarDeclStmt->typidDefn;	
@@ -613,7 +613,7 @@ void resolveExpr(ResolvePass * pPass, AstNode * pNode)
 							continue;
 						}
 
-						const Type * pTypeCandidate = lookupType(*pTypeTable, typidCandidate);
+						const Type * pTypeCandidate = lookupType(*typeTable, typidCandidate);
 						Assert(pTypeCandidate);
 
 						if (pTypeCandidate->typek != TYPEK_Func)
@@ -643,10 +643,10 @@ void resolveExpr(ResolvePass * pPass, AstNode * pNode)
 						MATCHK matchk = MATCHK_MatchExact;
 						for (int iParamCandidate = 0; iParamCandidate < pFuncTypeCandidate->paramTypids.cItem; iParamCandidate++)
 						{
-							TYPID typidCandidateExpected = pFuncTypeCandidate->paramTypids[iParamCandidate];
+							TypeId typidCandidateExpected = pFuncTypeCandidate->paramTypids[iParamCandidate];
 
 							auto * pNodeArg = pExpr->apArgs[iParamCandidate];
-							TYPID typidArg = aTypidArg[iParamCandidate];
+							TypeId typidArg = aTypidArg[iParamCandidate];
 
 							if (isTypeResolved(typidArg))
 							{
@@ -666,7 +666,7 @@ void resolveExpr(ResolvePass * pPass, AstNode * pNode)
 							}
 							else 
 							{
-								Assert(typidArg == TYPID_UnresolvedHasCandidates);
+								Assert(typidArg == TypeId::UnresolvedHasCandidates);
 								Assert(pNodeArg->astk == ASTK_SymbolExpr);
 
 								auto * pNodeArgSymbExpr = Down(pNodeArg, SymbolExpr);
@@ -675,13 +675,13 @@ void resolveExpr(ResolvePass * pPass, AstNode * pNode)
 
 								int cMatchExact = 0;
 								int cMatchLoose = 0;
-								TYPID typidMatchExact = TYPID_Unresolved;
-								TYPID typidMatchLoose = TYPID_Unresolved;
+								TypeId typidMatchExact = TypeId::Unresolved;
+								TypeId typidMatchLoose = TypeId::Unresolved;
 								for (int iArgCandidate = 0; iArgCandidate < pNodeArgSymbExpr->unresolvedData.aCandidates.cItem; iArgCandidate++)
 								{
 									SymbolInfo symbInfoArgCandidate = pNodeArgSymbExpr->unresolvedData.aCandidates[iArgCandidate];
 									
-									TYPID typidArgCandidate = TYPID_Unresolved;
+									TypeId typidArgCandidate = TypeId::Unresolved;
 									if (symbInfoArgCandidate.symbolk == SYMBOLK_Var)
 									{
 										typidArgCandidate = symbInfoArgCandidate.varData.pVarDeclStmt->typidDefn;
@@ -713,7 +713,7 @@ void resolveExpr(ResolvePass * pPass, AstNode * pNode)
 										}
 										else
 										{
-											typidMatchLoose = TYPID_Unresolved;
+											typidMatchLoose = TypeId::Unresolved;
 										}
 									}
 									else
@@ -742,7 +742,7 @@ void resolveExpr(ResolvePass * pPass, AstNode * pNode)
 
 									print("Ambiguous function call ");
 									print(pFuncSymbolExpr->ident.strv);
-									typidResult = TYPID_TypeError;
+									typidResult = TypeId::TypeError;
 									goto LEndSetTypidAndReturn;
 								}
 								else
@@ -802,7 +802,7 @@ void resolveExpr(ResolvePass * pPass, AstNode * pNode)
 						print("Ambiguous function call ");
 						print(pFuncSymbolExpr->ident.strv);
 						println();
-						typidResult = TYPID_TypeError;
+						typidResult = TypeId::TypeError;
 						goto LEndSetTypidAndReturn;
 					}
 					else
@@ -813,7 +813,7 @@ void resolveExpr(ResolvePass * pPass, AstNode * pNode)
 						print(pFuncSymbolExpr->ident.strv);
 						print(" matches the provided parameters");
 						println();
-						typidResult = TYPID_TypeError;
+						typidResult = TypeId::TypeError;
 						goto LEndSetTypidAndReturn;
 					}
 				}
@@ -825,7 +825,7 @@ void resolveExpr(ResolvePass * pPass, AstNode * pNode)
 					auto * pNodeVarDeclStmt = Down(pNodeDefnclMatch, VarDeclStmt);
 					Assert(isTypeResolved(pNodeVarDeclStmt->typidDefn));
 
-					pType = lookupType(*pTypeTable, pNodeVarDeclStmt->typidDefn);
+					pType = lookupType(*typeTable, pNodeVarDeclStmt->typidDefn);
 
 					pFuncSymbolExpr->symbexprk = SYMBEXPRK_Var;
 					pFuncSymbolExpr->varData.pDeclCached = pNodeVarDeclStmt;
@@ -837,7 +837,7 @@ void resolveExpr(ResolvePass * pPass, AstNode * pNode)
 					auto * pNodeFuncDefnStmt = Down(pNodeDefnclMatch, FuncDefnStmt);
 					Assert(isTypeResolved(pNodeFuncDefnStmt->typidDefn));
 
-					pType = lookupType(*pTypeTable, pNodeFuncDefnStmt->typidDefn);
+					pType = lookupType(*typeTable, pNodeFuncDefnStmt->typidDefn);
 
 					pFuncSymbolExpr->symbexprk = SYMBEXPRK_Func;
 					pFuncSymbolExpr->funcData.pDefnCached = pNodeFuncDefnStmt;
@@ -847,7 +847,7 @@ void resolveExpr(ResolvePass * pPass, AstNode * pNode)
 				Assert(pType->typek == TYPEK_Func);
 				if (pType->funcTypeData.funcType.returnTypids.cItem == 0)
 				{
-					typidResult = TYPID_Void;
+					typidResult = TypeId::Void;
 				}
 				else
 				{
@@ -891,7 +891,7 @@ void resolveStmt(ResolvePass * pPass, AstNode * pNode)
 	Assert(category(pNode->astk) == ASTCATK_Stmt);
 
 	MeekCtx * pCtx = pPass->pCtx;
-	TypeTable * pTypeTable = pCtx->pTypeTable;
+	TypeTable * typeTable = pCtx->typeTable;
 
 	switch (pNode->astk)
 	{
@@ -905,8 +905,8 @@ void resolveStmt(ResolvePass * pPass, AstNode * pNode)
 
 			auto * pStmt = Down(pNode, AssignStmt);
 
-			TYPID typidLhs = DownExpr(pStmt->pLhsExpr)->typidEval;
-			TYPID typidRhs = DownExpr(pStmt->pLhsExpr)->typidEval;
+			TypeId typidLhs = DownExpr(pStmt->pLhsExpr)->typidEval;
+			TypeId typidRhs = DownExpr(pStmt->pLhsExpr)->typidEval;
 
 			if (!isLValue(pStmt->pLhsExpr->astk))
 			{
@@ -931,13 +931,13 @@ void resolveStmt(ResolvePass * pPass, AstNode * pNode)
 			auto * pStmt = Down(pNode, VarDeclStmt);
 
 			AssertInfo(isTypeResolved(pStmt->typidDefn), "Inferred types are TODO");
-			const Type * pType = lookupType(*pTypeTable, pStmt->typidDefn);
+			const Type * pType = lookupType(*typeTable, pStmt->typidDefn);
 
 			if (pStmt->ident.lexeme.strv.cCh > 0)
 			{
 #if DEBUG
 				SCOPEID scopeidCur = peek(pPass->scopeidStack);
-				Scope * pScopeCur = pCtx->mpScopeidPScope[scopeidCur];
+				Scope * pScopeCur = pCtx->scopes[scopeidCur];
 				SymbolInfo symbInfo = lookupVarSymbol(*pScopeCur, pStmt->ident.lexeme);
 				Assert(symbInfo.symbolk == SYMBOLK_Var);
 #endif
@@ -953,7 +953,7 @@ void resolveStmt(ResolvePass * pPass, AstNode * pNode)
 
 			if (pStmt->pInitExpr)
 			{
-				TYPID typidInit = DownExpr(pStmt->pInitExpr)->typidEval;
+				TypeId typidInit = DownExpr(pStmt->pInitExpr)->typidEval;
 				if (isTypeResolved(typidInit) && typidInit != pStmt->typidDefn)
 				{
 					// TODO: report better error
@@ -968,7 +968,7 @@ void resolveStmt(ResolvePass * pPass, AstNode * pNode)
 			
 #if DEBUG
 			SCOPEID scopeidCur = peek(pPass->scopeidStack);
-			Scope * pScopeOuter = pCtx->mpScopeidPScope[scopeidCur];
+			Scope * pScopeOuter = pCtx->scopes[scopeidCur];
 			SymbolInfo symbInfo = lookupTypeSymbol(*pScopeOuter, pStmt->ident.lexeme);
 			Assert(symbInfo.symbolk == SYMBOLK_Struct);
 #endif
@@ -982,7 +982,7 @@ void resolveStmt(ResolvePass * pPass, AstNode * pNode)
 #if DEBUG
 			{
 				SCOPEID scopeidCur = peek(pPass->scopeidStack);
-				Scope * pScopeCur = pCtx->mpScopeidPScope[scopeidCur];
+				Scope * pScopeCur = pCtx->scopes[scopeidCur];
 				DynamicArray<SymbolInfo> aSymbInfo;
 				init(&aSymbInfo);
 				Defer(dispose(&aSymbInfo));
@@ -1007,7 +1007,7 @@ void resolveStmt(ResolvePass * pPass, AstNode * pNode)
 		{
 			auto * pStmt = Down(pNode, WhileStmt);
 
-			if (DownExpr(pStmt->pCondExpr)->typidEval != TYPID_Bool)
+			if (DownExpr(pStmt->pCondExpr)->typidEval != TypeId::Bool)
 			{
 				print("Expression in while condition must be a bool");
 			}
@@ -1019,7 +1019,7 @@ void resolveStmt(ResolvePass * pPass, AstNode * pNode)
 		{
 			auto * pStmt = Down(pNode, IfStmt);
 
-			if (DownExpr(pStmt->pCondExpr)->typidEval != TYPID_Bool)
+			if (DownExpr(pStmt->pCondExpr)->typidEval != TypeId::Bool)
 			{
 				print("Expression in if condition must be a bool");
 			}
@@ -1043,7 +1043,7 @@ void resolveStmt(ResolvePass * pPass, AstNode * pNode)
 
 			if (pStmt->pExpr)
 			{
-				TYPID typidReturn = DownExpr(pStmt->pExpr)->typidEval;
+				TypeId typidReturn = DownExpr(pStmt->pExpr)->typidEval;
 
 				// TODO: Handle multiple return values
 

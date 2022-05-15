@@ -39,7 +39,7 @@ void init(Scope * pScope, SCOPEID scopeid, SCOPEK scopek, Scope * pScopeParent)
 
 	if (scopek == SCOPEK_BuiltIn)
 	{
-		auto insertBuiltInTypeSymbol = [](Scope * pScope, const char * strIdent, TYPID typid)
+		auto insertBuiltInTypeSymbol = [](Scope * pScope, const char * strIdent, TypeId typid)
 		{
 			Lexeme lexeme;
 			setLexeme(&lexeme, strIdent);
@@ -57,25 +57,25 @@ void init(Scope * pScope, SCOPEID scopeid, SCOPEK scopek, Scope * pScopeParent)
 
 		// TODO: make void a symbol?
 
-		insertBuiltInTypeSymbol(pScope, "int", TYPID_S32);
-		insertBuiltInTypeSymbol(pScope, "s8", TYPID_S8);
-		insertBuiltInTypeSymbol(pScope, "s16", TYPID_S16);
-		insertBuiltInTypeSymbol(pScope, "s32", TYPID_S32);
-		insertBuiltInTypeSymbol(pScope, "s64", TYPID_S64);
+		insertBuiltInTypeSymbol(pScope, "int", TypeId::S32);
+		insertBuiltInTypeSymbol(pScope, "s8", TypeId::S8);
+		insertBuiltInTypeSymbol(pScope, "s16", TypeId::S16);
+		insertBuiltInTypeSymbol(pScope, "s32", TypeId::S32);
+		insertBuiltInTypeSymbol(pScope, "s64", TypeId::S64);
 
-		insertBuiltInTypeSymbol(pScope, "uint", TYPID_U32);
-		insertBuiltInTypeSymbol(pScope, "u8", TYPID_U8);
-		insertBuiltInTypeSymbol(pScope, "u16", TYPID_U16);
-		insertBuiltInTypeSymbol(pScope, "u32", TYPID_U32);
-		insertBuiltInTypeSymbol(pScope, "u64", TYPID_U64);
+		insertBuiltInTypeSymbol(pScope, "uint", TypeId::U32);
+		insertBuiltInTypeSymbol(pScope, "u8", TypeId::U8);
+		insertBuiltInTypeSymbol(pScope, "u16", TypeId::U16);
+		insertBuiltInTypeSymbol(pScope, "u32", TypeId::U32);
+		insertBuiltInTypeSymbol(pScope, "u64", TypeId::U64);
 
-		insertBuiltInTypeSymbol(pScope, "float", TYPID_F32);
-		insertBuiltInTypeSymbol(pScope, "f32", TYPID_F32);
-		insertBuiltInTypeSymbol(pScope, "f64", TYPID_F64);
+		insertBuiltInTypeSymbol(pScope, "float", TypeId::F32);
+		insertBuiltInTypeSymbol(pScope, "f32", TypeId::F32);
+		insertBuiltInTypeSymbol(pScope, "f64", TypeId::F64);
 
-		insertBuiltInTypeSymbol(pScope, "bool", TYPID_Bool);
+		insertBuiltInTypeSymbol(pScope, "bool", TypeId::Bool);
 
-		insertBuiltInTypeSymbol(pScope, "string", TYPID_String);
+		insertBuiltInTypeSymbol(pScope, "string", TypeId::String);
 	}
 }
 
@@ -97,13 +97,13 @@ void defineSymbol(MeekCtx * pCtx, Scope * pScope, const Lexeme & lexeme, const S
 		{
 			AssertTodo;		// Report error that main can only be defined at global level
 		}
-		else if (pCtx->funcidMain != FUNCID_Nil)
+		else if (pCtx->mainFuncid != FuncId::Nil)
 		{
 			AssertTodo;		// Report error that multiple functions named main not allowed
 		}
 		else
 		{
-			pCtx->funcidMain = symbInfo.funcData.pFuncDefnStmt->funcid;
+			pCtx->mainFuncid = symbInfo.funcData.pFuncDefnStmt->funcid;
 		}
 	}
 

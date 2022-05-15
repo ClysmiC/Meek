@@ -30,48 +30,53 @@ enum SCOPEID : u32
 // SYNC: Built in types should be inserted into the type table in the order that
 //  results in the following typids!
 
-enum TYPID : u32
+enum class TypeId : u32
 {
-	TYPID_Unresolved,
-	TYPID_UnresolvedInferred,
-	TYPID_UnresolvedHasCandidates,
+	Nil = 0,
+
+	UnresolvedInferred,
+	UnresolvedHasCandidates,
 
 	// Type checking errors
 
-	TYPID_TypeError,
-	TYPID_BubbleError,
+	TypeError,
+	BubbleError,
 
 	// Built-ins
 
-	TYPID_Void,
-	TYPID_S8,
-	TYPID_S16,
-	TYPID_S32,
-	TYPID_S64,
-	TYPID_U8,
-	TYPID_U16,
-	TYPID_U32,
-	TYPID_U64,
-	TYPID_F32,
-	TYPID_F64,
-	TYPID_Bool,
-	TYPID_String,
+	Void,
+	S8,
+	S16,
+	S32,
+	S64,
+	U8,
+	U16,
+	U32,
+	U64,
+	F32,
+	F64,
+	Bool,
+	String,
 
-	TYPID_UserDefinedStart,
-	TYPID_ActualTypesStart = TYPID_Void,
+	mFirstUserDefined,
 
-	TYPID_AnyIntStart = TYPID_S8,
-	TYPID_AnyIntEnd = TYPID_U64,
+	Unresolved = Nil,
 
-	TYPID_Nil = static_cast<u32>(0xFF'FF'FF'FF)
+	mFirstResolved = Void,
+	mFirstInt = S8,
+	mLastInt = U64,
+	mFirstFloat = F32,
+	mLastFloat = F64,
 };
 
-enum FUNCID : u32
+enum class FuncId : u32
 {
-	FUNCID_Nil = static_cast<u32>(0xFF'FF'FF'FF)
+	Nil = 0,
 };
 
-enum PENDINGTYPID : u32
+enum class PendingTypeId : u32
 {
-	PENDINGTYPID_Nil = static_cast<u32>(0xFF'FF'FF'FF)
+	Nil = 0,
+
+	mFirstValid = 1
 };

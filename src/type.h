@@ -38,8 +38,8 @@ struct TypeModifier
 
 struct FuncType
 {
-	DynamicArray<TYPID> paramTypids;
-	DynamicArray<TYPID> returnTypids;		// A.k.a. output params
+	DynamicArray<TypeId> paramTypids;
+	DynamicArray<TypeId> returnTypids;		// A.k.a. output params
 };
 
 
@@ -69,7 +69,7 @@ struct Type
 		struct UModTypeData
 		{
 			TypeModifier typemod;
-			TYPID typidModified;
+			TypeId typidModified;
 		} modTypeData;
 	};
 
@@ -97,7 +97,7 @@ void dispose(Type * pType);
 
 bool isTypeResolved(const Type & type);
 bool isFuncTypeResolved(const FuncType & funcType);
-bool isTypeResolved(TYPID typid);
+bool isTypeResolved(TypeId typid);
 bool isPointerType(const Type & type);
 bool isArrayType(const Type & type);
 
@@ -124,23 +124,23 @@ void init(FuncType * pFuncType);
 void initCopy(FuncType * pFuncType, const FuncType & funcTypeSrc);
 void dispose(FuncType * pFuncType);
 
-bool areTypidListTypesFullyResolved(const DynamicArray<TYPID> & aTypid);
+bool areTypidListTypesFullyResolved(const DynamicArray<TypeId> & aTypid);
 
 bool areVarDeclListTypesFullyResolved(const DynamicArray<AstNode *> & apVarDecls);
 bool areVarDeclListTypesEq(const DynamicArray<AstNode *> & apVarDecls0, const DynamicArray<AstNode *> & apVarDecls1);
 
-bool areTypidListTypesEq(const DynamicArray<TYPID> & aTypid0, const DynamicArray<TYPID> & aTypid1);
+bool areTypidListTypesEq(const DynamicArray<TypeId> & aTypid0, const DynamicArray<TypeId> & aTypid1);
 
 // bool areTypidListAndVarDeclListTypesEq(const DynamicArray<TYPID> & aTypid, const DynamicArray<AstNode *> & apVarDecls);
 
-inline uint typidHash(const TYPID & typid)
+inline uint typidHash(const TypeId & typid)
 {
 	// HMM: Is identity hash function a bad idea?
 
-	return typid;
+	return (uint)typid;
 }
 
-inline bool typidEq(const TYPID & typid0, const TYPID & typid1)
+inline bool typidEq(const TypeId & typid0, const TypeId & typid1)
 {
 	return typid0 == typid1;
 }
@@ -159,56 +159,56 @@ struct TypeTable
 		// Typid value to poke into corresponding AST node when we succeed resolving
 
 		static const int s_cTypidUpdateOnResolveMax = 4;
-		TYPID * apTypidUpdateOnResolve[s_cTypidUpdateOnResolveMax];
+		TypeId * apTypidUpdateOnResolve[s_cTypidUpdateOnResolveMax];
 		int cPTypidUpdateOnResolve = 0;
 
 		// Are we resolving a type that then has a modifier applied to it? If so, we
 		//	need to update our typid in the pendingtype that has the modifier.
 
-		PENDINGTYPID pendingTypidModifiedBy = PENDINGTYPID_Nil;
+		PendingTypeId pendingTypidModifiedBy = PendingTypeId::Nil;
 	};
 
 	DynamicArray<TypePendingResolve> typesPendingResolution;
 	DynamicPoolAllocator<Type> typeAlloc;
-	BiHashMap<TYPID, Type *> table;
+	BiHashMap<TypeId, Type *> table;
 
-	TYPID typidNext = TYPID_ActualTypesStart;
+	TypeId typidNext = TypeId::mFirstResolved;
 };
 
 void init(TypeTable * pTable, MeekCtx * pCtx);
 void init(TypeTable::TypePendingResolve * pTypePending, Scope * pScope, TYPEK typek);
 void dispose(TypeTable::TypePendingResolve * pTypePending);
 
-NULLABLE const Type * lookupType(const TypeTable & table, TYPID typid);
-void setTypeInfo(const TypeTable & table, TYPID typid, const Type::ComputedInfo & typeInfo);
+NULLABLE const Type * lookupType(const TypeTable & table, TypeId typid);
+void setTypeInfo(const TypeTable & table, TypeId typid, const Type::ComputedInfo & typeInfo);
 
 NULLABLE const FuncType * funcTypeFromDefnStmt(const TypeTable & typeTable, const AstFuncDefnStmt & defnStmt);
 
-PENDINGTYPID registerPendingNamedType(
+PendingTypeId registerPendingNamedType(
 	TypeTable * pTable,
 	Scope * pScope,
 	Lexeme ident,
-	NULLABLE TYPID * pTypidUpdateOnResolve=nullptr);
+	NULLABLE TypeId * pTypidUpdateOnResolve=nullptr);
 
-PENDINGTYPID registerPendingFuncType(
+PendingTypeId registerPendingFuncType(
 	TypeTable * pTable,
 	Scope * pScope,
-	const DynamicArray<PENDINGTYPID> & aPendingTypidParam,
-	const DynamicArray<PENDINGTYPID> & aPendingTypidReturn,
-	NULLABLE TYPID * pTypidUpdateOnResolve=nullptr);
+	const DynamicArray<PendingTypeId> & aPendingTypidParam,
+	const DynamicArray<PendingTypeId> & aPendingTypidReturn,
+	NULLABLE TypeId * pTypidUpdateOnResolve=nullptr);
 
-PENDINGTYPID registerPendingModType(
+PendingTypeId registerPendingModType(
 	TypeTable * pTable,
 	Scope * pScope,
 	TypeModifier typemod,
-	PENDINGTYPID pendingTypidModified,
-	NULLABLE TYPID * pTypidUpdateOnResolve=nullptr);
+	PendingTypeId pendingTypidModified,
+	NULLABLE TypeId * pTypidUpdateOnResolve=nullptr);
 
-void setPendingTypeUpdateOnResolvePtr(TypeTable * pTable, PENDINGTYPID pendingTypid, TYPID * pTypidUpdateOnResolve);
+void setPendingTypeUpdateOnResolvePtr(TypeTable * pTable, PendingTypeId pendingTypid, TypeId * pTypidUpdateOnResolve);
 
 struct EnsureInTypeTableResult
 {
-	TYPID typid = TYPID_Unresolved;
+	TypeId typid = TypeId::Unresolved;
 	bool typeInfoComputed = false;
 };
 EnsureInTypeTableResult ensureInTypeTable(TypeTable * pTable, Type * pType, bool debugAssertIfAlreadyInTable=false);
@@ -218,15 +218,15 @@ Type::ComputedInfo tryComputeTypeInfoAndSetMemberOffsets(
 	SCOPEID scopeid,
 	const DynamicArray<AstNode *> & apVarDeclStmt,
 	bool includeEndPadding = true);
-bool tryComputeTypeInfo(const TypeTable & typeTable, TYPID typid);
+bool tryComputeTypeInfo(const TypeTable & typeTable, TypeId typid);
 bool tryResolveAllTypes(TypeTable * pTable);
 
-TYPID typidFromLiteralk(LITERALK literalk);
+TypeId typidFromLiteralk(LITERALK literalk);
 
-bool canCoerce(TYPID typidFrom, TYPID typidTo);
+bool canCoerce(TypeId typidFrom, TypeId typidTo);
 
-bool isAnyInt(TYPID typid);
-bool isAnyFloat(TYPID typid);
+bool isAnyInt(TypeId typid);
+bool isAnyFloat(TypeId typid);
 
 #if DEBUG
 // void debugPrintType(const Type & type);
